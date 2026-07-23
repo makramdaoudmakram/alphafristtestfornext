@@ -4,11 +4,22 @@ import { readFileSync, existsSync, copyFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
-import sql from "mssql";
 
 const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, "..");
+
+async function loadSqlDriver() {
+  try {
+    return (await import("mssql")).default;
+  } catch {
+    console.error(
+      "Missing optional packages for init-db. Install locally with:\n" +
+        "  npm install mssql msnodesqlv8\n"
+    );
+    process.exit(1);
+  }
+}
 
 function loadEnvFile(filePath) {
   if (!existsSync(filePath)) return;
@@ -158,7 +169,7 @@ async function initWithLocalDb(dbName) {
   }
 }
 
-async function initWithTcp(dbName) {
+async function initWithTcp(dbName, sql) {
   const baseConfig = getConfig("master");
 
   if (!baseConfig.user || !baseConfig.password) {
@@ -258,7 +269,8 @@ async function initDatabase() {
   if (dbType === "localdb") {
     await initWithLocalDb(dbName);
   } else {
-    await initWithTcp(dbName);
+    const sql = await loadSqlDriver();
+    await initWithTcp(dbName, sql);
   }
 
   console.log("Database initialized successfully!");
