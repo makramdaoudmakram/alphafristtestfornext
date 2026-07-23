@@ -1,5 +1,6 @@
 "use client";
 
+import { getAlfaApiHint } from "@/lib/api-config";
 import { usePermissions, canAccessPermission } from "./permission-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,7 @@ export function PageGuard({
         <CardContent className="space-y-3">
           <p className="text-muted-foreground text-sm">
             Make sure the Alfa API is running at{" "}
-            <code className="text-xs">https://localhost:7211</code>, then try
+            <code className="text-xs">{getAlfaApiHint()}</code>, then try
             again.
           </p>
           <Button type="button" variant="outline" onClick={() => void refresh()}>

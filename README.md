@@ -16,19 +16,17 @@ Next.js calls your Alfa API through a proxy (`/api/alfa/*` → `ALFA_API_URL`). 
 npm install
 ```
 
-2. Configure `.env.local` — set **your** Alfa API URL:
+2. Configure `.env.local` for **development**:
 
 ```env
-# Use the same URL where Swagger opens (no /swagger)
-ALFA_API_URL=http://localhost:5258
+ALFA_API_URL=https://localhost:7211
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=change-this-to-a-random-secret-at-least-32-chars
 ```
 
-If you run from **Visual Studio (IIS Express)**, use:
-```env
-ALFA_API_URL=http://localhost:21137
-```
+Use the same base URL as Swagger (`https://localhost:7211/swagger/index.html`) **without** the `/swagger` path.
 
-3. Start the Alfa API (uses database `aghapany_AlphaAPI`):
+3. Start the Alfa API locally:
 
 ```bash
 dotnet run
@@ -41,6 +39,15 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## API URLs by environment
+
+| Environment | Alfa API URL | How it is set |
+|-------------|--------------|---------------|
+| **Development** | `https://localhost:7211` | `.env.local` → `ALFA_API_URL` (default if unset) |
+| **Production** | `https://apipharm.aghapy-company.com` | Hosting env → `ALFA_API_URL` (default if unset) |
+
+The browser always calls `/api/alfa/*`; the Next.js server proxies to the correct Alfa API URL above.
 
 ## Auth & RBAC
 
@@ -68,9 +75,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Production
 
-Set `NEXT_PUBLIC_API_URL` to your deployed Alfa API URL (e.g. `https://api.yourdomain.com`).
+Set these environment variables on your hosting platform:
 
-Ensure the Alfa API CORS policy allows your Next.js origin (`http://localhost:3000` in development).
+```env
+ALFA_API_URL=https://apipharm.aghapy-company.com
+NEXTAUTH_URL=https://your-nextjs-domain.com
+NEXTAUTH_SECRET=your-production-secret
+```
+
+If `ALFA_API_URL` is omitted in production, it defaults to `https://apipharm.aghapy-company.com`.
+
+Swagger (production API docs): https://apipharm.aghapy-company.com/swagger/index.html
 
 ## Tech Stack
 

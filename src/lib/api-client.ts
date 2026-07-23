@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./api-config";
+import { API_BASE_URL, getAlfaApiHint } from "./api-config";
 import type { AuthResponse } from "@/types/auth";
 import type {
   CreatePermissionRequest,
@@ -432,7 +432,7 @@ async function parseError(response: Response): Promise<string> {
   }
 
   if (response.status === 502) {
-    return "Cannot reach Alfa API. Ensure it is running at https://localhost:7211";
+    return `Cannot reach Alfa API. Ensure it is running at ${getAlfaApiHint()}`;
   }
 
   if (text.trim()) {
@@ -525,7 +525,7 @@ export async function loginWithAlfaApi(
       return {
         isSuccess: false,
         message:
-          "Cannot reach Alfa API. Ensure it is running at https://localhost:7211",
+          `Cannot reach Alfa API. Ensure it is running at ${getAlfaApiHint()}`,
       };
     }
     throw error;
@@ -563,7 +563,7 @@ export async function registerWithAlfaApi(
       return {
         isSuccess: false,
         message:
-          "Cannot reach Alfa API. Ensure it is running at https://localhost:7211",
+          `Cannot reach Alfa API. Ensure it is running at ${getAlfaApiHint()}`,
       };
     }
     throw error;

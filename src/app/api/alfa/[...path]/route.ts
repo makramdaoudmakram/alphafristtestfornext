@@ -1,11 +1,7 @@
 import http from "node:http";
 import https from "node:https";
+import { getAlfaApiUrl } from "@/lib/api-config";
 import { NextRequest, NextResponse } from "next/server";
-
-const ALFA_API_URL =
-  process.env.ALFA_API_URL ??
-  process.env.NEXT_PUBLIC_API_URL ??
-  "https://localhost:7211";
 
 async function nodeProxyRequest(
   targetUrl: string,
@@ -54,7 +50,8 @@ async function proxyRequest(
 ) {
   const path = pathSegments.join("/");
   const search = request.nextUrl.search;
-  const targetUrl = `${ALFA_API_URL}/api/${path}${search}`;
+  const alfaApiUrl = getAlfaApiUrl();
+  const targetUrl = `${alfaApiUrl}/api/${path}${search}`;
 
   const headers: Record<string, string> = {};
   const auth = request.headers.get("authorization");
@@ -101,7 +98,7 @@ async function proxyRequest(
     return NextResponse.json(
       {
         isSuccess: false,
-        message: `Cannot reach Alfa API at ${ALFA_API_URL}. ${message}`,
+        message: `Cannot reach Alfa API at ${alfaApiUrl}. ${message}`,
       },
       { status: 502 }
     );
