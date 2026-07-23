@@ -1,6 +1,9 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { loginWithAlfaApi } from "./api-client";
+import { ensureAuthEnv, getNextAuthSecret } from "./env";
+
+ensureAuthEnv();
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -75,5 +78,5 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getNextAuthSecret(),
 };
