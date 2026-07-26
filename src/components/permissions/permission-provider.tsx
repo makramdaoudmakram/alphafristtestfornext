@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { getMyPermissions, ApiError } from "@/lib/api-client";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 interface PermissionContextValue {
   roles: string[];
@@ -37,6 +38,7 @@ export function canAccessPermission(
 }
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
+  const hydrated = useHydrated();
   const { data: session, status } = useSession();
   const [roles, setRoles] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -87,7 +89,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     void loadPermissions();
   }, [loadPermissions]);
 
-  const ready = status !== "loading" && !fetching;
+  const ready = hydrated && status !== "loading" && !fetching;
   const loading = !ready;
 
   const value = useMemo(

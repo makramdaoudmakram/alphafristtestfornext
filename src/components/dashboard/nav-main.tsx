@@ -19,6 +19,7 @@ import {
   Building2,
   ChevronDown,
   Network,
+  Receipt,
 } from "lucide-react";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -43,6 +44,8 @@ const ICONS: Record<string, ElementType> = {
   "Item Origins": Globe,
   "Item Catalog": Package,
   Groups: Network,
+  Transaction: Receipt,
+  Purchase: Receipt,
   Units: Ruler,
   "Create Permission": KeyRound,
   "Create Role": Shield,
@@ -137,7 +140,7 @@ function NavGroupSection({
 }) {
   const visibleItems = filterNavLinks(group.items, canAccess);
   const active = visibleItems.some((item) => pathname === item.href);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(active);
   const Icon = ICONS[group.title] ?? Settings2;
 
   useEffect(() => {
@@ -207,7 +210,7 @@ function NavParentSection({
   const active =
     flatItems.some((sub) => pathname === sub.href) ||
     groups.some((group) => group.items.some((sub) => pathname === sub.href));
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(active);
   const Icon = ICONS[item.title] ?? Settings2;
 
   useEffect(() => {

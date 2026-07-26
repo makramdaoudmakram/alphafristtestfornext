@@ -77,6 +77,45 @@
   --ring: oklch(0.556 0 0);
 }
 
+@layer utilities {
+  .form-field-focus:focus-visible {
+    outline: none;
+    border-color: rgb(251 146 60 / 0.65);
+    box-shadow: 0 1px 8px 0 rgb(251 146 60 / 0.45);
+    --tw-ring-shadow: 0 0 #0000;
+    --tw-ring-offset-shadow: 0 0 #0000;
+  }
+
+  /* Item catalog edit dialog — tight labels, wide inputs */
+  .item-catalog-edit-form .form-field-inline {
+    gap: 0.375rem;
+  }
+  @media (min-width: 640px) {
+    .item-catalog-edit-form .form-field-inline {
+      grid-template-columns: 5.75rem minmax(0, 1fr);
+      gap: 0.375rem;
+    }
+  }
+  .item-catalog-edit-form .form-field-inline input,
+  .item-catalog-edit-form .form-field-inline textarea {
+    width: 100%;
+    min-width: 0;
+  }
+  .item-catalog-edit-form .item-catalog-fields-grid {
+    gap: 0.5rem;
+  }
+  @media (min-width: 768px) {
+    .item-catalog-edit-form .item-catalog-fields-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1280px) {
+    .item-catalog-edit-form .item-catalog-fields-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

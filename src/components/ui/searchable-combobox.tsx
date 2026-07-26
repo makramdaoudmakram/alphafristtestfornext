@@ -5,6 +5,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { formControlFocusClass } from "@/components/ui/form-field-inline";
 
 export type ComboboxOption = {
   value: string;
@@ -69,7 +70,10 @@ export function SearchableCombobox({
         type="button"
         variant="outline"
         disabled={disabled}
-        className="w-full justify-between font-normal"
+        className={cn(
+          "w-full justify-between font-normal",
+          formControlFocusClass
+        )}
         onClick={() => setOpen((current) => !current)}
       >
         <span className={cn("truncate", !selectedLabel && "text-muted-foreground")}>
@@ -86,6 +90,7 @@ export function SearchableCombobox({
               onChange={(event) => setSearch(event.target.value)}
               placeholder={searchPlaceholder}
               autoFocus
+              className={formControlFocusClass}
             />
           </div>
           <div className="max-h-56 overflow-y-auto p-1">

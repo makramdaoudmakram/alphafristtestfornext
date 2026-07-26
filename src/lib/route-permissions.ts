@@ -13,6 +13,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/companies": "Company.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
+  "/dashboard/transactions/purchase": null,
 };
 
 export const PERMISSIONS = {
@@ -61,6 +62,10 @@ export const PERMISSIONS = {
     create: "Group.Create",
     edit: "Group.Edit",
     delete: "Group.Delete",
+  },
+  purchase: {
+    /** Set when PurTransH RBAC is seeded on Alfa API */
+    view: null as string | null,
   },
   permissions: {
     manage: "Permissions.Manage",

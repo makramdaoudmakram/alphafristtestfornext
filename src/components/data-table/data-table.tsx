@@ -3,13 +3,16 @@
 import { useMemo, useState } from "react";
 import {
   type ColumnDef,
+  type OnChangeFn,
+  type PaginationState,
+  type SortingState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Search, Trash2 } from "lucide-react";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +41,21 @@ export interface DataTableProps<TData, TValue = unknown> {
   editLabel?: string;
   deleteLabel?: string;
   actionsHeader?: string;
-  /** Set false to hide the actions column even when handlers are provided */
   showActions?: boolean;
   className?: string;
+  /** Server-side pagination */
+  manualPagination?: boolean;
+  pageCount?: number;
+  pagination?: PaginationState;
+  onPaginationChange?: OnChangeFn<PaginationState>;
+  totalRowCount?: number;
+  /** Server-side sorting */
+  manualSorting?: boolean;
+  sorting?: SortingState;
+  onSortingChange?: OnChangeFn<SortingState>;
+  /** Controlled search (e.g. server filter) */
+  filterValue?: string;
+  onFilterChange?: (value: string) => void;
 }
 
 export function DataTable<TData, TValue = unknown>({
@@ -58,8 +73,28 @@ export function DataTable<TData, TValue = unknown>({
   actionsHeader = "Actions",
   showActions = true,
   className,
+  manualPagination = false,
+  pageCount,
+  pagination: paginationProp,
+  onPaginationChange,
+  totalRowCount,
+  manualSorting = false,
+  sorting: sortingProp,
+  onSortingChange,
+  filterValue,
+  onFilterChange,
 }: DataTableProps<TData, TValue>) {
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [internalFilter, setInternalFilter] = useState("");
+  const [internalPagination, setInternalPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize,
+  });
+
+  const globalFilter = filterValue ?? internalFilter;
+  const setGlobalFilter = onFilterChange ?? setInternalFilter;
+  const pagination = paginationProp ?? internalPagination;
+  const setPagination = onPaginationChange ?? setInternalPagination;
+  const sorting = sortingProp ?? [];
 
   const tableColumns = useMemo(() => {
     const baseColumns = [...columns];
@@ -77,7 +112,10 @@ export function DataTable<TData, TValue = unknown>({
                 type="button"
                 variant="update"
                 size="sm"
-                onClick={() => onEdit(row.original)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(row.original);
+                }}
               >
                 <Pencil className="size-3.5" />
                 {editLabel}
@@ -88,7 +126,10 @@ export function DataTable<TData, TValue = unknown>({
                 type="button"
                 variant="destructive"
                 size="sm"
-                onClick={() => onDelete(row.original)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(row.original);
+                }}
               >
                 <Trash2 className="size-3.5" />
                 {deleteLabel}
@@ -113,14 +154,27 @@ export function DataTable<TData, TValue = unknown>({
   const table = useReactTable({
     data,
     columns: tableColumns,
-    state: { globalFilter },
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: { pageSize },
+    state: {
+      globalFilter: manualPagination ? undefined : globalFilter,
+      pagination,
+      sorting,
     },
+    onGlobalFilterChange: manualPagination ? undefined : setGlobalFilter,
+    onPaginationChange: setPagination,
+    onSortingChange,
+    getCoreRowModel: getCoreRowModel(),
+    ...(manualPagination
+      ? {
+          manualPagination: true,
+          manualSorting: manualSorting,
+          pageCount: pageCount ?? 1,
+        }
+      : {
+          getFilteredRowModel: getFilteredRowModel(),
+          getPaginationRowModel: getPaginationRowModel(),
+        }),
+    enableSorting: manualSorting || !manualPagination,
+    manualSorting,
   });
 
   return (
@@ -140,16 +194,40 @@ export function DataTable<TData, TValue = unknown>({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
+                {headerGroup.headers.map((header) => {
+                  const canSort = header.column.getCanSort();
+                  const sorted = header.column.getIsSorted();
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder ? null : canSort ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="-ml-2 h-8 font-medium"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                          {sorted === "asc" ? (
+                            <ArrowUp className="ml-1 size-3.5" />
+                          ) : sorted === "desc" ? (
+                            <ArrowDown className="ml-1 size-3.5" />
+                          ) : (
+                            <ArrowUpDown className="text-muted-foreground ml-1 size-3.5" />
+                          )}
+                        </Button>
+                      ) : (
+                        flexRender(
                           header.column.columnDef.header,
                           header.getContext()
-                        )}
-                  </TableHead>
-                ))}
+                        )
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -193,6 +271,7 @@ export function DataTable<TData, TValue = unknown>({
       <DataTablePagination
         table={table}
         pageSizeOptions={pageSizeOptions}
+        totalRowCount={totalRowCount}
       />
     </div>
   );

@@ -104,6 +104,16 @@ export const SIDEBAR_NAV: NavItem[] = [
     href: "/dashboard/customers",
     permission: PERMISSIONS.customer.view,
   },
+  {
+    title: "Transaction",
+    items: [
+      {
+        title: "Purchase",
+        href: "/dashboard/transactions/purchase",
+        permission: null,
+      },
+    ],
+  },
 ];
 
 export const PAGE_TITLES: Record<string, string> = {
@@ -120,4 +130,5 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/companies": "Company",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
+  "/dashboard/transactions/purchase": "Purchase",
 };

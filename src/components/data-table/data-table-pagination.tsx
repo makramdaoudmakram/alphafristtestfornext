@@ -19,16 +19,20 @@ import {
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
   pageSizeOptions?: number[];
+  totalRowCount?: number;
 }
 
 export function DataTablePagination<TData>({
   table,
   pageSizeOptions = [5, 10, 20, 50],
+  totalRowCount,
 }: DataTablePaginationProps<TData>) {
   return (
     <div className="flex flex-col gap-3 px-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-muted-foreground text-sm">
-        {table.getFilteredRowModel().rows.length} row(s)
+        {totalRowCount != null
+          ? `${totalRowCount} row(s) total`
+          : `${table.getFilteredRowModel().rows.length} row(s)`}
       </p>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">

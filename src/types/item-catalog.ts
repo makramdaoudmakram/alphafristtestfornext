@@ -123,3 +123,18 @@ export type ItemCatalogUpsertRequest = {
     itmGId: number | null;
   } | null;
 };
+
+export type ItemCatalogPagedResult = {
+  items: ItemCatalogItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+};
+
+export type ItemCatalogPageQuery = {
+  page: number;
+  pageSize: number;
+  sortBy?: string;
+  sortDesc?: boolean;
+  search?: string;
+};

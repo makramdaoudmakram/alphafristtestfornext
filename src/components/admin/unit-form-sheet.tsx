@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import type { UnitItem } from "@/types/unit";
 import { Button } from "@/components/ui/button";
+import { FormFieldInline, formControlFocusClass } from "@/components/ui/form-field-inline";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
@@ -68,37 +70,39 @@ export function UnitFormSheet({
         </SheetHeader>
 
         {unit ? (
-          <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 px-4">
-            <div className="space-y-2">
-              <Label>Unit code</Label>
-              <Input value={unit.uCode} disabled />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sheet-uNameAr">Arabic name</Label>
+          <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-3 px-4">
+            <div className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-4">
+              <Label className="text-muted-foreground shrink-0 text-sm font-medium sm:text-end">
+                Unit code
+              </Label>
               <Input
-                id="sheet-uNameAr"
-                value={values.uNameAr}
-                onChange={(e) =>
-                  setValues((current) => ({ ...current, uNameAr: e.target.value }))
-                }
-                required
+                value={unit.uCode}
+                disabled
+                className={cn("bg-muted/40", formControlFocusClass)}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="sheet-uNameEn">English name</Label>
-              <Input
-                id="sheet-uNameEn"
-                value={values.uNameEn}
-                onChange={(e) =>
-                  setValues((current) => ({ ...current, uNameEn: e.target.value }))
-                }
-                required
-              />
-            </div>
+            <FormFieldInline
+              id="sheet-uNameAr"
+              label="Arabic name"
+              value={values.uNameAr}
+              onChange={(e) =>
+                setValues((current) => ({ ...current, uNameAr: e.target.value }))
+              }
+              required
+            />
 
-            <SheetFooter className="px-0 pb-4">
+            <FormFieldInline
+              id="sheet-uNameEn"
+              label="English name"
+              value={values.uNameEn}
+              onChange={(e) =>
+                setValues((current) => ({ ...current, uNameEn: e.target.value }))
+              }
+              required
+            />
+
+            <SheetFooter className="px-0 pt-2 pb-4 sm:pl-[calc(9.5rem+1rem)]">
               <Button
                 type="button"
                 variant="outline"

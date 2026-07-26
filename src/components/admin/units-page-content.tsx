@@ -26,8 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FormFieldInline } from "@/components/ui/form-field-inline";
 import { DataTable } from "@/components/data-table";
 
 export function UnitsPageContent() {
@@ -183,40 +182,36 @@ export function UnitsPageContent() {
               <CardDescription>Example: PCS, BOX, KG</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="grid max-w-lg gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="uCode">Unit code</Label>
-                  <Input
-                    id="uCode"
-                    placeholder="PCS"
-                    value={uCode}
-                    onChange={(e) => setUCode(e.target.value)}
-                    required
-                  />
+              <form onSubmit={handleSubmit} className="max-w-2xl space-y-3">
+                <FormFieldInline
+                  id="uCode"
+                  label="Unit code"
+                  placeholder="PCS"
+                  value={uCode}
+                  onChange={(e) => setUCode(e.target.value)}
+                  required
+                />
+                <FormFieldInline
+                  id="uNameAr"
+                  label="Arabic name"
+                  placeholder="قطعة"
+                  value={uNameAr}
+                  onChange={(e) => setUNameAr(e.target.value)}
+                  required
+                />
+                <FormFieldInline
+                  id="uNameEn"
+                  label="English name"
+                  placeholder="Piece"
+                  value={uNameEn}
+                  onChange={(e) => setUNameEn(e.target.value)}
+                  required
+                />
+                <div className="pt-2 sm:pl-[calc(9.5rem+1rem)]">
+                  <Button type="submit" disabled={saving}>
+                    {saving ? "Creating..." : "Create unit"}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="uNameAr">Arabic name</Label>
-                  <Input
-                    id="uNameAr"
-                    placeholder="قطعة"
-                    value={uNameAr}
-                    onChange={(e) => setUNameAr(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="uNameEn">English name</Label>
-                  <Input
-                    id="uNameEn"
-                    placeholder="Piece"
-                    value={uNameEn}
-                    onChange={(e) => setUNameEn(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" disabled={saving}>
-                  {saving ? "Creating..." : "Create unit"}
-                </Button>
               </form>
             </CardContent>
           </Card>

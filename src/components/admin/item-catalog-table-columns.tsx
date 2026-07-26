@@ -11,6 +11,7 @@ export function useItemCatalogColumns(): ColumnDef<ItemCatalogItem>[] {
       {
         accessorKey: "itmCode",
         header: "Code",
+        enableSorting: true,
         cell: ({ row }) => (
           <span className="font-medium">{row.original.itmCode?.trim() || "—"}</span>
         ),
@@ -18,26 +19,31 @@ export function useItemCatalogColumns(): ColumnDef<ItemCatalogItem>[] {
       {
         accessorKey: "itmCode2",
         header: "User code",
+        enableSorting: true,
         cell: ({ row }) => row.original.itmCode2?.trim() || "—",
       },
       {
         accessorKey: "itmNameAr",
         header: "Arabic name",
+        enableSorting: true,
         cell: ({ row }) => row.original.itmNameAr?.trim() || "—",
       },
       {
         accessorKey: "itmNameEn",
         header: "English name",
+        enableSorting: true,
         cell: ({ row }) => row.original.itmNameEn?.trim() || "—",
       },
       {
         accessorKey: "itmDefSellPrice",
         header: "Sales price",
+        enableSorting: true,
         cell: ({ row }) => row.original.itmDefSellPrice ?? "—",
       },
       {
         accessorKey: "itmActive",
         header: "Active",
+        enableSorting: true,
         cell: ({ row }) =>
           row.original.itmActive ? (
             <Badge className="bg-emerald-600">Active</Badge>

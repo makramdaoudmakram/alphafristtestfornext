@@ -35,6 +35,8 @@ import type {
 } from "@/types/group";
 import type {
   ItemCatalogItem,
+  ItemCatalogPageQuery,
+  ItemCatalogPagedResult,
   ItemCatalogUpsertRequest,
 } from "@/types/item-catalog";
 
@@ -45,6 +47,7 @@ function readString(
   for (const key of keys) {
     const value = obj[key];
     if (typeof value === "string") return value;
+    if (value != null && typeof value !== "object") return String(value);
   }
   return "";
 }
@@ -253,20 +256,48 @@ function normalizeItemCatalogChild(
   };
 }
 
+function readItemCatalogId(item: Record<string, unknown>): number {
+  const id = readNumber(item, "id", "Id");
+  if (id > 0) return id;
+  const catalogId = readNumber(item, "itemCatalogId", "ItemCatalogId");
+  return catalogId > 0 ? catalogId : 0;
+}
+
 function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogItem {
   const child = item.child ?? item.Child;
 
   return {
-    id: readNumber(item, "id", "Id"),
+    id: readItemCatalogId(item),
     itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
-    itmCode: readString(item, "itmCode", "Itm_Code", "ItmCode") || null,
-    itmCode2: readString(item, "itmCode2", "Itm_Code2", "ItmCode2") || null,
-    itmIntCode: readString(item, "itmIntCode", "Itm_Int_Code", "ItmIntCode") || null,
-    itmNameAr: readString(item, "itmNameAr", "Itm_Name_Ar", "ItmNameAr") || null,
-    itmNameEn: readString(item, "itmNameEn", "Itm_Name_En", "ItmNameEn") || null,
-    itmDefSellPrice: readNullableNumber(item, "itmDefSellPrice", "Itm_DefSell_Price"),
-    itmDefTax: readNullableNumber(item, "itmDefTax", "Itm_Def_Tax"),
-    itmDefPharmPrice: readNullableNumber(item, "itmDefPharmPrice", "Itm_DefPharm_Price"),
+    itmCode:
+      readString(item, "itmCode", "itm_Code", "Itm_Code", "ItmCode") || null,
+    itmCode2:
+      readString(item, "itmCode2", "itm_Code2", "Itm_Code2", "ItmCode2") ||
+      null,
+    itmIntCode:
+      readString(item, "itmIntCode", "itm_Int_Code", "Itm_Int_Code", "ItmIntCode") ||
+      null,
+    itmNameAr:
+      readString(item, "itmNameAr", "itm_Name_Ar", "Itm_Name_Ar", "ItmNameAr") ||
+      null,
+    itmNameEn:
+      readString(item, "itmNameEn", "itm_Name_En", "Itm_Name_En", "ItmNameEn") ||
+      null,
+    itmDefSellPrice: readNullableNumber(
+      item,
+      "itmDefSellPrice",
+      "itm_DefSell_Price",
+      "Itm_DefSell_Price",
+      "ItmDefSellPrice"
+    ),
+    itmDefTax: readNullableNumber(item, "itmDefTax", "itm_Def_Tax", "Itm_Def_Tax"),
+    itmDefPharmPrice: readNullableNumber(
+      item,
+      "itmDefPharmPrice",
+      "itm_DefPharm_Price",
+      "Itm_DefPharm_Price",
+      "ItmDefPharmPrice"
+    ),
     itmHasExpire: readNullableBoolean(item, "itmHasExpire", "Itm_Has_Expire"),
     itmIsmedicine: readBoolean(item, "itmIsmedicine", "Itm_Ismedicine"),
     itmActive: readBoolean(item, "itmActive", "Itm_Active"),
@@ -412,6 +443,14 @@ async function parseError(response: Response): Promise<string> {
     try {
       body = JSON.parse(text) as Record<string, unknown>;
     } catch {
+      if (response.status === 405 || text.includes("405") && text.includes("IIS")) {
+        return "Update failed: IIS blocked PUT/DELETE on the API server. Redeploy the latest web.config to apipharm.aghapy-company.com and disable WebDAV in IIS.";
+      }
+
+      if (text.includes("<!DOCTYPE html") || text.includes("<html")) {
+        return `HTTP ${response.status} — the API server returned an HTML error page instead of JSON. Check IIS configuration for PUT/DELETE.`;
+      }
+
       return text.slice(0, 200) || `HTTP ${response.status} ${response.statusText}`;
     }
   }
@@ -429,6 +468,10 @@ async function parseError(response: Response): Promise<string> {
 
   if (response.status === 401) {
     return "Unauthorized — your session expired. Please sign out and sign in again.";
+  }
+
+  if (response.status === 405) {
+    return "HTTP 405 Method Not Allowed — IIS blocked the update request. Redeploy web.config on the API server.";
   }
 
   if (response.status === 502) {
@@ -963,9 +1006,82 @@ export function deleteGroup(id: number, token: string) {
 }
 
 export function getItemCatalogs(token: string) {
-  return apiFetch<Record<string, unknown>[]>("ItemCatalog", {}, token).then(
-    (items) => items.map((item) => normalizeItemCatalogItem(item))
-  );
+  return apiFetch<unknown>("ItemCatalog", {}, token).then(parseItemCatalogListResponse);
+}
+
+/** Loads every catalog row (paged API) for autocomplete on large datasets. */
+export async function fetchAllItemCatalogItems(
+  token: string
+): Promise<ItemCatalogItem[]> {
+  const pageSize = 200;
+  let page = 1;
+  let totalCount = 0;
+  const all: ItemCatalogItem[] = [];
+
+  while (page < 500) {
+    const batch = await getItemCatalogPage(token, {
+      page,
+      pageSize,
+      sortBy: "itmCode",
+      sortDesc: false,
+    });
+    if (page === 1) totalCount = batch.totalCount;
+    all.push(...batch.items);
+    if (all.length >= totalCount || batch.items.length === 0) break;
+    page += 1;
+  }
+
+  return all;
+}
+
+function parseItemCatalogListResponse(data: unknown): ItemCatalogItem[] {
+  if (Array.isArray(data)) {
+    return data.map((item) =>
+      normalizeItemCatalogItem(item as Record<string, unknown>)
+    );
+  }
+  if (data && typeof data === "object") {
+    return normalizeItemCatalogPagedResult(
+      data as Record<string, unknown>
+    ).items;
+  }
+  return [];
+}
+
+function normalizeItemCatalogPagedResult(
+  raw: Record<string, unknown>
+): ItemCatalogPagedResult {
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) =>
+        normalizeItemCatalogItem(item as Record<string, unknown>)
+      )
+    : [];
+
+  return {
+    items,
+    totalCount: readNumber(raw, "totalCount", "TotalCount"),
+    page: readNumber(raw, "page", "Page") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || items.length,
+  };
+}
+
+export function getItemCatalogPage(
+  token: string,
+  query: ItemCatalogPageQuery
+) {
+  const params = new URLSearchParams();
+  params.set("page", String(query.page));
+  params.set("pageSize", String(query.pageSize));
+  if (query.sortBy) params.set("sortBy", query.sortBy);
+  if (query.sortDesc) params.set("sortDesc", "true");
+  if (query.search?.trim()) params.set("search", query.search.trim());
+
+  return apiFetch<Record<string, unknown>>(
+    `ItemCatalog?${params.toString()}`,
+    {},
+    token
+  ).then((data) => normalizeItemCatalogPagedResult(data));
 }
 
 export function getItemCatalog(id: number, token: string) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { getAlfaApiHint } from "@/lib/api-config";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { usePermissions, canAccessPermission } from "./permission-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,17 +16,23 @@ export function PageGuard({
   permission,
   children,
 }: {
-  permission: string | string[];
+  permission: string | string[] | null;
   children: React.ReactNode;
 }) {
   const { roles, permissions, loading, ready, error, refresh } =
     usePermissions();
+  const hydrated = useHydrated();
 
-  const allowed = Array.isArray(permission)
-    ? permission.some((code) => canAccessPermission(code, roles, permissions))
-    : canAccessPermission(permission, roles, permissions);
+  const allowed =
+    permission === null
+      ? true
+      : Array.isArray(permission)
+        ? permission.some((code) =>
+            canAccessPermission(code, roles, permissions)
+          )
+        : canAccessPermission(permission, roles, permissions);
 
-  if (loading || !ready) {
+  if (!hydrated || loading || !ready) {
     return (
       <Card>
         <CardHeader>
@@ -100,8 +107,9 @@ export function ActionGuard({
   fallback?: React.ReactNode;
 }) {
   const { hasPermission, loading, ready } = usePermissions();
+  const hydrated = useHydrated();
 
-  if (loading || !ready) return null;
+  if (!hydrated || loading || !ready) return null;
   if (!hasPermission(permission)) return <>{fallback}</>;
   return <>{children}</>;
 }

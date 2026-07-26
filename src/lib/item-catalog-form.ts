@@ -1,4 +1,14 @@
-import type { ItemCatalogItem, ItemCatalogUpsertRequest } from "@/types/item-catalog";
+import type {
+  ItemCatalogItem,
+  ItemCatalogUpsertRequest,
+} from "@/types/item-catalog";
+
+/** Primary key for ItemCatalog API routes (Id, fallback ItemCatalogId). */
+export function resolveItemCatalogApiId(row: Pick<ItemCatalogItem, "id" | "itemCatalogId">): number | null {
+  if (row.id > 0) return row.id;
+  if (row.itemCatalogId > 0) return row.itemCatalogId;
+  return null;
+}
 
 export type ItemCatalogFormValues = {
   itmCode: string;
