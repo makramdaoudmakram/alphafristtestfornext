@@ -76,9 +76,8 @@ export type PurchaseUpsertPayload = {
     PurchaseHeader,
     "noOfItems" | "totalQuantity" | "totalBill" | "totalDesMon" | "totalTax" | "pthNetBill"
   >;
-  details: Omit<
+  details: (Omit<
     PurchaseDetail,
     "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
-  > &
-    { unitId?: number }[];
+  > & { unitId?: number })[];
 };

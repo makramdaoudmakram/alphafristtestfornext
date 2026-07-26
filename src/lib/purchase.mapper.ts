@@ -1,6 +1,7 @@
 import { computeHeaderTotals, computeLineTotal } from "@/lib/purchase-calculations";
 import { enrichDetailFromCatalog } from "@/lib/item-catalog-search";
 import { monthInputToExpDate, expDateToMonthInput } from "@/lib/purchase-exp-date";
+import type { ItemCatalogItem } from "@/types/item-catalog";
 import type {
   PurchaseDetail,
   PurchaseDocument,
