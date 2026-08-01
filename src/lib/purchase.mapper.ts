@@ -115,6 +115,12 @@ export function emptyPurchaseHeader(): PurchaseHeader {
     venBillDate: "",
     phtDate: new Date().toISOString().slice(0, 10),
     venId: "",
+    stoId: "",
+    movId: null,
+    movmentRowId: null,
+    movAccount: "",
+    movAccountsec: "",
+    movAccounttherd: "",
     noOfItems: 0,
     totalQuantity: 0,
     totalBill: 0,
@@ -183,6 +189,12 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
     venBillDate: formatDateInput(raw.venBillDate ?? raw.VenBillDate),
     phtDate: formatDateInput(raw.phtDate ?? raw.PhtDate),
     venId: readString(raw, "venId", "VenId"),
+    stoId: readString(raw, "stoId", "StoId"),
+    movId: readNullableNumber(raw, "movId", "MovId"),
+    movmentRowId: readNullableNumber(raw, "movmentRowId", "MovmentRowId"),
+    movAccount: readString(raw, "movAccount", "MovAccount"),
+    movAccountsec: readString(raw, "movAccountsec", "MovAccountsec"),
+    movAccounttherd: readString(raw, "movAccounttherd", "MovAccounttherd"),
     noOfItems: readNumber(raw, "noOfItems", "NoOfItems"),
     totalQuantity: readNumber(raw, "totalQuantity", "TotalQuantity"),
     totalBill: readNumber(raw, "totalBill", "TotalBill"),
@@ -242,6 +254,38 @@ export function mergeSavedDetailsWithPrior(
   });
 }
 
+/** Map selected movement settings onto PurTransH header fields. */
+export function applyMovementToHeader(
+  header: PurchaseHeaderFormValues,
+  movement: {
+    id: number;
+    movChiledId: number | null;
+    movStor: string | null;
+    movAccountEntry1: string | null;
+    movAccountEntry2: string | null;
+    movAccountEntry3: string | null;
+  } | null
+): PurchaseHeaderFormValues {
+  if (!movement) return header;
+
+  const entry1 = movement.movAccountEntry1?.trim() ?? "";
+  const entry2 = movement.movAccountEntry2?.trim() ?? "";
+  const entry3 = movement.movAccountEntry3?.trim() ?? "";
+  const movStor = movement.movStor?.trim() ?? "";
+
+  return {
+    ...header,
+    movmentRowId: movement.id,
+    // Force mapping from movement (do not keep stale empty form values)
+    stoId: movStor,
+    movId: movement.movChiledId,
+    venId: entry1,
+    movAccountsec: entry1,
+    movAccount: entry2,
+    movAccounttherd: entry3,
+  };
+}
+
 export function toUpsertPayload(
   header: PurchaseHeaderFormValues,
   details: PurchaseDetail[]
@@ -254,6 +298,12 @@ export function toUpsertPayload(
       venBillDate: header.venBillDate,
       phtDate: header.phtDate,
       venId: header.venId?.trim() ?? "",
+      stoId: header.stoId?.trim() ?? "",
+      movId: header.movId,
+      movmentRowId: header.movmentRowId,
+      movAccount: header.movAccount?.trim() ?? "",
+      movAccountsec: header.movAccountsec?.trim() ?? "",
+      movAccounttherd: header.movAccounttherd?.trim() ?? "",
       purchExtraDisCount: Number(header.purchExtraDisCount) || 0,
       totalDisPer: Number(header.totalDisPer) || 0,
       pOtherExpenses: Number(header.pOtherExpenses) || 0,

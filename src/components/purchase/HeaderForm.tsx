@@ -49,11 +49,6 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
     formState: { errors },
   } = form;
 
-  const readonlyInput = cn(
-    "bg-muted/50 font-medium tabular-nums",
-    formControlFocusClass
-  );
-
   const fieldProps = {
     className: headerFieldGrid,
     labelClassName: headerLabelClass,
@@ -61,16 +56,56 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <FormFieldInline
-        id="pthId"
-        label="PthId"
-        readOnly
-        disabled
-        value={form.watch("pthId") ?? ""}
-        placeholder="Auto"
-        {...fieldProps}
-        inputClassName={readonlyInput}
+      {/* Keep movement-mapped fields registered so zodResolver does not wipe them */}
+      <input type="hidden" {...register("stoId")} />
+      <input
+        type="hidden"
+        {...register("movId", {
+          setValueAs: (value) => {
+            if (value === "" || value == null) return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          },
+        })}
       />
+      <input
+        type="hidden"
+        {...register("movmentRowId", {
+          setValueAs: (value) => {
+            if (value === "" || value == null) return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          },
+        })}
+      />
+      <input type="hidden" {...register("venId")} />
+      <input type="hidden" {...register("movAccount")} />
+      <input type="hidden" {...register("movAccountsec")} />
+      <input type="hidden" {...register("movAccounttherd")} />
+      <div className="space-y-1">
+        <FormFieldInline
+          id="pthId"
+          label="PthId"
+          type="number"
+          inputMode="numeric"
+          disabled={disabled}
+          placeholder="Select movement…"
+          aria-invalid={!!errors.pthId}
+          {...fieldProps}
+          {...register("pthId", {
+            setValueAs: (value) => {
+              if (value === "" || value == null) return null;
+              const parsed = Number(value);
+              return Number.isFinite(parsed) ? parsed : null;
+            },
+          })}
+        />
+        {errors.pthId ? (
+          <p className={cn("text-destructive text-sm", headerErrorOffset)}>
+            {errors.pthId.message}
+          </p>
+        ) : null}
+      </div>
       <div className="space-y-1">
         <FormFieldInline
           id="venBillNo"

@@ -124,8 +124,14 @@ export class PurchaseRepository {
       return [];
     }
 
-    const data = await this.handle<number[] | { ids?: number[] }>(response);
-    return Array.isArray(data) ? data : (data.ids ?? []);
+    const data = await this.handle<unknown>(response);
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    const record = data as { items?: number[]; Items?: number[]; ids?: number[] };
+    const items = record.items ?? record.Items ?? record.ids;
+    return Array.isArray(items) ? items : [];
   }
 
   async getById(id: number): Promise<PurchaseDocument> {
@@ -137,11 +143,50 @@ export class PurchaseRepository {
     return mapDocumentFromApi(raw);
   }
 
+  /** Build API body with PascalCase property names for reliable ASP.NET binding. */
+  private toApiBody(payload: PurchaseUpsertPayload) {
+    const h = payload.header;
+    return {
+      Header: {
+        Id: h.id,
+        PthId: h.pthId,
+        VenBillNo: h.venBillNo,
+        VenBillDate: h.venBillDate,
+        PhtDate: h.phtDate,
+        VenId: h.venId || null,
+        StoId: h.stoId || null,
+        MovId: h.movId != null ? Number(h.movId) : null,
+        MovmentRowId: h.movmentRowId != null ? Number(h.movmentRowId) : null,
+        MovAccount: h.movAccount || null,
+        MovAccountsec: h.movAccountsec || null,
+        MovAccounttherd: h.movAccounttherd || null,
+        PurchExtraDisCount: h.purchExtraDisCount,
+        TotalDisPer: h.totalDisPer,
+        POtherExpenses: h.pOtherExpenses,
+        PthNotice: h.pthNotice,
+      },
+      Details: payload.details.map((d) => ({
+        Id: d.id,
+        ItmId: d.itmId,
+        CId: d.cId,
+        ExpDate: d.expDate || null,
+        Qnty: d.qnty,
+        Bonus: d.bonus,
+        ItmPurPrice: d.itmPurPrice,
+        ItmSell: d.itmSell,
+        ItmDisPer: d.itmDisPer,
+        ItmDisMon: d.itmDisMon,
+        ItmTaxTotal: d.itmTaxTotal,
+        UnitId: d.unitId,
+      })),
+    };
+  }
+
   async create(payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
     const response = await fetch(this.url("PurTransH"), {
       method: "POST",
       headers: this.authHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(this.toApiBody(payload)),
     });
     const raw = await this.handle<Record<string, unknown>>(response);
     return mapDocumentFromApi(raw);
@@ -151,7 +196,7 @@ export class PurchaseRepository {
     const response = await fetch(this.url(`PurTransH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
-      body: JSON.stringify(payload),
+      body: JSON.stringify(this.toApiBody(payload)),
     });
     const raw = await this.handle<Record<string, unknown>>(response);
     return mapDocumentFromApi(raw);

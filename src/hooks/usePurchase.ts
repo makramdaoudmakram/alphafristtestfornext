@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { Resolver } from "react-hook-form";
 import { computeHeaderTotals, mapDetailsWithLineTotals } from "@/lib/purchase-calculations";
 import {
+  applyMovementToHeader,
   createEmptyDetailRow,
   documentToFormValues,
   emptyPurchaseHeader,
@@ -21,6 +22,7 @@ import {
   PurchaseRepositoryError,
 } from "@/services/purchase.service";
 import type { PurchaseDetail, PurchaseHeader, PurchaseSearchFilters } from "@/types/purchase";
+import type { MovmentLookupItem } from "@/types/movment";
 import {
   purchaseHeaderSchema,
   type PurchaseHeaderFormValues,
@@ -149,10 +151,19 @@ export function usePurchase(token: string | undefined) {
   }, [currentId]);
 
   const handleSave = useCallback(
-    async (itemByCode?: Map<string, ItemCatalogItem>) => {
+    async (
+      itemByCode?: Map<string, ItemCatalogItem>,
+      selectedMovement?: MovmentLookupItem | null
+    ) => {
       if (!service) return;
 
-      const header = form.getValues();
+      // Re-apply movement mapping at save time so values cannot be lost
+      // between selection and submit (zodResolver / unregistered fields).
+      const header = applyMovementToHeader(
+        form.getValues(),
+        selectedMovement ?? null
+      );
+
       const detailsForSave = filterDetailsWithItemCode(detailsWithTotals);
       const removedCount = detailsWithTotals.length - detailsForSave.length;
 

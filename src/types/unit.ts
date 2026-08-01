@@ -10,4 +10,6 @@ export interface CreateUnitRequest {
   uNameEn: string;
 }
 
+export type UnitListItem = UnitItem & { pendingSync?: boolean };
+
 export type UpdateUnitRequest = Omit<CreateUnitRequest, "uCode">;

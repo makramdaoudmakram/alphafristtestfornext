@@ -10,6 +10,7 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil, Search, Trash2 } from "lucide-react";
@@ -85,6 +86,7 @@ export function DataTable<TData, TValue = unknown>({
   onFilterChange,
 }: DataTableProps<TData, TValue>) {
   const [internalFilter, setInternalFilter] = useState("");
+  const [internalSorting, setInternalSorting] = useState<SortingState>([]);
   const [internalPagination, setInternalPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize,
@@ -94,7 +96,8 @@ export function DataTable<TData, TValue = unknown>({
   const setGlobalFilter = onFilterChange ?? setInternalFilter;
   const pagination = paginationProp ?? internalPagination;
   const setPagination = onPaginationChange ?? setInternalPagination;
-  const sorting = sortingProp ?? [];
+  const sorting = sortingProp ?? internalSorting;
+  const setSorting = onSortingChange ?? setInternalSorting;
 
   const tableColumns = useMemo(() => {
     const baseColumns = [...columns];
@@ -161,17 +164,21 @@ export function DataTable<TData, TValue = unknown>({
     },
     onGlobalFilterChange: manualPagination ? undefined : setGlobalFilter,
     onPaginationChange: setPagination,
-    onSortingChange,
+    onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     ...(manualPagination
       ? {
           manualPagination: true,
           manualSorting: manualSorting,
           pageCount: pageCount ?? 1,
+          ...(manualSorting
+            ? {}
+            : { getSortedRowModel: getSortedRowModel() }),
         }
       : {
           getFilteredRowModel: getFilteredRowModel(),
           getPaginationRowModel: getPaginationRowModel(),
+          getSortedRowModel: getSortedRowModel(),
         }),
     enableSorting: manualSorting || !manualPagination,
     manualSorting,

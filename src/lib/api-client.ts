@@ -24,6 +24,16 @@ import type {
   UpdateItemOriginRequest,
 } from "@/types/item-origin";
 import type {
+  CreateMovParientRequest,
+  MovParientItem,
+  UpdateMovParientRequest,
+} from "@/types/mov-parient";
+import type {
+  MovmentItem,
+  MovmentLookupItem,
+  MovmentUpsertRequest,
+} from "@/types/movment";
+import type {
   CompanyItem,
   CreateCompanyRequest,
   UpdateCompanyRequest,
@@ -71,6 +81,14 @@ function readBoolean(
   for (const key of keys) {
     const value = obj[key];
     if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1" || normalized === "yes")
+        return true;
+      if (normalized === "false" || normalized === "0" || normalized === "no")
+        return false;
+    }
   }
   return false;
 }
@@ -191,6 +209,164 @@ function normalizeItemOriginItem(item: Record<string, unknown>): ItemOriginItem 
     ioId: readNumber(item, "ioId", "IoId"),
     ioTextAr: readString(item, "ioTextAr", "IoTextAr", "io_Text_Ar"),
   };
+}
+
+function normalizeMovParientItem(item: Record<string, unknown>): MovParientItem {
+  return {
+    movParientId: readNumber(item, "movParientId", "MovParientId"),
+    movParientAname: readString(
+      item,
+      "movParientAname",
+      "MovParientAname",
+      "mov_Parient_Aname"
+    ),
+    movParientEname: readString(
+      item,
+      "movParientEname",
+      "MovParientEname",
+      "mov_Parient_Ename"
+    ),
+  };
+}
+
+function normalizeMovmentItem(item: Record<string, unknown>): MovmentItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    movChiledId: readNullableNumber(item, "movChiledId", "MovChiledId"),
+    movChiledName: readString(item, "movChiledName", "MovChiledName") || null,
+    movParientId: readNullableNumber(item, "movParientId", "MovParientId"),
+    movSingleStore: readBoolean(item, "movSingleStore", "MovSingleStore"),
+    movStor: readString(item, "movStor", "MovStor") || null,
+    movStor2: readString(item, "movStor2", "MovStor2") || null,
+    movAccountEntry1:
+      readString(item, "movAccountEntry1", "MovAccountEntry1") || null,
+    movAccountEntry2:
+      readString(item, "movAccountEntry2", "MovAccountEntry2") || null,
+    movAccountEntry3:
+      readString(item, "movAccountEntry3", "MovAccountEntry3") || null,
+    movAccountEntry4:
+      readString(item, "movAccountEntry4", "MovAccountEntry4") || null,
+    movAccountEntry5:
+      readString(item, "movAccountEntry5", "MovAccountEntry5") || null,
+    movAccountEntry6:
+      readString(item, "movAccountEntry6", "MovAccountEntry6") || null,
+    movAccountEntry7:
+      readString(item, "movAccountEntry7", "MovAccountEntry7") || null,
+    movAccountEntry8:
+      readString(item, "movAccountEntry8", "MovAccountEntry8") || null,
+    movClint1: readString(item, "movClint1", "MovClint1") || null,
+    movClint2: readString(item, "movClint2", "MovClint2") || null,
+    movStockEffict: readNullableNumber(item, "movStockEffict", "MovStockEffict"),
+    movPage: readString(item, "movPage", "MovPage") || null,
+    movActive: readBoolean(item, "movActive", "MovActive"),
+  };
+}
+
+function buildMovmentPayload(data: MovmentUpsertRequest) {
+  return {
+    MovChiledId: data.movChiledId,
+    MovChiledName: data.movChiledName,
+    MovParientId: data.movParientId,
+    MovSingleStore: data.movSingleStore,
+    MovStor: data.movStor,
+    MovStor2: data.movStor2,
+    MovAccountEntry1: data.movAccountEntry1,
+    MovAccountEntry2: data.movAccountEntry2,
+    MovAccountEntry3: data.movAccountEntry3,
+    MovAccountEntry4: data.movAccountEntry4,
+    MovAccountEntry5: data.movAccountEntry5,
+    MovAccountEntry6: data.movAccountEntry6,
+    MovAccountEntry7: data.movAccountEntry7,
+    MovAccountEntry8: data.movAccountEntry8,
+    MovClint1: data.movClint1,
+    MovClint2: data.movClint2,
+    MovStockEffict: data.movStockEffict,
+    MovPage: data.movPage,
+    MovActive: !!data.movActive,
+  };
+}
+
+function normalizeMovmentLookupItem(
+  item: Record<string, unknown>
+): MovmentLookupItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    movChiledId: readNullableNumber(item, "movChiledId", "MovChiledId"),
+    movChiledName: readString(item, "movChiledName", "MovChiledName") || null,
+    movParientId: readNullableNumber(item, "movParientId", "MovParientId"),
+    movStor: readString(item, "movStor", "MovStor") || null,
+    movSingleStore: readBoolean(item, "movSingleStore", "MovSingleStore"),
+    movAccountEntry1:
+      readString(item, "movAccountEntry1", "MovAccountEntry1") || null,
+    movAccountEntry2:
+      readString(item, "movAccountEntry2", "MovAccountEntry2") || null,
+    movAccountEntry3:
+      readString(item, "movAccountEntry3", "MovAccountEntry3") || null,
+  };
+}
+
+function parseArrayOrPaged<T>(
+  data: unknown,
+  normalize: (item: Record<string, unknown>) => T
+): T[] {
+  if (Array.isArray(data)) {
+    return data.map((item) => normalize(item as Record<string, unknown>));
+  }
+  if (data && typeof data === "object") {
+    const raw = data as Record<string, unknown>;
+    const itemsRaw = raw.items ?? raw.Items;
+    if (Array.isArray(itemsRaw)) {
+      return itemsRaw.map((item) =>
+        normalize(item as Record<string, unknown>)
+      );
+    }
+  }
+  return [];
+}
+
+async function fetchAllPaged<T>(
+  path: string,
+  token: string,
+  normalize: (item: Record<string, unknown>) => T,
+  extraQuery?: Record<string, string | number | undefined>
+): Promise<T[]> {
+  const pageSize = 100;
+  let pageNumber = 1;
+  const all: T[] = [];
+
+  while (pageNumber < 500) {
+    const params = new URLSearchParams();
+    params.set("pageNumber", String(pageNumber));
+    params.set("pageSize", String(pageSize));
+    if (extraQuery) {
+      for (const [key, value] of Object.entries(extraQuery)) {
+        if (value !== undefined && value !== "") params.set(key, String(value));
+      }
+    }
+
+    const data = await apiFetch<unknown>(`${path}?${params.toString()}`, {}, token);
+
+    if (Array.isArray(data)) {
+      return data.map((item) => normalize(item as Record<string, unknown>));
+    }
+
+    const batch = parseArrayOrPaged(data, normalize);
+    if (batch.length === 0) break;
+
+    all.push(...batch);
+
+    const totalCount =
+      data && typeof data === "object"
+        ? readNumber(data as Record<string, unknown>, "totalCount", "TotalCount")
+        : 0;
+
+    if (totalCount > 0 && all.length >= totalCount) break;
+    if (batch.length < pageSize) break;
+
+    pageNumber += 1;
+  }
+
+  return all;
 }
 
 function readNullableNumber(
@@ -624,9 +800,7 @@ export function getMyPermissions(token: string) {
 }
 
 export function getRoles(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Permissions/roles", {}, token).then(
-    (items) => items.map((item) => normalizeRoleSummary(item))
-  );
+  return fetchAllPaged("Permissions/roles", token, normalizeRoleSummary);
 }
 
 export function getRolePermissions(roleId: number, token: string) {
@@ -649,9 +823,7 @@ export function updateRolePermissions(
 }
 
 export function getPermissionsList(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Permissions/list", {}, token).then(
-    (items) => items.map((item) => normalizePermissionListItem(item))
-  );
+  return fetchAllPaged("Permissions/list", token, normalizePermissionListItem);
 }
 
 export function createPermission(
@@ -722,9 +894,7 @@ export function deleteRole(roleId: number, token: string) {
 }
 
 export function getUsers(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Permissions/users", {}, token).then(
-    (items) => items.map((item) => normalizeUserSummary(item))
-  );
+  return fetchAllPaged("Permissions/users", token, normalizeUserSummary);
 }
 
 export function getUserRoles(userId: string, token: string) {
@@ -790,9 +960,7 @@ export function clearUserPermissions(userId: string, token: string) {
 }
 
 export function getUnits(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Unit", {}, token).then((items) =>
-    items.map((item) => normalizeUnitItem(item))
-  );
+  return fetchAllPaged("Unit", token, normalizeUnitItem);
 }
 
 export function createUnit(data: CreateUnitRequest, token: string) {
@@ -847,9 +1015,7 @@ export function deleteUnit(uCode: string, token: string) {
 }
 
 export function getItemFormats(token: string) {
-  return apiFetch<Record<string, unknown>[]>("ItemFormat", {}, token).then(
-    (items) => items.map((item) => normalizeItemFormatItem(item))
-  );
+  return fetchAllPaged("ItemFormat", token, normalizeItemFormatItem);
 }
 
 export function createItemFormat(data: CreateItemFormatRequest, token: string) {
@@ -886,9 +1052,7 @@ export function deleteItemFormat(itfCode: number, token: string) {
 }
 
 export function getItemOrigins(token: string) {
-  return apiFetch<Record<string, unknown>[]>("ItemOrigin", {}, token).then(
-    (items) => items.map((item) => normalizeItemOriginItem(item))
-  );
+  return fetchAllPaged("ItemOrigin", token, normalizeItemOriginItem);
 }
 
 export function createItemOrigin(data: CreateItemOriginRequest, token: string) {
@@ -922,10 +1086,139 @@ export function deleteItemOrigin(ioId: number, token: string) {
   return apiFetch<void>(`ItemOrigin/${ioId}`, { method: "DELETE" }, token);
 }
 
-export function getCompanies(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Company", {}, token).then(
-    (items) => items.map((item) => normalizeCompanyItem(item))
+export function getMovParients(token: string) {
+  return fetchAllPaged("MovParient", token, normalizeMovParientItem);
+}
+
+export function createMovParient(data: CreateMovParientRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "MovParient",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        MovParientAname: data.movParientAname,
+        MovParientEname: data.movParientEname,
+      }),
+    },
+    token
+  ).then((item) => normalizeMovParientItem(item));
+}
+
+export function updateMovParient(
+  movParientId: number,
+  data: UpdateMovParientRequest,
+  token: string
+) {
+  return apiFetch<void>(`MovParient/${movParientId}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      MovParientAname: data.movParientAname,
+      MovParientEname: data.movParientEname,
+    }),
+  }, token);
+}
+
+export function deleteMovParient(movParientId: number, token: string) {
+  return apiFetch<void>(`MovParient/${movParientId}`, { method: "DELETE" }, token);
+}
+
+export function getMovments(token: string, movParientId?: number) {
+  return fetchAllPaged(
+    "Movment",
+    token,
+    normalizeMovmentItem,
+    movParientId != null ? { movParientId } : undefined
   );
+}
+
+/** Active movements for a parent — transaction-page lookup. */
+export function lookupMovments(
+  token: string,
+  parentId: number,
+  search?: string,
+  options?: { pageNumber?: number; pageSize?: number; signal?: AbortSignal }
+): Promise<MovmentLookupItem[]> {
+  const params = new URLSearchParams();
+  params.set("parentId", String(parentId));
+  if (search?.trim()) params.set("search", search.trim());
+  params.set("pageNumber", String(options?.pageNumber ?? 1));
+  params.set("pageSize", String(options?.pageSize ?? 50));
+
+  return apiFetch<unknown>(
+    `Movment/lookup?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => parseArrayOrPaged(data, normalizeMovmentLookupItem));
+}
+
+/** Full movement row — used to load store/account fields for purchase header. */
+export function getMovmentById(
+  id: number,
+  token: string,
+  options?: { signal?: AbortSignal }
+): Promise<MovmentItem> {
+  return apiFetch<Record<string, unknown>>(
+    `Movment/${id}`,
+    { signal: options?.signal },
+    token
+  ).then((item) => normalizeMovmentItem(item));
+}
+
+export function createMovment(data: MovmentUpsertRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "Movment",
+    {
+      method: "POST",
+      body: JSON.stringify(buildMovmentPayload(data)),
+    },
+    token
+  ).then((item) => normalizeMovmentItem(item));
+}
+
+export function updateMovment(
+  id: number,
+  data: MovmentUpsertRequest,
+  token: string
+) {
+  return apiFetch<void>(`Movment/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(buildMovmentPayload(data)),
+  }, token);
+}
+
+export function deleteMovment(id: number, token: string) {
+  return apiFetch<void>(`Movment/${id}`, { method: "DELETE" }, token);
+}
+
+export type MovValueNextResult = {
+  success: boolean;
+  value: number;
+  message?: string | null;
+};
+
+/** Atomically get the next sequence value for a movement id (Movdid). */
+export function getNextMovValue(
+  movId: number,
+  token: string,
+  options?: { signal?: AbortSignal }
+): Promise<MovValueNextResult> {
+  return apiFetch<Record<string, unknown>>(
+    `MovValue/GetNextValue/${movId}`,
+    { method: "POST", signal: options?.signal },
+    token
+  ).then((data) => {
+    const success = Boolean(data.success ?? data.Success);
+    const value = Number(data.value ?? data.Value ?? 0);
+    const message =
+      (data.message as string | undefined) ??
+      (data.Message as string | undefined) ??
+      null;
+    return { success, value, message };
+  });
+}
+
+export function getCompanies(token: string) {
+  return fetchAllPaged("Company", token, normalizeCompanyItem);
 }
 
 export function createCompany(data: CreateCompanyRequest, token: string) {
@@ -970,9 +1263,7 @@ export function deleteCompany(comId: number, token: string) {
 }
 
 export function getGroups(token: string) {
-  return apiFetch<Record<string, unknown>[]>("Group", {}, token).then((items) =>
-    items.map((item) => normalizeGroupItem(item))
-  );
+  return fetchAllPaged("Group", token, normalizeGroupItem);
 }
 
 export function createGroup(data: CreateGroupRequest, token: string) {
@@ -1013,7 +1304,8 @@ export function getItemCatalogs(token: string) {
 export async function fetchAllItemCatalogItems(
   token: string
 ): Promise<ItemCatalogItem[]> {
-  const pageSize = 200;
+  // API MaxPageSize is 100 — page through until all rows are loaded.
+  const pageSize = 100;
   let page = 1;
   let totalCount = 0;
   const all: ItemCatalogItem[] = [];

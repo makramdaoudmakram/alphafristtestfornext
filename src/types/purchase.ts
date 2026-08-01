@@ -8,6 +8,18 @@ export type PurchaseHeader = {
   venBillDate: string;
   phtDate: string;
   venId: string;
+  /** Store from movement MovStor */
+  stoId: string;
+  /** Movement child id (MovChiledId) */
+  movId: number | null;
+  /** Movment.Id PK — server uses this to map StoId/MovId/accounts */
+  movmentRowId: number | null;
+  /** From movement MovAccountEntry2 */
+  movAccount: string;
+  /** From movement MovAccountEntry1 */
+  movAccountsec: string;
+  /** From movement MovAccountEntry3 */
+  movAccounttherd: string;
   noOfItems: number;
   totalQuantity: number;
   totalBill: number;

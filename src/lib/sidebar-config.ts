@@ -88,6 +88,21 @@ export const SIDEBAR_NAV: NavItem[] = [
         ],
       },
       {
+        title: "TransSetting",
+        items: [
+          {
+            title: "Move Parient",
+            href: "/dashboard/item-transactions",
+            permission: PERMISSIONS.movParient.view,
+          },
+          {
+            title: "Movement Setting",
+            href: "/dashboard/movement-setting",
+            permission: PERMISSIONS.movment.view,
+          },
+        ],
+      },
+      {
         title: "Account Setting",
         items: [
           {
@@ -131,4 +146,6 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
+  "/dashboard/item-transactions": "Move Parient",
+  "/dashboard/movement-setting": "Movement Setting",
 };

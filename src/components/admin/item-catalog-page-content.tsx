@@ -13,9 +13,9 @@ import {
   getItemCatalogPage,
   getItemFormats,
   getItemOrigins,
-  getUnits,
   updateItemCatalog,
 } from "@/lib/api-client";
+import { createUnitService } from "@/services/unit.service";
 import {
   emptyItemCatalogFormValues,
   formValuesToUpsertRequest,
@@ -211,7 +211,8 @@ export function ItemCatalogPageContent() {
     const sortBy = sort?.id ?? "itmCode";
 
     try {
-      const [catalogPage, companyList, unitList, formatList, originList, groupList] =
+      const unitService = createUnitService(token);
+      const [catalogPage, companyList, unitResult, formatList, originList, groupList] =
         await Promise.all([
           getItemCatalogPage(token, {
             page: pagination.pageIndex + 1,
@@ -221,7 +222,7 @@ export function ItemCatalogPageContent() {
             search: debouncedSearch.trim() || undefined,
           }),
           getCompanies(token),
-          getUnits(token),
+          unitService.listUnits(),
           getItemFormats(token),
           getItemOrigins(token),
           getGroups(token),
@@ -230,7 +231,7 @@ export function ItemCatalogPageContent() {
       setItems(catalogPage.items);
       setTotalCount(catalogPage.totalCount);
       setCompanies(companyList);
-      setUnits(unitList);
+      setUnits(unitResult.units);
       setFormats(formatList);
       setOrigins(originList);
       setGroups(groupList);

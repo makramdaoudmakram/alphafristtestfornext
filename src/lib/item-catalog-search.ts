@@ -38,6 +38,15 @@ export function patchDetailFromCatalogItem(
   };
 }
 
+function fieldText(
+  item: ItemCatalogItem,
+  field: ItemCatalogSearchField
+): string {
+  if (field === "code") return norm(item.itmCode);
+  if (field === "nameAr") return norm(item.itmNameAr);
+  return norm(item.itmNameEn);
+}
+
 /** Exact field match, else first autocomplete hit (for Enter without open list). */
 export function resolveCatalogItemOnEnter(
   items: ItemCatalogItem[],
@@ -48,10 +57,7 @@ export function resolveCatalogItemOnEnter(
   if (!q) return null;
 
   for (const item of items) {
-    let hay = "";
-    if (field === "code") hay = norm(item.itmCode);
-    else if (field === "nameAr") hay = norm(item.itmNameAr);
-    else hay = norm(item.itmNameEn);
+    const hay = fieldText(item, field);
     if (hay && hay === q) return item;
   }
 
@@ -59,6 +65,10 @@ export function resolveCatalogItemOnEnter(
   return hits[0] ?? null;
 }
 
+/**
+ * Contains search (not prefix-only). Case-insensitive, trimmed.
+ * Example: "ment" matches "Augmentin".
+ */
 export function searchItemCatalog(
   items: ItemCatalogItem[],
   field: ItemCatalogSearchField,
@@ -67,16 +77,12 @@ export function searchItemCatalog(
 ): ItemCatalogItem[] {
   const q = norm(query);
   if (!q) return [];
+  if (!Array.isArray(items) || items.length === 0) return [];
 
   const matches: ItemCatalogItem[] = [];
   for (const item of items) {
-    let hay = "";
-    if (field === "code") hay = norm(item.itmCode);
-    else if (field === "nameAr") hay = norm(item.itmNameAr);
-    else hay = norm(item.itmNameEn);
-
+    const hay = fieldText(item, field);
     if (!hay) continue;
-
     if (hay.includes(q)) {
       matches.push(item);
       if (matches.length >= limit) break;
@@ -99,7 +105,11 @@ export function suggestionSecondaryLabel(
   field: ItemCatalogSearchField
 ): string {
   if (field === "code") {
-    return [item.itmNameAr, item.itmNameEn].filter(Boolean).join(" · ") || item.itmCode || "";
+    return (
+      [item.itmNameAr, item.itmNameEn].filter(Boolean).join(" · ") ||
+      item.itmCode ||
+      ""
+    );
   }
   return item.itmCode?.trim() || "";
 }

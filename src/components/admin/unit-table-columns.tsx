@@ -2,16 +2,23 @@
 
 import { useMemo } from "react";
 import type { ColumnDef } from "@/components/data-table";
-import type { UnitItem } from "@/types/unit";
+import type { UnitListItem } from "@/types/unit";
 
-export function useUnitColumns(): ColumnDef<UnitItem>[] {
+export function useUnitColumns(): ColumnDef<UnitListItem>[] {
   return useMemo(
     () => [
       {
         accessorKey: "uCode",
         header: "Code",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.uCode}</span>
+          <span className="flex items-center gap-2 font-medium">
+            {row.original.uCode}
+            {row.original.pendingSync ? (
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-normal text-amber-800 dark:text-amber-300">
+                Pending sync
+              </span>
+            ) : null}
+          </span>
         ),
       },
       {

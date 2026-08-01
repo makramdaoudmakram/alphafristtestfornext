@@ -34,7 +34,6 @@ type ItemCatalogAutocompleteCellProps = {
   inputClassName?: string;
   onFocusRow: () => void;
   onChangeRow: (patch: Partial<PurchaseDetail>) => void;
-  /** After a catalog row is applied (e.g. focus Qty). */
   onAfterApply?: () => void;
 };
 
@@ -59,18 +58,23 @@ export function ItemCatalogAutocompleteCell({
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
+  /** False after picking an item or pressing Escape; true again on typing. */
+  const [wantList, setWantList] = useState(true);
 
   const suggestions = useMemo(
     () => searchItemCatalog(catalogItems, field, value),
     [catalogItems, field, value]
   );
 
-  const showList = open && !disabled && suggestions.length > 0;
+  const showList =
+    wantList &&
+    !disabled &&
+    value.trim().length > 0 &&
+    suggestions.length > 0;
 
-  const updateMenuPosition = useCallback(() => {
+  const syncMenuPosition = useCallback(() => {
     const el = rootRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -83,7 +87,30 @@ export function ItemCatalogAutocompleteCell({
 
   useEffect(() => {
     setHighlight(0);
-  }, [suggestions]);
+  }, [value, field]);
+
+  useLayoutEffect(() => {
+    if (!showList) return;
+    syncMenuPosition();
+    window.addEventListener("scroll", syncMenuPosition, true);
+    window.addEventListener("resize", syncMenuPosition);
+    return () => {
+      window.removeEventListener("scroll", syncMenuPosition, true);
+      window.removeEventListener("resize", syncMenuPosition);
+    };
+  }, [showList, syncMenuPosition, value, suggestions.length]);
+
+  useEffect(() => {
+    if (!showList) return;
+    function onDocDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (listRef.current?.contains(target)) return;
+      setWantList(false);
+    }
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [showList]);
 
   useEffect(() => {
     if (!showList || !listRef.current) return;
@@ -93,36 +120,10 @@ export function ItemCatalogAutocompleteCell({
     option?.scrollIntoView({ block: "nearest" });
   }, [highlight, showList]);
 
-  useLayoutEffect(() => {
-    if (!showList) {
-      setMenuPos(null);
-      return;
-    }
-    updateMenuPosition();
-    window.addEventListener("scroll", updateMenuPosition, true);
-    window.addEventListener("resize", updateMenuPosition);
-    return () => {
-      window.removeEventListener("scroll", updateMenuPosition, true);
-      window.removeEventListener("resize", updateMenuPosition);
-    };
-  }, [showList, updateMenuPosition, suggestions.length, value]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDocDown(e: MouseEvent) {
-      const target = e.target as Node;
-      if (rootRef.current?.contains(target)) return;
-      if (listRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
-  }, [open]);
-
   const applyItem = useCallback(
     (item: ItemCatalogItem) => {
       onChangeRow(patchDetailFromCatalogItem(item));
-      setOpen(false);
+      setWantList(false);
       if (onAfterApply) {
         requestAnimationFrame(() => onAfterApply());
       }
@@ -134,7 +135,7 @@ export function ItemCatalogAutocompleteCell({
     if (field === "code") onChangeRow({ itmId: text });
     else if (field === "nameAr") onChangeRow({ itmNameAr: text });
     else onChangeRow({ itmNameEn: text });
-    setOpen(text.trim().length > 0);
+    setWantList(true);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -142,7 +143,7 @@ export function ItemCatalogAutocompleteCell({
       e.preventDefault();
       e.stopPropagation();
       const item =
-        open && suggestions.length > 0
+        showList && suggestions.length > 0
           ? suggestions[highlight]
           : resolveCatalogItemOnEnter(catalogItems, field, value);
       if (item) applyItem(item);
@@ -150,33 +151,22 @@ export function ItemCatalogAutocompleteCell({
     }
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      const query = value.trim();
-      const list = suggestions;
-      const canNavigate = open || query.length > 0;
-      if (!canNavigate || list.length === 0) return;
-
+      if (!value.trim() || suggestions.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
-
-      if (!open) {
-        setOpen(true);
-        setHighlight(e.key === "ArrowUp" ? list.length - 1 : 0);
-        return;
-      }
-
+      setWantList(true);
       if (e.key === "ArrowDown") {
-        setHighlight((i) => Math.min(i + 1, list.length - 1));
+        setHighlight((i) => Math.min(i + 1, suggestions.length - 1));
       } else {
         setHighlight((i) => Math.max(i - 1, 0));
       }
       return;
     }
 
-    if (e.key === "Escape") {
-      if (!open) return;
+    if (e.key === "Escape" && showList) {
       e.preventDefault();
       e.stopPropagation();
-      setOpen(false);
+      setWantList(false);
     }
   };
 
@@ -197,7 +187,7 @@ export function ItemCatalogAutocompleteCell({
       >
         {suggestions.map((item, index) => (
           <li
-            key={`${item.id}-${item.itmCode}`}
+            key={`${item.id}-${item.itmCode ?? index}`}
             role="option"
             aria-selected={index === highlight}
             data-suggestion-index={index}
@@ -240,9 +230,10 @@ export function ItemCatalogAutocompleteCell({
         aria-expanded={showList}
         aria-controls={showList ? listId : undefined}
         aria-autocomplete="list"
+        autoComplete="off"
         onFocus={() => {
           onFocusRow();
-          if (value.trim()) setOpen(true);
+          if (value.trim()) setWantList(true);
         }}
         onChange={(e) => onInputChange(e.target.value)}
         onKeyDown={onKeyDown}

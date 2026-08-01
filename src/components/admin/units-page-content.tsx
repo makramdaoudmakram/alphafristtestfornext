@@ -3,13 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import {
-  createUnit,
-  deleteUnit,
-  getUnits,
-  updateUnit,
-} from "@/lib/api-client";
-import type { UnitItem } from "@/types/unit";
+import { UnitOfflinePanel } from "@/components/admin/unit-offline-panel";
+import { useOffline } from "@/components/providers/offline-provider";
+import { createUnitService } from "@/services/unit.service";
+import type { UnitListItem } from "@/types/unit";
 import {
   UnitFormSheet,
   type UnitFormValues,
@@ -35,13 +32,15 @@ export function UnitsPageContent() {
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
 
-  const [units, setUnits] = useState<UnitItem[]>([]);
+  const [units, setUnits] = useState<UnitListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sheetSaving, setSheetSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
+  const [editingUnit, setEditingUnit] = useState<UnitListItem | null>(null);
+
+  const { syncEngine } = useOffline();
 
   const [uCode, setUCode] = useState("");
   const [uNameAr, setUNameAr] = useState("");
@@ -49,7 +48,7 @@ export function UnitsPageContent() {
 
   const unitColumns = useUnitColumns();
 
-  const loadUnits = useCallback(async () => {
+  const loadUnits = useCallback(async (options?: { quiet?: boolean }) => {
     if (!token) {
       setUnits([]);
       setLoading(false);
@@ -59,8 +58,12 @@ export function UnitsPageContent() {
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await getUnits(token);
+      const service = createUnitService(token);
+      const { units: data, source } = await service.listUnits();
       setUnits(data);
+      if (source === "cache" && !options?.quiet) {
+        toast.message("Showing cached units (offline)");
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to load units";
@@ -71,10 +74,31 @@ export function UnitsPageContent() {
     }
   }, [token]);
 
+  const reloadFromIndexedDb = useCallback(async () => {
+    if (!token) return;
+    const service = createUnitService(token);
+    const data = await service.listUnitsFromIndexedDb();
+    setUnits(data);
+    setLoadError(null);
+    toast.message(`Showing ${data.length} unit(s) from IndexedDB`);
+  }, [token]);
+
   useEffect(() => {
     if (!sessionReady) return;
     void loadUnits();
   }, [sessionReady, loadUnits]);
+
+  useEffect(() => {
+    if (!syncEngine) return;
+    return syncEngine.subscribe((event) => {
+      if (event.type === "sync-idle" || event.type === "item-processed") {
+        void loadUnits({ quiet: true });
+      }
+      if (event.type === "item-failed") {
+        toast.error(`Sync failed: ${event.message}`);
+      }
+    });
+  }, [syncEngine, loadUnits]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -82,15 +106,15 @@ export function UnitsPageContent() {
 
     setSaving(true);
     try {
-      await createUnit(
-        {
-          uCode: uCode.trim(),
-          uNameAr: uNameAr.trim(),
-          uNameEn: uNameEn.trim(),
-        },
-        token
+      const service = createUnitService(token);
+      const { queued } = await service.createUnit({
+        uCode: uCode.trim(),
+        uNameAr: uNameAr.trim(),
+        uNameEn: uNameEn.trim(),
+      });
+      toast.success(
+        queued ? "Unit saved offline — will sync when online" : "Unit created"
       );
-      toast.success("Unit created");
       setUCode("");
       setUNameAr("");
       setUNameEn("");
@@ -104,7 +128,7 @@ export function UnitsPageContent() {
     }
   }
 
-  function handleEditUnit(row: UnitItem) {
+  function handleEditUnit(row: UnitListItem) {
     setEditingUnit(row);
     setSheetOpen(true);
   }
@@ -114,15 +138,14 @@ export function UnitsPageContent() {
 
     setSheetSaving(true);
     try {
-      await updateUnit(
-        editingUnit.uCode,
-        {
-          uNameAr: values.uNameAr.trim(),
-          uNameEn: values.uNameEn.trim(),
-        },
-        token
+      const service = createUnitService(token);
+      const { queued } = await service.updateUnit(editingUnit.uCode, {
+        uNameAr: values.uNameAr.trim(),
+        uNameEn: values.uNameEn.trim(),
+      });
+      toast.success(
+        queued ? "Unit saved offline — will sync when online" : "Unit updated"
       );
-      toast.success("Unit updated");
       setSheetOpen(false);
       setEditingUnit(null);
       await loadUnits();
@@ -135,7 +158,7 @@ export function UnitsPageContent() {
     }
   }
 
-  function handleDeleteUnit(row: UnitItem) {
+  function handleDeleteUnit(row: UnitListItem) {
     toast(`Delete unit "${row.uCode}"?`, {
       description: "This will permanently remove the unit from the database.",
       action: {
@@ -151,12 +174,17 @@ export function UnitsPageContent() {
     });
   }
 
-  async function confirmDeleteUnit(row: UnitItem) {
+  async function confirmDeleteUnit(row: UnitListItem) {
     if (!token) return;
 
     try {
-      await deleteUnit(row.uCode, token);
-      toast.success("Unit deleted");
+      const service = createUnitService(token);
+      const { queued } = await service.deleteUnit(row.uCode);
+      toast.success(
+        queued
+          ? "Unit removed offline — delete will sync when online"
+          : "Unit deleted"
+      );
       await loadUnits();
     } catch (error) {
       toast.error(
@@ -174,6 +202,12 @@ export function UnitsPageContent() {
             Manage measurement units connected to the Alfa API.
           </p>
         </div>
+
+        <UnitOfflinePanel
+          token={token}
+          onDataChanged={() => loadUnits()}
+          onReloadFromIndexedDb={() => reloadFromIndexedDb()}
+        />
 
         <ActionGuard permission={PERMISSIONS.unit.create}>
           <Card>

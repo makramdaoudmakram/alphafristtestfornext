@@ -14,6 +14,8 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/transactions/purchase": null,
+  "/dashboard/item-transactions": null,
+  "/dashboard/movement-setting": null,
 };
 
 export const PERMISSIONS = {
@@ -66,6 +68,19 @@ export const PERMISSIONS = {
   purchase: {
     /** Set when PurTransH RBAC is seeded on Alfa API */
     view: null as string | null,
+  },
+  movParient: {
+    /** Set when MovParient RBAC is seeded on Alfa API */
+    view: null as string | null,
+    create: null as string | null,
+    edit: null as string | null,
+    delete: null as string | null,
+  },
+  movment: {
+    view: null as string | null,
+    create: null as string | null,
+    edit: null as string | null,
+    delete: null as string | null,
   },
   permissions: {
     manage: "Permissions.Manage",
@@ -128,6 +143,16 @@ export const NAV_LINKS = [
     href: "/dashboard/groups",
     label: "Groups",
     permission: PERMISSIONS.group.view,
+  },
+  {
+    href: "/dashboard/item-transactions",
+    label: "Move Parient",
+    permission: PERMISSIONS.movParient.view,
+  },
+  {
+    href: "/dashboard/movement-setting",
+    label: "Movement Setting",
+    permission: PERMISSIONS.movment.view,
   },
 ] as const;
 

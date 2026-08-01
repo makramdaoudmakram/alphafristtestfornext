@@ -419,13 +419,12 @@ export function DetailsGrid({
         ↑↓ to highlight a suggestion, Enter to apply and jump to Qty.
         {catalogLoading ? (
           <span className="text-muted-foreground block pt-1">
-            Loading item catalog for autocomplete…
+            Loading item catalog…
           </span>
         ) : null}
         {catalogLoaded && catalogItems.length === 0 ? (
           <span className="text-destructive block pt-1">
-            Item catalog not loaded or empty — use New/Edit mode, stay signed in,
-            and ensure the Alfa API is running with Item Catalog data.
+            Item catalog not loaded — stay signed in and confirm the API is running.
           </span>
         ) : null}
       </p>
