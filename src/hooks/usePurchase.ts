@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { Resolver } from "react-hook-form";
 import { computeHeaderTotals, mapDetailsWithLineTotals } from "@/lib/purchase-calculations";
 import {
+  applyMovementStoToDetails,
   applyMovementToHeader,
   createEmptyDetailRow,
   documentToFormValues,
@@ -164,7 +165,10 @@ export function usePurchase(token: string | undefined) {
         selectedMovement ?? null
       );
 
-      const detailsForSave = filterDetailsWithItemCode(detailsWithTotals);
+      const detailsForSave = applyMovementStoToDetails(
+        filterDetailsWithItemCode(detailsWithTotals),
+        selectedMovement ?? null
+      );
       const removedCount = detailsWithTotals.length - detailsForSave.length;
 
       if (detailsForSave.length === 0) {
@@ -282,8 +286,8 @@ export function usePurchase(token: string | undefined) {
     [service]
   );
 
-  const addDetailRow = useCallback(() => {
-    setDetails((rows) => [...rows, createEmptyDetailRow()]);
+  const addDetailRow = useCallback((defaultStoId = "") => {
+    setDetails((rows) => [...rows, createEmptyDetailRow(defaultStoId)]);
     setSelectedRowIndex(details.length);
   }, [details.length]);
 

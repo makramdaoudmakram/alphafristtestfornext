@@ -154,7 +154,6 @@ export class PurchaseRepository {
         VenBillDate: h.venBillDate,
         PhtDate: h.phtDate,
         VenId: h.venId || null,
-        StoId: h.stoId || null,
         MovId: h.movId != null ? Number(h.movId) : null,
         MovmentRowId: h.movmentRowId != null ? Number(h.movmentRowId) : null,
         MovAccount: h.movAccount || null,
@@ -178,6 +177,7 @@ export class PurchaseRepository {
         ItmDisMon: d.itmDisMon,
         ItmTaxTotal: d.itmTaxTotal,
         UnitId: d.unitId,
+        StoId: d.stoId || null,
       })),
     };
   }

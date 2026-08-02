@@ -19,26 +19,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ExpDateMmYyyyInput } from "@/components/purchase/ExpDateMmYyyyInput";
 import { ItemCatalogAutocompleteCell } from "@/components/purchase/ItemCatalogAutocompleteCell";
+import { getBranchTypeSelectOptions } from "@/lib/movment-enums";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
 
-/** Column keys used for keyboard navigation order */
+/** Column keys used for keyboard navigation order (ItmCode hidden in UI) */
 const EDITABLE_COLUMNS = [
-  "itmId",
   "itmNameAr",
   "itmNameEn",
   "qnty",
   "bonus",
   "itmPurPrice",
+  "stoId",
   "itmSell",
   "itmDisPer",
   "itmDisMon",
   "itmTaxTotal",
   "expDate",
 ] as const;
+
+const branchTypeOptions = getBranchTypeSelectOptions();
 
 type EditableColumn = (typeof EDITABLE_COLUMNS)[number];
 
@@ -73,11 +83,13 @@ export function DetailsGrid({
   const tableRef = useRef<HTMLDivElement>(null);
 
   const focusCell = useCallback((rowIndex: number, col: EditableColumn) => {
-    const el = tableRef.current?.querySelector<HTMLInputElement>(
+    const el = tableRef.current?.querySelector<HTMLElement>(
       `[data-row="${rowIndex}"][data-col="${col}"]`
     );
     el?.focus();
-    el?.select();
+    if (el instanceof HTMLInputElement) {
+      el.select();
+    }
   }, []);
 
   const handleGridKeyDown = useCallback(
@@ -115,7 +127,10 @@ export function DetailsGrid({
         }
       }
       if (target.closest('[data-autocomplete-open="true"]')) return;
-      if (target.tagName !== "INPUT") return;
+      const isGridField =
+        target.tagName === "INPUT" ||
+        (target.tagName === "BUTTON" && target.dataset.col === "stoId");
+      if (!isGridField) return;
 
       const rowIndex = Number(target.dataset.row);
       const col = target.dataset.col as EditableColumn | undefined;
@@ -160,24 +175,6 @@ export function DetailsGrid({
         header: "#",
         cell: ({ row }) => row.index + 1,
         size: 40,
-      },
-      {
-        accessorKey: "itmId",
-        header: "Item",
-        cell: ({ row }) => (
-          <ItemCatalogAutocompleteCell
-            field="code"
-            rowIndex={row.index}
-            dataCol="itmId"
-            value={row.original.itmId}
-            token={token}
-            catalogItems={catalogItems}
-            disabled={disabled}
-            onFocusRow={() => onSelectRow(row.index)}
-            onChangeRow={(patch) => onChangeRow(row.index, patch)}
-            onAfterApply={() => focusCell(row.index, "qnty")}
-          />
-        ),
       },
       {
         id: "itmNameAr",
@@ -274,6 +271,33 @@ export function DetailsGrid({
             }
             className={cn("h-8 w-24 tabular-nums", formControlFocusClass)}
           />
+        ),
+      },
+      {
+        accessorKey: "stoId",
+        header: "Store",
+        cell: ({ row }) => (
+          <Select
+            value={row.original.stoId?.trim() || undefined}
+            onValueChange={(value) => onChangeRow(row.index, { stoId: value })}
+            disabled={disabled}
+          >
+            <SelectTrigger
+              className={cn("h-8 w-[5.5rem] text-xs", formControlFocusClass)}
+              data-row={row.index}
+              data-col="stoId"
+              onFocus={() => onSelectRow(row.index)}
+            >
+              <SelectValue placeholder="Store" />
+            </SelectTrigger>
+            <SelectContent>
+              {branchTypeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         ),
       },
       {
@@ -421,7 +445,7 @@ export function DetailsGrid({
         </Button>
       </div>
       <p className="text-muted-foreground text-xs">
-        Keyboard: type in Item / Arabic / English for autocomplete (max 15).
+        Keyboard: type in Arabic / English name for autocomplete (max 15).
         ↑↓ to highlight a suggestion, Enter to apply and jump to Qty.
         {catalogLoading ? (
           <span className="text-muted-foreground block pt-1">

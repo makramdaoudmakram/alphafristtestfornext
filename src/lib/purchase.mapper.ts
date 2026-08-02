@@ -86,7 +86,7 @@ function newClientRowId(): string {
   return `row-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function createEmptyDetailRow(): PurchaseDetail {
+export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
   return {
     id: null,
     clientRowId: newClientRowId(),
@@ -103,6 +103,7 @@ export function createEmptyDetailRow(): PurchaseDetail {
     itmDisMon: 0,
     itmTaxTotal: 0,
     unitId: "",
+    stoId,
     lineTotal: 0,
   };
 }
@@ -115,7 +116,6 @@ export function emptyPurchaseHeader(): PurchaseHeader {
     venBillDate: "",
     phtDate: new Date().toISOString().slice(0, 10),
     venId: "",
-    stoId: "",
     movId: null,
     movmentRowId: null,
     movAccount: "",
@@ -175,6 +175,7 @@ export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
     itmDisMon: readNumber(raw, "itmDisMon", "ItmDisMon"),
     itmTaxTotal: readNumber(raw, "itmTaxTotal", "ItmTaxTotal"),
     unitId: readUnitId(raw),
+    stoId: readString(raw, "stoId", "StoId"),
     lineTotal: 0,
   };
   row.lineTotal = computeLineTotal(row);
@@ -189,7 +190,6 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
     venBillDate: formatDateInput(raw.venBillDate ?? raw.VenBillDate),
     phtDate: formatDateInput(raw.phtDate ?? raw.PhtDate),
     venId: readString(raw, "venId", "VenId"),
-    stoId: readString(raw, "stoId", "StoId"),
     movId: readNullableNumber(raw, "movId", "MovId"),
     movmentRowId: readNullableNumber(raw, "movmentRowId", "MovmentRowId"),
     movAccount: readString(raw, "movAccount", "MovAccount"),
@@ -254,13 +254,12 @@ export function mergeSavedDetailsWithPrior(
   });
 }
 
-/** Map selected movement settings onto PurTransH header fields. */
+/** Map selected movement settings onto PurTransH header fields (StoId is on detail lines). */
 export function applyMovementToHeader(
   header: PurchaseHeaderFormValues,
   movement: {
     id: number;
     movChiledId: number | null;
-    movStor: string | null;
     movAccountEntry1: string | null;
     movAccountEntry2: string | null;
     movAccountEntry3: string | null;
@@ -271,19 +270,30 @@ export function applyMovementToHeader(
   const entry1 = movement.movAccountEntry1?.trim() ?? "";
   const entry2 = movement.movAccountEntry2?.trim() ?? "";
   const entry3 = movement.movAccountEntry3?.trim() ?? "";
-  const movStor = movement.movStor?.trim() ?? "";
 
   return {
     ...header,
     movmentRowId: movement.id,
-    // Force mapping from movement (do not keep stale empty form values)
-    stoId: movStor,
     movId: movement.movChiledId,
     venId: entry1,
     movAccountsec: entry1,
     movAccount: entry2,
     movAccounttherd: entry3,
   };
+}
+
+/** Apply movement MovStor onto each detail line StoId. */
+export function applyMovementStoToDetails(
+  details: PurchaseDetail[],
+  movement: { movStor: string | null } | null
+): PurchaseDetail[] {
+  if (!movement) return details;
+  const movStor = movement.movStor?.trim() ?? "";
+  if (!movStor) return details;
+  return details.map((row) => ({
+    ...row,
+    stoId: row.stoId?.trim() || movStor,
+  }));
 }
 
 export function toUpsertPayload(
@@ -298,7 +308,6 @@ export function toUpsertPayload(
       venBillDate: header.venBillDate,
       phtDate: header.phtDate,
       venId: header.venId?.trim() ?? "",
-      stoId: header.stoId?.trim() ?? "",
       movId: header.movId,
       movmentRowId: header.movmentRowId,
       movAccount: header.movAccount?.trim() ?? "",
@@ -334,6 +343,7 @@ export function toUpsertPayload(
           itmDisPer: rest.itmDisPer,
           itmDisMon: rest.itmDisMon,
           itmTaxTotal: rest.itmTaxTotal,
+          stoId: rest.stoId?.trim() ?? "",
         };
         if (apiUnitId !== undefined) line.unitId = apiUnitId;
         return line;

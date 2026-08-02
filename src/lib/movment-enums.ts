@@ -50,6 +50,14 @@ export function getBranchTypeOptions(): ComboboxOption[] {
   }));
 }
 
+/** Branch options for grids/forms — label is Br1…Br10, value is 1…10. */
+export function getBranchTypeSelectOptions(): ComboboxOption[] {
+  return Object.entries(BranchType).map(([name, value]) => ({
+    value: String(value),
+    label: name,
+  }));
+}
+
 export function getMovmentEffectOptions(): ComboboxOption[] {
   return Object.entries(MovmentEffect).map(([name, value]) => ({
     value: String(value),

@@ -56,8 +56,7 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {/* Keep movement-mapped fields registered so zodResolver does not wipe them */}
-      <input type="hidden" {...register("stoId")} />
+      {/* Keep movement-mapped header fields registered so zodResolver does not wipe them */}
       <input
         type="hidden"
         {...register("movId", {

@@ -8,11 +8,9 @@ export type PurchaseHeader = {
   venBillDate: string;
   phtDate: string;
   venId: string;
-  /** Store from movement MovStor */
-  stoId: string;
   /** Movement child id (MovChiledId) */
   movId: number | null;
-  /** Movment.Id PK — server uses this to map StoId/MovId/accounts */
+  /** Movment.Id PK — server uses this to map detail StoId/MovId/accounts */
   movmentRowId: number | null;
   /** From movement MovAccountEntry2 */
   movAccount: string;
@@ -50,6 +48,8 @@ export type PurchaseDetail = {
   itmDisMon: number;
   itmTaxTotal: number;
   unitId: string;
+  /** Store from movement MovStor — one value per detail line */
+  stoId: string;
   /** Computed: quantity × price − discounts + tax */
   lineTotal: number;
 };

@@ -143,6 +143,7 @@ export function PurchasePageContent() {
     form,
     mode,
     details,
+    setDetails,
     selectedRowIndex,
     setSelectedRowIndex,
     loading,
@@ -209,7 +210,6 @@ export function PurchasePageContent() {
         shouldDirty: true,
         shouldValidate: false,
       });
-      form.setValue("stoId", movStor, { shouldDirty: true, shouldValidate: false });
       form.setValue("movId", movChiledId, { shouldDirty: true, shouldValidate: false });
       form.setValue("venId", entry1, { shouldDirty: true, shouldValidate: false });
       form.setValue("movAccountsec", entry1, { shouldDirty: true, shouldValidate: false });
@@ -219,9 +219,13 @@ export function PurchasePageContent() {
         shouldValidate: false,
       });
 
+      if (movStor) {
+        setDetails((rows) => rows.map((row) => ({ ...row, stoId: movStor })));
+      }
+
       showMovementToast(mapped);
     },
-    [form, showMovementToast]
+    [form, setDetails, showMovementToast]
   );
 
   const handleMovementChange = useCallback(
@@ -229,12 +233,12 @@ export function PurchasePageContent() {
       if (!item) {
         setSelectedMovement(null);
         form.setValue("movmentRowId", null, { shouldDirty: true, shouldValidate: false });
-        form.setValue("stoId", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movId", null, { shouldDirty: true, shouldValidate: false });
         form.setValue("venId", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccountsec", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccount", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccounttherd", "", { shouldDirty: true, shouldValidate: false });
+        setDetails((rows) => rows.map((row) => ({ ...row, stoId: "" })));
         return;
       }
 
@@ -308,7 +312,7 @@ export function PurchasePageContent() {
         }
       }
     },
-    [applyMovementFields, form, token]
+    [applyMovementFields, form, setDetails, token]
   );
 
   function confirmDelete() {
@@ -425,7 +429,9 @@ export function PurchasePageContent() {
               selectedRowIndex={selectedRowIndex}
               onSelectRow={setSelectedRowIndex}
               onChangeRow={updateDetailRow}
-              onAddRow={addDetailRow}
+              onAddRow={() =>
+                addDetailRow(selectedMovement?.movStor?.trim() ?? "")
+              }
               onRemoveRow={removeDetailRow}
             />
           </CardContent>
