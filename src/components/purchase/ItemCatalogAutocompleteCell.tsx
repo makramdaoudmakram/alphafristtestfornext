@@ -5,14 +5,15 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
+import { lookupItemCatalog } from "@/lib/api-client";
 import {
+  ITEM_AUTOCOMPLETE_LIMIT,
   patchDetailFromCatalogItem,
   resolveCatalogItemOnEnter,
   searchItemCatalog,
@@ -24,11 +25,16 @@ import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
 
+const LOOKUP_DEBOUNCE_MS = 250;
+
 type ItemCatalogAutocompleteCellProps = {
   field: ItemCatalogSearchField;
   rowIndex: number;
   dataCol: string;
   value: string;
+  /** Auth token — when set, suggestions come from GET /ItemCatalog/lookup (full table). */
+  token?: string | null;
+  /** Local catalog fallback (Enter resolve / offline) — not the primary search source. */
   catalogItems: ItemCatalogItem[];
   disabled: boolean;
   inputClassName?: string;
@@ -48,6 +54,7 @@ export function ItemCatalogAutocompleteCell({
   rowIndex,
   dataCol,
   value,
+  token,
   catalogItems,
   disabled,
   inputClassName,
@@ -62,17 +69,14 @@ export function ItemCatalogAutocompleteCell({
   const [menuPos, setMenuPos] = useState<MenuPosition | null>(null);
   /** False after picking an item or pressing Escape; true again on typing. */
   const [wantList, setWantList] = useState(true);
-
-  const suggestions = useMemo(
-    () => searchItemCatalog(catalogItems, field, value),
-    [catalogItems, field, value]
-  );
+  const [suggestions, setSuggestions] = useState<ItemCatalogItem[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   const showList =
     wantList &&
     !disabled &&
     value.trim().length > 0 &&
-    suggestions.length > 0;
+    (suggestions.length > 0 || lookupLoading);
 
   const syncMenuPosition = useCallback(() => {
     const el = rootRef.current;
@@ -85,9 +89,53 @@ export function ItemCatalogAutocompleteCell({
     });
   }, []);
 
+  // Server-side full-table lookup (debounced). Falls back to in-memory filter if offline.
+  useEffect(() => {
+    const q = value.trim();
+    if (!wantList || disabled || !q) {
+      setSuggestions([]);
+      setLookupLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      if (!token) {
+        setSuggestions(
+          searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
+        );
+        setLookupLoading(false);
+        return;
+      }
+
+      setLookupLoading(true);
+      try {
+        const results = await lookupItemCatalog(token, q, {
+          take: ITEM_AUTOCOMPLETE_LIMIT,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        setSuggestions(results);
+      } catch {
+        if (controller.signal.aborted) return;
+        // Network/API failure — best-effort local contains search
+        setSuggestions(
+          searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
+        );
+      } finally {
+        if (!controller.signal.aborted) setLookupLoading(false);
+      }
+    }, LOOKUP_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [value, field, token, wantList, disabled, catalogItems]);
+
   useEffect(() => {
     setHighlight(0);
-  }, [value, field]);
+  }, [value, field, suggestions]);
 
   useLayoutEffect(() => {
     if (!showList) return;
@@ -98,7 +146,7 @@ export function ItemCatalogAutocompleteCell({
       window.removeEventListener("scroll", syncMenuPosition, true);
       window.removeEventListener("resize", syncMenuPosition);
     };
-  }, [showList, syncMenuPosition, value, suggestions.length]);
+  }, [showList, syncMenuPosition, value, suggestions.length, lookupLoading]);
 
   useEffect(() => {
     if (!showList) return;
@@ -145,7 +193,11 @@ export function ItemCatalogAutocompleteCell({
       const item =
         showList && suggestions.length > 0
           ? suggestions[highlight]
-          : resolveCatalogItemOnEnter(catalogItems, field, value);
+          : resolveCatalogItemOnEnter(
+              suggestions.length > 0 ? suggestions : catalogItems,
+              field,
+              value
+            );
       if (item) applyItem(item);
       return;
     }
@@ -185,6 +237,11 @@ export function ItemCatalogAutocompleteCell({
         }}
         className="bg-popover max-h-52 overflow-y-auto rounded-md border py-1 shadow-md"
       >
+        {lookupLoading && suggestions.length === 0 ? (
+          <li className="text-muted-foreground px-2 py-1.5 text-xs">
+            Searching…
+          </li>
+        ) : null}
         {suggestions.map((item, index) => (
           <li
             key={`${item.id}-${item.itmCode ?? index}`}
@@ -230,6 +287,7 @@ export function ItemCatalogAutocompleteCell({
         aria-expanded={showList}
         aria-controls={showList ? listId : undefined}
         aria-autocomplete="list"
+        aria-busy={lookupLoading || undefined}
         autoComplete="off"
         onFocus={() => {
           onFocusRow();

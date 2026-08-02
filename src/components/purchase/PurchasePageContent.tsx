@@ -417,6 +417,7 @@ export function PurchasePageContent() {
           <CardContent className="min-h-0 flex-1 pt-6">
             <DetailsGrid
               rows={details}
+              token={token}
               catalogItems={catalogItems}
               catalogLoading={catalogLoading}
               catalogLoaded={catalogLoaded}

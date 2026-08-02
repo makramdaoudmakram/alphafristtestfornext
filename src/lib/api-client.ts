@@ -1376,6 +1376,91 @@ export function getItemCatalogPage(
   ).then((data) => normalizeItemCatalogPagedResult(data));
 }
 
+/**
+ * Full-table item autocomplete lookup (server-side Contains on code + Ar/En names).
+ * Returns top matches only — does not use the paginated admin list page.
+ */
+export function lookupItemCatalog(
+  token: string,
+  search: string,
+  options?: { take?: number; signal?: AbortSignal }
+): Promise<ItemCatalogItem[]> {
+  const term = search.trim();
+  if (!term) return Promise.resolve([]);
+
+  const params = new URLSearchParams();
+  params.set("search", term);
+  params.set("take", String(options?.take ?? 20));
+
+  return apiFetch<unknown>(
+    `ItemCatalog/lookup?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => {
+    if (!Array.isArray(data)) return [];
+    return data.map((row) =>
+      normalizeItemCatalogLookupItem(row as Record<string, unknown>)
+    );
+  });
+}
+
+/** Map lightweight lookup DTO onto ItemCatalogItem (prices needed for line apply). */
+function normalizeItemCatalogLookupItem(
+  item: Record<string, unknown>
+): ItemCatalogItem {
+  return {
+    id: readItemCatalogId(item),
+    itemCatalogId: readNumber(item, "id", "Id", "itemCatalogId", "ItemCatalogId"),
+    itmCode:
+      readString(item, "itmCode", "itm_Code", "Itm_Code", "ItmCode") || null,
+    itmCode2: null,
+    itmIntCode: null,
+    itmNameAr:
+      readString(item, "itmNameAr", "itm_Name_Ar", "Itm_Name_Ar", "ItmNameAr") ||
+      null,
+    itmNameEn:
+      readString(item, "itmNameEn", "itm_Name_En", "Itm_Name_En", "ItmNameEn") ||
+      null,
+    itmDefSellPrice: readNullableNumber(
+      item,
+      "itmDefSellPrice",
+      "itm_DefSell_Price",
+      "Itm_DefSell_Price",
+      "ItmDefSellPrice"
+    ),
+    itmDefTax: null,
+    itmDefPharmPrice: readNullableNumber(
+      item,
+      "itmDefPharmPrice",
+      "itm_DefPharm_Price",
+      "Itm_DefPharm_Price",
+      "ItmDefPharmPrice"
+    ),
+    itmHasExpire: null,
+    itmIsmedicine: false,
+    itmActive: true,
+    itmStopSell: false,
+    itmSrvc: false,
+    itmStopPur: false,
+    itmPrintBarcode: false,
+    itmAllowDiscount: false,
+    itmFreez: false,
+    comId: null,
+    itmOrigin: null,
+    itmGroup: null,
+    itemForm: null,
+    itmNotes: null,
+    itmMaxDiscPer: null,
+    itmMaxDiscVal: null,
+    itmUnit1: null,
+    itmUnit2: null,
+    itmUnit3: null,
+    itmUnit1Unit2: null,
+    itmUnit1Unit3: null,
+    child: null,
+  };
+}
+
 export function getItemCatalog(id: number, token: string) {
   return apiFetch<Record<string, unknown>>(`ItemCatalog/${id}`, {}, token).then(
     (item) => normalizeItemCatalogItem(item)

@@ -44,7 +44,9 @@ type EditableColumn = (typeof EDITABLE_COLUMNS)[number];
 
 type DetailsGridProps = {
   rows: PurchaseDetail[];
+  /** Used for Enter fallback / enrich — autocomplete search uses token + lookup API. */
   catalogItems: ItemCatalogItem[];
+  token?: string | null;
   catalogLoading?: boolean;
   catalogLoaded?: boolean;
   disabled: boolean;
@@ -58,6 +60,7 @@ type DetailsGridProps = {
 export function DetailsGrid({
   rows,
   catalogItems,
+  token,
   catalogLoading = false,
   catalogLoaded = false,
   disabled,
@@ -167,6 +170,7 @@ export function DetailsGrid({
             rowIndex={row.index}
             dataCol="itmId"
             value={row.original.itmId}
+            token={token}
             catalogItems={catalogItems}
             disabled={disabled}
             onFocusRow={() => onSelectRow(row.index)}
@@ -184,6 +188,7 @@ export function DetailsGrid({
             rowIndex={row.index}
             dataCol="itmNameAr"
             value={row.original.itmNameAr}
+            token={token}
             catalogItems={catalogItems}
             disabled={disabled}
             inputClassName="min-w-[8rem]"
@@ -202,6 +207,7 @@ export function DetailsGrid({
             rowIndex={row.index}
             dataCol="itmNameEn"
             value={row.original.itmNameEn}
+            token={token}
             catalogItems={catalogItems}
             disabled={disabled}
             inputClassName="min-w-[8rem]"
@@ -390,7 +396,7 @@ export function DetailsGrid({
         ),
       },
     ],
-    [disabled, catalogItems, focusCell, onChangeRow, onRemoveRow, onSelectRow]
+    [disabled, catalogItems, token, focusCell, onChangeRow, onRemoveRow, onSelectRow]
   );
 
   const table = useReactTable({
