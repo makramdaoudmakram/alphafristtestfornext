@@ -57,6 +57,10 @@ export interface DataTableProps<TData, TValue = unknown> {
   /** Controlled search (e.g. server filter) */
   filterValue?: string;
   onFilterChange?: (value: string) => void;
+  getRowId?: (row: TData) => string;
+  selectedRowId?: string | null;
+  onRowClick?: (row: TData) => void;
+  onRowDoubleClick?: (row: TData) => void;
 }
 
 export function DataTable<TData, TValue = unknown>({
@@ -84,6 +88,10 @@ export function DataTable<TData, TValue = unknown>({
   onSortingChange,
   filterValue,
   onFilterChange,
+  getRowId,
+  selectedRowId,
+  onRowClick,
+  onRowDoubleClick,
 }: DataTableProps<TData, TValue>) {
   const [internalFilter, setInternalFilter] = useState("");
   const [internalSorting, setInternalSorting] = useState<SortingState>([]);
@@ -157,6 +165,7 @@ export function DataTable<TData, TValue = unknown>({
   const table = useReactTable({
     data,
     columns: tableColumns,
+    getRowId: getRowId ? (row) => getRowId(row) : undefined,
     state: {
       globalFilter: manualPagination ? undefined : globalFilter,
       pagination,
@@ -249,18 +258,31 @@ export function DataTable<TData, TValue = unknown>({
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                const rowId = getRowId?.(row.original) ?? row.id;
+                const selected = selectedRowId != null && selectedRowId === rowId;
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={selected ? "selected" : undefined}
+                    className={cn(
+                      (onRowClick || onRowDoubleClick) && "cursor-pointer",
+                      selected && "bg-muted/50"
+                    )}
+                    onClick={() => onRowClick?.(row.original)}
+                    onDoubleClick={() => onRowDoubleClick?.(row.original)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
             ) : (
               <TableRow>
                 <TableCell

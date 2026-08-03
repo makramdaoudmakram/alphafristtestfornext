@@ -49,6 +49,12 @@ import type {
   ItemCatalogPagedResult,
   ItemCatalogUpsertRequest,
 } from "@/types/item-catalog";
+import type {
+  UserListItem,
+  UserListPagedResult,
+  UserListQuery,
+} from "@/types/user";
+import type { PharmFormValues, PharmItem } from "@/types/pharm";
 
 function readString(
   obj: Record<string, unknown>,
@@ -751,15 +757,20 @@ export async function loginWithAlfaApi(
   }
 }
 
-export async function registerWithAlfaApi(
-  email: string,
-  password: string
-): Promise<AuthResponse> {
+export async function registerWithAlfaApi(input: {
+  email: string;
+  password: string;
+  userName?: string;
+}): Promise<AuthResponse> {
   try {
     const response = await fetch(alfaUrl("Auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email: input.email,
+        password: input.password,
+        userName: input.userName ?? null,
+      }),
     });
 
     const data = await parseJsonBody(response);
@@ -895,6 +906,113 @@ export function deleteRole(roleId: number, token: string) {
 
 export function getUsers(token: string) {
   return fetchAllPaged("Permissions/users", token, normalizeUserSummary);
+}
+
+function normalizeUserListItem(raw: Record<string, unknown>): UserListItem {
+  const id = readString(raw, "id", "Id", "userId", "UserId");
+  const email = readString(raw, "email", "Email");
+  const userName = readString(raw, "userName", "UserName") || email || id;
+  const hasDetailFields =
+    "phoneNumber" in raw ||
+    "PhoneNumber" in raw ||
+    "lockoutEnabled" in raw ||
+    "LockoutEnabled" in raw ||
+    "emailConfirmed" in raw ||
+    "EmailConfirmed" in raw;
+
+  return {
+    id,
+    userName,
+    fullName: readString(raw, "fullName", "FullName") || userName,
+    email,
+    phoneNumber: readString(raw, "phoneNumber", "PhoneNumber"),
+    isActive: hasDetailFields
+      ? readBoolean(raw, "isActive", "IsActive")
+      : true,
+    emailConfirmed: hasDetailFields
+      ? readBoolean(raw, "emailConfirmed", "EmailConfirmed")
+      : false,
+    lockoutEnabled: hasDetailFields
+      ? readBoolean(raw, "lockoutEnabled", "LockoutEnabled")
+      : false,
+  };
+}
+
+function normalizeUserListPagedResult(
+  raw: Record<string, unknown>
+): UserListPagedResult {
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) =>
+        normalizeUserListItem(item as Record<string, unknown>)
+      )
+    : [];
+
+  return {
+    items,
+    totalCount: readNumber(raw, "totalCount", "TotalCount"),
+    pageNumber:
+      readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || items.length,
+  };
+}
+
+/** Server-paged AspNetUsers list for the Users admin page. */
+export async function getUsersPage(token: string, query: UserListQuery) {
+  const fullParams = new URLSearchParams();
+  fullParams.set("pageNumber", String(query.pageNumber));
+  fullParams.set("pageSize", String(query.pageSize));
+  if (query.search?.trim()) fullParams.set("search", query.search.trim());
+  if (query.sortBy) fullParams.set("sortBy", query.sortBy);
+  if (query.sortDesc) fullParams.set("sortDesc", "true");
+
+  const legacyParams = new URLSearchParams();
+  legacyParams.set("pageNumber", String(query.pageNumber));
+  legacyParams.set("pageSize", String(query.pageSize));
+
+  const paths = [
+    `Permissions/users/list?${fullParams.toString()}`,
+    `Users?${fullParams.toString()}`,
+    `Permissions/users?${legacyParams.toString()}`,
+  ];
+
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      const data = await apiFetch<Record<string, unknown>>(path, {}, token);
+      let result = normalizeUserListPagedResult(data);
+
+      if (path.startsWith("Permissions/users?") && query.search?.trim()) {
+        const term = query.search.trim().toLowerCase();
+        const filtered = result.items.filter(
+          (user) =>
+            user.userName.toLowerCase().includes(term) ||
+            user.email.toLowerCase().includes(term) ||
+            user.fullName.toLowerCase().includes(term)
+        );
+        result = {
+          ...result,
+          items: filtered,
+          totalCount: filtered.length,
+        };
+      }
+
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof ApiError && error.status === 404) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (lastError instanceof ApiError) {
+    throw lastError;
+  }
+
+  throw new ApiError(404, "Users list endpoint not found on the API.");
 }
 
 export function getUserRoles(userId: string, token: string) {
@@ -1260,6 +1378,89 @@ export function updateCompany(
 
 export function deleteCompany(comId: number, token: string) {
   return apiFetch<void>(`Company/${comId}`, { method: "DELETE" }, token);
+}
+
+function normalizePharmItem(item: Record<string, unknown>): PharmItem {
+  return {
+    parmId: readNumber(item, "parmId", "ParmId"),
+    parmArName: readString(item, "parmArName", "ParmArName"),
+    parmEnName: readString(item, "parmEnName", "ParmEnName"),
+    parmTel: readString(item, "parmTel", "ParmTel"),
+    parmAdress: readString(item, "parmAdress", "ParmAdress"),
+    parmStor: readString(item, "parmStor", "ParmStor"),
+    parmBussReg: readString(item, "parmBussReg", "ParmBussReg"),
+    parmTaxNo: readString(item, "parmTaxNo", "ParmTaxNo"),
+    parmOwnerName: readString(item, "parmOwnerName", "ParmOwnerName"),
+    parmOwnerAdress: readString(item, "parmOwnerAdress", "ParmOwnerAdress"),
+    parmOwnerMob: readString(item, "parmOwnerMob", "ParmOwnerMob"),
+    parmOwnerTel: readString(item, "parmOwnerTel", "ParmOwnerTel"),
+    parmOwnerEMail: readString(item, "parmOwnerEMail", "ParmOwnerEMail"),
+    parmMangerName: readString(item, "parmMangerName", "ParmMangerName"),
+    parmMangerAdress: readString(item, "parmMangerAdress", "ParmMangerAdress"),
+    parmMangerTel: readString(item, "parmMangerTel", "ParmMangerTel"),
+    parmMangerMob: readString(item, "parmMangerMob", "ParmMangerMob"),
+    parmOrder: readNumber(item, "parmOrder", "ParmOrder"),
+  };
+}
+
+function pharmFormToApiBody(values: PharmFormValues) {
+  const order = Number.parseInt(values.parmOrder, 10);
+  return {
+    ParmArName: values.parmArName.trim() || null,
+    ParmEnName: values.parmEnName.trim() || null,
+    ParmTel: values.parmTel.trim() || null,
+    ParmAdress: values.parmAdress.trim() || null,
+    ParmStor: values.parmStor.trim() || null,
+    ParmBussReg: values.parmBussReg.trim() || null,
+    ParmTaxNo: values.parmTaxNo.trim() || null,
+    ParmOwnerName: values.parmOwnerName.trim() || null,
+    ParmOwnerAdress: values.parmOwnerAdress.trim() || null,
+    ParmOwnerMob: values.parmOwnerMob.trim() || null,
+    ParmOwnerTel: values.parmOwnerTel.trim() || null,
+    ParmOwnerEMail: values.parmOwnerEMail.trim() || null,
+    ParmMangerName: values.parmMangerName.trim() || null,
+    ParmMangerAdress: values.parmMangerAdress.trim() || null,
+    ParmMangerTel: values.parmMangerTel.trim() || null,
+    ParmMangerMob: values.parmMangerMob.trim() || null,
+    ParmOrder: Number.isFinite(order) ? order : 0,
+  };
+}
+
+export function getPharms(token: string) {
+  return fetchAllPaged("Pharm", token, normalizePharmItem);
+}
+
+export function createPharm(data: PharmFormValues, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "Pharm",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ParmId: 0,
+        ...pharmFormToApiBody(data),
+      }),
+    },
+    token
+  ).then((item) => normalizePharmItem(item));
+}
+
+export function updatePharm(
+  parmId: number,
+  data: PharmFormValues,
+  token: string
+) {
+  return apiFetch<void>(
+    `Pharm/${parmId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(pharmFormToApiBody(data)),
+    },
+    token
+  );
+}
+
+export function deletePharm(parmId: number, token: string) {
+  return apiFetch<void>(`Pharm/${parmId}`, { method: "DELETE" }, token);
 }
 
 export function getGroups(token: string) {

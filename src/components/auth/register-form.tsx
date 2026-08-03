@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
@@ -10,15 +9,51 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function InlineField({
+  id,
+  label,
+  type = "text",
+  value,
+  onChange,
+  disabled,
+  minLength,
+}: {
+  id: string;
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  minLength?: number;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Label htmlFor={id} className="shrink-0 text-sm">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+        disabled={disabled}
+        minLength={minLength}
+        className="h-9 min-w-[8rem] flex-1"
+      />
+    </div>
+  );
+}
+
 export function RegisterForm() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +63,11 @@ export function RegisterForm() {
     setIsLoading(true);
 
     try {
-      const result = await registerWithAlfaApi(email.trim(), password);
+      const result = await registerWithAlfaApi({
+        email: email.trim(),
+        password,
+        userName: name.trim() || undefined,
+      });
 
       if (!result.isSuccess || !result.token || !result.userId) {
         toast.error(result.message || "Registration failed");
@@ -62,47 +101,42 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Create account</CardTitle>
-        <CardDescription>
-          Register with the Alfa API. First user becomes Admin.
-        </CardDescription>
+    <Card className="w-[80%] max-w-5xl">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-xl">Create account</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              disabled={isLoading}
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Creating account..." : "Register"}
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-wrap items-end gap-x-4 gap-y-3"
+        >
+          <InlineField
+            id="name"
+            label="Name"
+            value={name}
+            onChange={setName}
+            disabled={isLoading}
+          />
+          <InlineField
+            id="email"
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            disabled={isLoading}
+          />
+          <InlineField
+            id="password"
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            disabled={isLoading}
+            minLength={8}
+          />
+          <Button type="submit" className="h-9 shrink-0" disabled={isLoading}>
+            {isLoading ? "Creating..." : "Register"}
           </Button>
-          <p className="text-muted-foreground text-center text-sm">
-            Already have an account?{" "}
-            <Link href="/login" className="text-foreground underline">
-              Sign in
-            </Link>
-          </p>
         </form>
       </CardContent>
     </Card>

@@ -6,11 +6,14 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/admin/roles": "Permissions.Manage",
   "/dashboard/admin/user-roles": "Permissions.Manage",
   "/dashboard/admin/user-permissions": "Permissions.Manage",
+  "/dashboard/admin/users": "Users.View",
+  "/dashboard/admin/users/create": "Users.Create",
   "/dashboard/customers": "Customer.View",
   "/dashboard/units": "Unit.View",
   "/dashboard/item-formats": "ItemFormat.View",
   "/dashboard/item-origins": "ItemOrigin.View",
   "/dashboard/companies": "Company.View",
+  "/dashboard/pharm": "Pharm.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/transactions/purchase": null,
@@ -53,6 +56,12 @@ export const PERMISSIONS = {
     edit: "Company.Edit",
     delete: "Company.Delete",
   },
+  pharm: {
+    view: "Pharm.View",
+    create: "Pharm.Create",
+    edit: "Pharm.Edit",
+    delete: "Pharm.Delete",
+  },
   itemCatalog: {
     view: "ItemCatalog.View",
     create: "ItemCatalog.Create",
@@ -85,6 +94,12 @@ export const PERMISSIONS = {
   permissions: {
     manage: "Permissions.Manage",
   },
+  users: {
+    view: "Users.View",
+    create: "Users.Create",
+    edit: "Users.Edit",
+    delete: "Users.Delete",
+  },
 } as const;
 
 export const NAV_LINKS = [
@@ -98,6 +113,11 @@ export const NAV_LINKS = [
     href: "/dashboard/admin/roles",
     label: "Create Roles",
     permission: PERMISSIONS.permissions.manage,
+  },
+  {
+    href: "/dashboard/admin/users",
+    label: "Users",
+    permission: PERMISSIONS.users.view,
   },
   {
     href: "/dashboard/admin/user-roles",
@@ -133,6 +153,11 @@ export const NAV_LINKS = [
     href: "/dashboard/companies",
     label: "Company",
     permission: PERMISSIONS.company.view,
+  },
+  {
+    href: "/dashboard/pharm",
+    label: "Pharm",
+    permission: PERMISSIONS.pharm.view,
   },
   {
     href: "/dashboard/item-catalog",

@@ -36,6 +36,10 @@ export const SIDEBAR_NAV: NavItem[] = [
         title: "Permission Setting",
         items: [
           {
+            title: "Users",
+            href: "/dashboard/admin/users",
+          },
+          {
             title: "Create Permission",
             href: "/dashboard/admin/permissions",
           },
@@ -106,6 +110,10 @@ export const SIDEBAR_NAV: NavItem[] = [
         title: "Account Setting",
         items: [
           {
+            title: "Pharm",
+            href: "/dashboard/pharm",
+          },
+          {
             title: "Company",
             href: "/dashboard/companies",
             permission: PERMISSIONS.company.view,
@@ -135,6 +143,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Overview",
   "/dashboard/admin/permissions": "Create Permission",
   "/dashboard/admin/roles": "Create Role",
+  "/dashboard/admin/users": "Users",
   "/dashboard/admin/user-roles": "Assign User Roles",
   "/dashboard/admin/user-permissions": "User Permissions",
   "/dashboard/permissions": "Role Permissions",
@@ -143,6 +152,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/item-origins": "Item Origins",
   "/dashboard/units": "Units",
   "/dashboard/companies": "Company",
+  "/dashboard/pharm": "Pharm",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",

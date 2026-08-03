@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Network,
   Receipt,
+  Pill,
 } from "lucide-react";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -40,6 +41,7 @@ const ICONS: Record<string, ElementType> = {
   TransSetting: Receipt,
   "Account Setting": Building2,
   Company: Building2,
+  Pharm: Pill,
   Customers: Users,
   "Item Formats": Package,
   "Item Origins": Globe,
@@ -52,6 +54,7 @@ const ICONS: Record<string, ElementType> = {
   Units: Ruler,
   "Create Permission": KeyRound,
   "Create Role": Shield,
+  Users: UserCog,
   "Assign User Roles": UserCog,
   "User Permissions": UserCog,
   "Role Permissions": ListChecks,
