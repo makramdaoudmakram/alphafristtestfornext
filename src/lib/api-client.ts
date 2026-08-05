@@ -55,6 +55,23 @@ import type {
   UserListQuery,
 } from "@/types/user";
 import type { PharmFormValues, PharmItem } from "@/types/pharm";
+import type {
+  ExcelEntityMetadata,
+  ExcelImportCommitResponse,
+  ExcelImportError,
+  ExcelImportJobStatus,
+  ExcelImportMode,
+  ExcelImportPreview,
+  ExcelImportResult,
+  ExcelPropertyMetadata,
+  ExcelTemplateDownload,
+  ExcelTemplateRequest,
+} from "@/types/excel";
+import {
+  excelImportJobStatusFromApiValue,
+  excelImportModeFromApiValue,
+  excelImportModeToApiValue,
+} from "@/types/excel";
 
 function readString(
   obj: Record<string, unknown>,
@@ -1692,4 +1709,352 @@ export function updateItemCatalog(
 
 export function deleteItemCatalog(id: number, token: string) {
   return apiFetch<void>(`ItemCatalog/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeExcelPropertyMetadata(
+  raw: Record<string, unknown>
+): ExcelPropertyMetadata {
+  return {
+    name: readString(raw, "name", "Name"),
+    clrType: readString(raw, "clrType", "ClrType"),
+    isPrimaryKey: readBoolean(raw, "isPrimaryKey", "IsPrimaryKey"),
+    isForeignKey: readBoolean(raw, "isForeignKey", "IsForeignKey"),
+    isRequired: readBoolean(raw, "isRequired", "IsRequired"),
+    isNullable: readBoolean(raw, "isNullable", "IsNullable"),
+    isImportable: readBoolean(raw, "isImportable", "IsImportable"),
+    isDatabaseGenerated: readBoolean(
+      raw,
+      "isDatabaseGenerated",
+      "IsDatabaseGenerated"
+    ),
+    maxLength: readNumber(raw, "maxLength", "MaxLength") || null,
+    foreignKeyPrincipalEntity:
+      readString(raw, "foreignKeyPrincipalEntity", "ForeignKeyPrincipalEntity") ||
+      null,
+  };
+}
+
+function normalizeExcelEntityMetadata(
+  raw: Record<string, unknown>
+): ExcelEntityMetadata {
+  const propertiesRaw = raw.properties ?? raw.Properties;
+  const properties = Array.isArray(propertiesRaw)
+    ? propertiesRaw.map((item) =>
+        normalizeExcelPropertyMetadata(item as Record<string, unknown>)
+      )
+    : [];
+
+  const excludedRaw = raw.excludedColumns ?? raw.ExcludedColumns;
+  const lookupRaw = raw.lookupColumns ?? raw.LookupColumns;
+
+  return {
+    entityName: readString(raw, "entityName", "EntityName"),
+    displayName: readString(raw, "displayName", "DisplayName"),
+    primaryKey: readString(raw, "primaryKey", "PrimaryKey"),
+    identityKey: readBoolean(raw, "identityKey", "IdentityKey"),
+    alternateKey:
+      readString(raw, "alternateKey", "AlternateKey") || null,
+    excludedColumns: Array.isArray(excludedRaw)
+      ? excludedRaw.map((item) => String(item))
+      : [],
+    lookupColumns: Array.isArray(lookupRaw)
+      ? lookupRaw.map((item) => String(item))
+      : [],
+    useCreateMethod: readBoolean(raw, "useCreateMethod", "UseCreateMethod"),
+    useUpdateMethod: readBoolean(raw, "useUpdateMethod", "UseUpdateMethod"),
+    useDeleteMethod: readBoolean(raw, "useDeleteMethod", "UseDeleteMethod"),
+    properties,
+  };
+}
+
+function parseDownloadFileName(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+
+  const starMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (starMatch?.[1]) {
+    return decodeURIComponent(starMatch[1].replace(/(^"|"$)/g, ""));
+  }
+
+  const match = /filename="?([^";]+)"?/i.exec(contentDisposition);
+  return match?.[1] ?? null;
+}
+
+export function getExcelEntityMetadata(entityName: string, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `Excel/metadata/${encodeURIComponent(entityName)}`,
+    {},
+    token
+  ).then((item) => normalizeExcelEntityMetadata(item));
+}
+
+export async function downloadExcelTemplate(
+  entityName: string,
+  request: ExcelTemplateRequest,
+  token: string
+): Promise<ExcelTemplateDownload> {
+  const response = await fetch(
+    alfaUrl(`Excel/template/${encodeURIComponent(entityName)}`),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        Mode: excelImportModeToApiValue(request.mode),
+        SelectedColumns: request.selectedColumns,
+      }),
+    }
+  );
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const fileName =
+    parseDownloadFileName(response.headers.get("Content-Disposition")) ??
+    `${entityName}-template.xlsx`;
+
+  return { blob, fileName };
+}
+
+function normalizeExcelImportError(
+  raw: Record<string, unknown>
+): ExcelImportError {
+  return {
+    rowNumber: readNumber(raw, "rowNumber", "RowNumber"),
+    columnName: readString(raw, "columnName", "ColumnName") || null,
+    errorCode: readString(raw, "errorCode", "ErrorCode"),
+    message: readString(raw, "message", "Message"),
+  };
+}
+
+function normalizeExcelImportPreview(
+  raw: Record<string, unknown> | undefined
+): ExcelImportPreview {
+  const preview = raw ?? {};
+  return {
+    totalRows: readNumber(preview, "totalRows", "TotalRows"),
+    insertCount: readNumber(preview, "insertCount", "InsertCount"),
+    updateCount: readNumber(preview, "updateCount", "UpdateCount"),
+    deleteCount: readNumber(preview, "deleteCount", "DeleteCount"),
+    validRowCount: readNumber(preview, "validRowCount", "ValidRowCount"),
+    errorCount: readNumber(preview, "errorCount", "ErrorCount"),
+  };
+}
+
+function normalizeExcelImportResult(raw: Record<string, unknown>): ExcelImportResult {
+  const errorsRaw = raw.errors ?? raw.Errors;
+  const errors = Array.isArray(errorsRaw)
+    ? errorsRaw.map((item) =>
+        normalizeExcelImportError(item as Record<string, unknown>)
+      )
+    : [];
+
+  const modeValue = readNumber(raw, "mode", "Mode");
+
+  return {
+    success: readBoolean(raw, "success", "Success"),
+    isPreview: readBoolean(raw, "isPreview", "IsPreview"),
+    entityName: readString(raw, "entityName", "EntityName"),
+    mode: excelImportModeFromApiValue(modeValue),
+    importSessionId:
+      readString(raw, "importSessionId", "ImportSessionId") || null,
+    preview: normalizeExcelImportPreview(
+      (raw.preview ?? raw.Preview) as Record<string, unknown> | undefined
+    ),
+    inserted: readNumber(raw, "inserted", "Inserted"),
+    updated: readNumber(raw, "updated", "Updated"),
+    deleted: readNumber(raw, "deleted", "Deleted"),
+    totalProcessed: readNumber(raw, "totalProcessed", "TotalProcessed"),
+    errors,
+  };
+}
+
+export async function previewExcelImport(
+  entityName: string,
+  file: File,
+  mode: ExcelImportMode,
+  token: string
+): Promise<ExcelImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("mode", String(excelImportModeToApiValue(mode)));
+
+  const response = await fetch(
+    alfaUrl(`Excel/import/${encodeURIComponent(entityName)}/preview`),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    }
+  );
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  const data = await parseJsonBody(response);
+  const result = normalizeExcelImportResult(data);
+
+  if (!response.ok && errorsOnlyMessage(data)) {
+    throw new ApiError(response.status, readString(data, "message", "Message"));
+  }
+
+  return result;
+}
+
+function normalizeExcelImportJobStatus(
+  raw: Record<string, unknown>
+): ExcelImportJobStatus {
+  const resultRaw = raw.result ?? raw.Result;
+  const statusValue = readNumber(raw, "status", "Status");
+
+  return {
+    importJobId: readString(raw, "importJobId", "ImportJobId"),
+    entityName: readString(raw, "entityName", "EntityName"),
+    status: excelImportJobStatusFromApiValue(statusValue),
+    progressPercent: readNumber(raw, "progressPercent", "ProgressPercent"),
+    processedRows: readNumber(raw, "processedRows", "ProcessedRows"),
+    totalRows: readNumber(raw, "totalRows", "TotalRows"),
+    message: readString(raw, "message", "Message") || null,
+    result:
+      resultRaw && typeof resultRaw === "object"
+        ? normalizeExcelImportResult(resultRaw as Record<string, unknown>)
+        : null,
+  };
+}
+
+function normalizeExcelImportCommitResponse(
+  raw: Record<string, unknown>
+): ExcelImportCommitResponse {
+  if (readBoolean(raw, "isAsync", "IsAsync")) {
+    return {
+      isAsync: true,
+      importJobId: readString(raw, "importJobId", "ImportJobId"),
+    };
+  }
+
+  const resultRaw = raw.result ?? raw.Result;
+  if (resultRaw && typeof resultRaw === "object") {
+    return {
+      isAsync: false,
+      result: normalizeExcelImportResult(resultRaw as Record<string, unknown>),
+    };
+  }
+
+  return {
+    isAsync: false,
+    result: normalizeExcelImportResult(raw),
+  };
+}
+
+export async function commitExcelImport(
+  entityName: string,
+  importSessionId: string,
+  token: string
+): Promise<ExcelImportCommitResponse> {
+  const response = await fetch(
+    alfaUrl(`Excel/import/${encodeURIComponent(entityName)}/commit`),
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ ImportSessionId: importSessionId }),
+    }
+  );
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  const data = await parseJsonBody(response);
+  const commitResponse = normalizeExcelImportCommitResponse(data);
+
+  if (!response.ok) {
+    if (!commitResponse.isAsync && commitResponse.result.errors.length > 0) {
+      return commitResponse;
+    }
+
+    if (errorsOnlyMessage(data)) {
+      throw new ApiError(response.status, readString(data, "message", "Message"));
+    }
+  }
+
+  return commitResponse;
+}
+
+export async function getExcelImportJobStatus(
+  entityName: string,
+  importJobId: string,
+  token: string
+): Promise<ExcelImportJobStatus> {
+  const response = await fetch(
+    alfaUrl(
+      `Excel/import/${encodeURIComponent(entityName)}/jobs/${encodeURIComponent(importJobId)}`
+    ),
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  const data = await parseJsonBody(response);
+
+  if (!response.ok) {
+    throw new ApiError(response.status, readString(data, "message", "Message"));
+  }
+
+  return normalizeExcelImportJobStatus(data);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+export async function waitForExcelImportJob(
+  entityName: string,
+  importJobId: string,
+  token: string,
+  onProgress?: (status: ExcelImportJobStatus) => void,
+  pollIntervalMs = 800
+): Promise<ExcelImportResult> {
+  while (true) {
+    const status = await getExcelImportJobStatus(entityName, importJobId, token);
+    onProgress?.(status);
+
+    if (status.status === "Completed" || status.status === "Failed") {
+      if (!status.result) {
+        throw new ApiError(
+          500,
+          status.message || "Import job finished without a result payload."
+        );
+      }
+
+      return status.result;
+    }
+
+    await delay(pollIntervalMs);
+  }
+}
+
+function errorsOnlyMessage(data: Record<string, unknown>): boolean {
+  const errors = data.errors ?? data.Errors;
+  return !Array.isArray(errors) || errors.length === 0;
 }

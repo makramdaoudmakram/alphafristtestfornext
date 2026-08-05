@@ -55,6 +55,8 @@ export const PERMISSIONS = {
     create: "Company.Create",
     edit: "Company.Edit",
     delete: "Company.Delete",
+    import: "Company.Import",
+    export: "Company.Export",
   },
   pharm: {
     view: "Pharm.View",

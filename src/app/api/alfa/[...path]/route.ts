@@ -7,8 +7,13 @@ async function nodeProxyRequest(
   targetUrl: string,
   method: string,
   headers: Record<string, string>,
-  body?: string
-): Promise<{ status: number; body: string; contentType: string | null }> {
+  body?: Buffer
+): Promise<{
+  status: number;
+  body: Buffer;
+  contentType: string | null;
+  contentDisposition: string | null;
+}> {
   const url = new URL(targetUrl);
   const isHttps = url.protocol === "https:";
   const lib = isHttps ? https : http;
@@ -31,8 +36,9 @@ async function nodeProxyRequest(
         res.on("end", () => {
           resolve({
             status: res.statusCode ?? 502,
-            body: Buffer.concat(chunks).toString("utf8"),
+            body: Buffer.concat(chunks),
             contentType: res.headers["content-type"] ?? null,
+            contentDisposition: res.headers["content-disposition"] ?? null,
           });
         });
       }
@@ -60,13 +66,16 @@ async function proxyRequest(
   if (auth) headers.Authorization = auth;
   if (contentType) headers["Content-Type"] = contentType;
 
-  let body: string | undefined;
+  let body: Buffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    body = await request.text();
+    const rawBody = await request.arrayBuffer();
+    if (rawBody.byteLength > 0) {
+      body = Buffer.from(rawBody);
+    }
   }
 
   if (body) {
-    headers["Content-Length"] = Buffer.byteLength(body).toString();
+    headers["Content-Length"] = body.length.toString();
   }
 
   try {
@@ -86,8 +95,11 @@ async function proxyRequest(
     if (response.contentType) {
       responseHeaders["Content-Type"] = response.contentType;
     }
+    if (response.contentDisposition) {
+      responseHeaders["Content-Disposition"] = response.contentDisposition;
+    }
 
-    return new NextResponse(response.body || null, {
+    return new NextResponse(new Uint8Array(response.body), {
       status: response.status,
       headers: responseHeaders,
     });

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   createCompany,
@@ -15,6 +16,8 @@ import {
   type CompanyFormValues,
 } from "@/components/admin/company-form-sheet";
 import { useCompanyColumns } from "@/components/admin/company-table-columns";
+import { ExcelTemplateWizard } from "@/components/excel/excel-template-wizard";
+import { ExcelImportDialog } from "@/components/excel/excel-import-dialog";
 import { ActionGuard, PageGuard } from "@/components/permissions/page-guard";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
@@ -43,6 +46,8 @@ export function CompaniesPageContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<CompanyItem | null>(null);
+  const [templateWizardOpen, setTemplateWizardOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   const [comCode, setComCode] = useState("");
   const [comNameAr, setComNameAr] = useState("");
@@ -180,11 +185,37 @@ export function CompaniesPageContent() {
   return (
     <PageGuard permission={PERMISSIONS.company.view}>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold">Companies</h2>
-          <p className="text-muted-foreground text-sm">
-            Manage companies connected to the Alfa API.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Companies</h2>
+            <p className="text-muted-foreground text-sm">
+              Manage companies connected to the Alfa API.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <ActionGuard permission={PERMISSIONS.company.import}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImportDialogOpen(true)}
+                disabled={!sessionReady || !token}
+              >
+                <Upload className="size-4" />
+                Import Excel
+              </Button>
+            </ActionGuard>
+            <ActionGuard permission={PERMISSIONS.company.export}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTemplateWizardOpen(true)}
+                disabled={!sessionReady || !token}
+              >
+                <FileSpreadsheet className="size-4" />
+                Download Excel Template
+              </Button>
+            </ActionGuard>
+          </div>
         </div>
 
         <ActionGuard permission={PERMISSIONS.company.create}>
@@ -300,6 +331,23 @@ export function CompaniesPageContent() {
           company={editingCompany}
           saving={sheetSaving}
           onSubmit={handleSheetSubmit}
+        />
+
+        <ExcelTemplateWizard
+          open={templateWizardOpen}
+          onOpenChange={setTemplateWizardOpen}
+          entityName="Company"
+          entityLabel="Company"
+          token={token}
+        />
+
+        <ExcelImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          entityName="Company"
+          entityLabel="Company"
+          token={token}
+          onCommitted={loadCompanies}
         />
       </div>
     </PageGuard>
