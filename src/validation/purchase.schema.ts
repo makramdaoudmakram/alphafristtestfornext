@@ -50,10 +50,15 @@ export const purchaseDetailRowSchema = z.object({
   bonus: z.coerce.number().min(0).default(0),
   itmPurPrice: z.coerce.number().min(0),
   itmSell: z.coerce.number().min(0).default(0),
-  itmDisPer: z.coerce.number().min(0).max(100).default(0),
-  itmDisMon: z.coerce.number().min(0).default(0),
+  itmTaxPrice: z.coerce.number().min(0).default(0),
   itmTaxTotal: z.coerce.number().min(0).default(0),
-  unitId: z.string().default(""),
+  itmExtraDis: z.coerce.number().min(0).default(0),
+  itmDisMon: z.coerce.number().min(0).default(0),
+  itmDisPer: z.coerce.number().min(0).max(100).default(0),
+  itmCost: z.coerce.number().min(0).default(0),
+  itmNet: z.coerce.number().min(0).default(0),
+  stdItmStock: z.coerce.number().min(0).default(0),
+  unitId: z.number().nullable().default(null),
   stoId: z
     .string()
     .trim()
@@ -69,4 +74,10 @@ export const purchaseDocumentSchema = z.object({
   details: z
     .array(purchaseDetailRowSchema)
     .min(1, "At least one detail line is required"),
+});
+
+/** Existing invoice update — detail lines may be empty when all lines were deleted. */
+export const purchaseDocumentUpdateSchema = z.object({
+  header: purchaseHeaderSchema,
+  details: z.array(purchaseDetailRowSchema),
 });

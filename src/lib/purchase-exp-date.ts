@@ -4,7 +4,9 @@ export function expDateToMonthInput(value: string): string {
   if (!value?.trim()) return "";
   const trimmed = value.trim();
   if (/^\d{4}-\d{2}$/.test(trimmed)) return trimmed;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed.slice(0, 7);
+  // API DateTime JSON: 2026-08-01T00:00:00 or 2026-08-01
+  const dateMatch = /^(\d{4}-\d{2}-\d{2})/.exec(trimmed);
+  if (dateMatch) return dateMatch[1]!.slice(0, 7);
   return "";
 }
 

@@ -1,11 +1,11 @@
 export interface UnitItem {
-  uCode: string;
+  uCode: number;
   uNameAr: string;
   uNameEn: string;
 }
 
 export interface CreateUnitRequest {
-  uCode: string;
+  uCode: number;
   uNameAr: string;
   uNameEn: string;
 }

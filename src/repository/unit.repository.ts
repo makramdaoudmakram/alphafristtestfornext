@@ -20,14 +20,14 @@ export const unitRepository = {
   },
 
   update(
-    uCode: string,
+    uCode: number,
     data: UpdateUnitRequest,
     token: string
   ): Promise<void> {
     return updateUnit(uCode, data, token);
   },
 
-  delete(uCode: string, token: string): Promise<void> {
+  delete(uCode: number, token: string): Promise<void> {
     return deleteUnit(uCode, token);
   },
 };

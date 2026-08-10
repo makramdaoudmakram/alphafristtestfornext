@@ -59,10 +59,8 @@ function unitValueFromItem(
   units: UnitItem[]
 ): string {
   if (unitId === null || unitId === undefined) return "";
-  const match = units.find(
-    (unit) => unit.uCode === String(unitId) || Number(unit.uCode) === unitId
-  );
-  return match?.uCode ?? String(unitId);
+  const match = units.find((unit) => unit.uCode === unitId);
+  return match ? String(match.uCode) : String(unitId);
 }
 
 export function ItemCatalogPageContent() {
@@ -112,7 +110,7 @@ export function ItemCatalogPageContent() {
   const unitOptions = useMemo<ComboboxOption[]>(
     () =>
       units.map((unit) => ({
-        value: unit.uCode,
+        value: String(unit.uCode),
         label: `${unit.uNameEn || unit.uNameAr || unit.uCode} (${unit.uCode})`,
       })),
     [units]

@@ -11,11 +11,17 @@ import type {
   PurchaseSearchResult,
 } from "@/types/purchase";
 import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
-import { purchaseDocumentSchema } from "@/validation/purchase.schema";
+import type { ItemCatalogItem } from "@/types/item-catalog";
+import { purchaseDocumentSchema, purchaseDocumentUpdateSchema } from "@/validation/purchase.schema";
+import { validatePurchaseDetailUnits } from "@/lib/item-unit-options";
+import { z } from "zod";
 
 export type SavePurchaseInput = {
   header: PurchaseHeaderFormValues;
   details: PurchaseDetail[];
+  /** PurTransH.Id — authoritative update key when form state loses id. */
+  recordId?: number | null;
+  deletedDetailIds?: number[];
 };
 
 export class PurchaseService {
@@ -34,9 +40,70 @@ export class PurchaseService {
     };
   }
 
-  validateDocument(header: PurchaseHeaderFormValues, details: PurchaseDetail[]) {
+  validateDocument(
+    header: PurchaseHeaderFormValues,
+    details: PurchaseDetail[],
+    itemByCode?: Map<string, ItemCatalogItem>,
+    catalogItems?: readonly ItemCatalogItem[],
+    options?: { allowEmptyDetails?: boolean; isUpdate?: boolean }
+  ) {
     const document = this.buildDocument(header, details);
-    return purchaseDocumentSchema.safeParse(document);
+    const useUpdateSchema =
+      options?.allowEmptyDetails === true ||
+      (options?.isUpdate === true && details.length === 0);
+    const schema = useUpdateSchema
+      ? purchaseDocumentUpdateSchema
+      : purchaseDocumentSchema;
+    const parsed = schema.safeParse(document);
+    if (!parsed.success) return parsed;
+
+    if (details.length === 0) {
+      return parsed;
+    }
+
+    const unitMessage = validatePurchaseDetailUnits(
+      parsed.data.details,
+      itemByCode ?? new Map(),
+      catalogItems
+    );
+    if (unitMessage) {
+      return {
+        success: false as const,
+        error: new z.ZodError([
+          {
+            code: z.ZodIssueCode.custom,
+            message: unitMessage,
+            path: ["details"],
+          },
+        ]),
+      };
+    }
+
+    return parsed;
+  }
+
+  /**
+   * Validates document shape only. Unit rules are enforced by the API on save.
+   */
+  validateDocumentForApi(
+    header: PurchaseHeaderFormValues,
+    details: PurchaseDetail[],
+    options?: { allowEmptyDetails?: boolean; isUpdate?: boolean }
+  ) {
+    const document = this.buildDocument(header, details);
+    const useUpdateSchema =
+      options?.allowEmptyDetails === true ||
+      (options?.isUpdate === true && details.length === 0);
+    const schema = useUpdateSchema
+      ? purchaseDocumentUpdateSchema
+      : purchaseDocumentSchema;
+    return schema.safeParse(document);
+  }
+
+  private resolveRecordId(input: SavePurchaseInput): number | null {
+    if (input.recordId != null && input.recordId > 0) return input.recordId;
+    if (input.header.id != null && input.header.id > 0) return input.header.id;
+    return null;
   }
 
   async search(filters: PurchaseSearchFilters): Promise<PurchaseSearchResult[]> {
@@ -52,17 +119,28 @@ export class PurchaseService {
   }
 
   async save(input: SavePurchaseInput): Promise<PurchaseDocument> {
-    const validation = this.validateDocument(input.header, input.details);
+    const recordId = this.resolveRecordId(input);
+    const isUpdate = recordId != null;
+    const allowEmptyDetails = isUpdate && input.details.length === 0;
+
+    const validation = this.validateDocumentForApi(input.header, input.details, {
+      allowEmptyDetails,
+      isUpdate,
+    });
     if (!validation.success) {
-      const first = validation.error.errors[0];
+      const first = validation.error.issues[0];
       throw new PurchaseRepositoryError(first?.message ?? "Validation failed", 400);
     }
 
     const document = validation.data;
-    const payload = toUpsertPayload(document.header, document.details);
+    const payload = toUpsertPayload(
+      document.header,
+      document.details,
+      input.deletedDetailIds
+    );
 
-    if (document.header.id) {
-      return this.repository.update(document.header.id, payload);
+    if (recordId != null) {
+      return this.repository.update(recordId, payload);
     }
     return this.repository.create(payload);
   }

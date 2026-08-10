@@ -6,11 +6,18 @@ import { toast } from "sonner";
 import {
   ApiError,
   fetchAllItemCatalogItems,
+  getItemCatalog,
   getItemCatalogPage,
   getMovmentById,
   getNextMovValue,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { UnitItem } from "@/types/unit";
+import {
+  getItemUnitIds,
+  mergeCatalogItemWithCache,
+} from "@/lib/item-unit-options";
+import { createUnitService } from "@/services/unit.service";
 import { DetailsGrid } from "@/components/purchase/DetailsGrid";
 import {
   HeaderPrimaryFields,
@@ -26,6 +33,7 @@ import {
 } from "@/components/ui/form-field-inline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { resolveMovementForPurchaseHeader } from "@/lib/purchase-movement";
 import { usePurchase } from "@/hooks/usePurchase";
 import type { MovmentLookupItem } from "@/types/movment";
 
@@ -42,6 +50,8 @@ export function PurchasePageContent() {
   const [catalogItems, setCatalogItems] = useState<ItemCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [units, setUnits] = useState<UnitItem[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
   const [itemByCode, setItemByCode] = useState<Map<string, ItemCatalogItem>>(
     () => new Map()
   );
@@ -65,12 +75,22 @@ export function PurchasePageContent() {
 
     const applyCatalog = (items: ItemCatalogItem[]) => {
       setCatalogItems(items);
-      const map = new Map<string, ItemCatalogItem>();
-      for (const item of items) {
-        const code = item.itmCode?.trim();
-        if (code) map.set(code.toLowerCase(), item);
-      }
-      setItemByCode(map);
+      setItemByCode((prev) => {
+        const map = new Map(prev);
+        for (const item of items) {
+          const code = item.itmCode?.trim();
+          if (!code) continue;
+          const key = code.toLowerCase();
+          const existing = map.get(key);
+          map.set(
+            key,
+            existing
+              ? mergeCatalogItemWithCache(item, map, items)
+              : item
+          );
+        }
+        return map;
+      });
     };
 
     try {
@@ -128,16 +148,77 @@ export function PurchasePageContent() {
     }
   }, [token]);
 
+  const loadUnits = useCallback(async () => {
+    if (!token) {
+      setUnits([]);
+      setUnitsLoading(false);
+      return;
+    }
+
+    setUnitsLoading(true);
+    try {
+      const service = createUnitService(token);
+      const { units: loaded } = await service.listUnits();
+      setUnits(loaded);
+    } catch (err) {
+      setUnits([]);
+      toast.error("Could not load units.", {
+        description:
+          err instanceof Error
+            ? err.message
+            : "Check API connection and database migrations.",
+      });
+    } finally {
+      setUnitsLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!sessionReady) return;
     if (!sessionAuthenticated) {
       setCatalogItems([]);
       setItemByCode(new Map());
       setCatalogLoaded(true);
+      setUnits([]);
       return;
     }
     void loadItemCatalog();
-  }, [sessionReady, sessionAuthenticated, loadItemCatalog]);
+    void loadUnits();
+  }, [sessionReady, sessionAuthenticated, loadItemCatalog, loadUnits]);
+
+  const handleCatalogItemApplied = useCallback(
+    (item: ItemCatalogItem) => {
+      setItemByCode((prev) => {
+        const merged = mergeCatalogItemWithCache(item, prev, catalogItems);
+        const code = merged.itmCode?.trim().toLowerCase();
+        if (!code) return prev;
+        const next = new Map(prev);
+        next.set(code, merged);
+
+        if (getItemUnitIds(merged).length === 0 && merged.id > 0 && token) {
+          void getItemCatalog(merged.id, token)
+            .then((full) => {
+              setItemByCode((current) => {
+                const enriched = mergeCatalogItemWithCache(
+                  full,
+                  current,
+                  catalogItems
+                );
+                const enrichedCode = enriched.itmCode?.trim().toLowerCase();
+                if (!enrichedCode) return current;
+                const updated = new Map(current);
+                updated.set(enrichedCode, enriched);
+                return updated;
+              });
+            })
+            .catch(() => undefined);
+        }
+
+        return next;
+      });
+    },
+    [catalogItems, token]
+  );
 
   const {
     form,
@@ -167,34 +248,65 @@ export function PurchasePageContent() {
   } = purchase;
 
   const hasRecord = !!form.watch("id");
+  const recordId = form.watch("id");
+  const headerMovId = form.watch("movId");
 
-  const showMovementToast = useCallback((src: {
-    movStor: string | null | undefined;
-    movChiledId: number | null | undefined;
-    movAccountEntry1: string | null | undefined;
-    movAccountEntry2: string | null | undefined;
-    movAccountEntry3: string | null | undefined;
-  }) => {
-    const movStor = src.movStor?.trim() || "—";
-    const movChiledId = src.movChiledId != null ? String(src.movChiledId) : "—";
-    const entry1 = src.movAccountEntry1?.trim() || "—";
-    const entry2 = src.movAccountEntry2?.trim() || "—";
-    const entry3 = src.movAccountEntry3?.trim() || "—";
+  const syncMovementFromLoadedHeader = useCallback(async () => {
+    if (!token || recordId == null) return;
 
-    toast.message("Movement selected", {
-      duration: 10000,
-      description: [
-        `MovStor = ${movStor}`,
-        `MovChiledId = ${movChiledId}`,
-        `MovAccountEntry1 = ${entry1}`,
-        `MovAccountEntry2 = ${entry2}`,
-        `MovAccountEntry3 = ${entry3}`,
-      ].join("\n"),
-      classNames: {
-        description: "whitespace-pre-line font-mono text-xs",
-      },
-    });
-  }, []);
+    try {
+      const movement = await resolveMovementForPurchaseHeader(
+        token,
+        PURCHASE_MOV_PARENT_ID,
+        form.getValues()
+      );
+      if (movement) {
+        setSelectedMovement(movement);
+        form.setValue("movmentRowId", movement.id, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+      } else if (headerMovId != null) {
+        setSelectedMovement({
+          id: form.getValues("movmentRowId") ?? 0,
+          movChiledId: headerMovId,
+          movChiledName: `Movement #${headerMovId}`,
+          movParientId: PURCHASE_MOV_PARENT_ID,
+          movStor: null,
+          movSingleStore: false,
+          movAccountEntry1: form.getValues("movAccountsec") || null,
+          movAccountEntry2: form.getValues("movAccount") || null,
+          movAccountEntry3: form.getValues("movAccounttherd") || null,
+        });
+      } else {
+        setSelectedMovement(null);
+      }
+    } catch {
+      if (headerMovId != null) {
+        setSelectedMovement({
+          id: form.getValues("movmentRowId") ?? 0,
+          movChiledId: headerMovId,
+          movChiledName: `Movement #${headerMovId}`,
+          movParientId: PURCHASE_MOV_PARENT_ID,
+          movStor: null,
+          movSingleStore: false,
+          movAccountEntry1: form.getValues("movAccountsec") || null,
+          movAccountEntry2: form.getValues("movAccount") || null,
+          movAccountEntry3: form.getValues("movAccounttherd") || null,
+        });
+      }
+    }
+  }, [form, headerMovId, recordId, token]);
+
+  useEffect(() => {
+    if (!token || recordId == null) return;
+    void syncMovementFromLoadedHeader();
+  }, [recordId, headerMovId, syncMovementFromLoadedHeader, token]);
+
+  const onNew = useCallback(() => {
+    handleNew();
+    setSelectedMovement(null);
+  }, [handleNew]);
 
   const applyMovementFields = useCallback(
     (mapped: MovmentLookupItem) => {
@@ -222,10 +334,8 @@ export function PurchasePageContent() {
       if (movStor) {
         setDetails((rows) => rows.map((row) => ({ ...row, stoId: movStor })));
       }
-
-      showMovementToast(mapped);
     },
-    [form, setDetails, showMovementToast]
+    [form, setDetails]
   );
 
   const handleMovementChange = useCallback(
@@ -320,7 +430,8 @@ export function PurchasePageContent() {
       description: "This action cannot be undone.",
       action: {
         label: "Delete",
-        onClick: () => void handleDelete(),
+        onClick: () =>
+          void handleDelete().then(() => setSelectedMovement(null)),
       },
       cancel: { label: "Cancel", onClick: () => toast.message("Cancelled") },
     });
@@ -338,6 +449,17 @@ export function PurchasePageContent() {
 
   return (
     <PageGuard permission={null}>
+      {/* Keep header id registered while the detail card shows a loading skeleton */}
+      <input
+        type="hidden"
+        {...form.register("id", {
+          setValueAs: (value) => {
+            if (value === "" || value == null) return null;
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+          },
+        })}
+      />
       <div className="space-y-4 print:space-y-2 lg:flex lg:min-h-[calc(100vh-6rem)] lg:flex-col">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -357,8 +479,8 @@ export function PurchasePageContent() {
           loading={loading}
           hasRecord={hasRecord}
           nav={navState}
-          onNew={handleNew}
-          onSave={() => void handleSave(itemByCode, selectedMovement)}
+          onNew={onNew}
+          onSave={() => void handleSave(itemByCode, selectedMovement, catalogItems)}
           onEdit={handleEdit}
           onDelete={confirmDelete}
           onPrint={() => {
@@ -370,12 +492,13 @@ export function PurchasePageContent() {
           }}
           onRefresh={() => {
             void loadItemCatalog();
-            void handleRefresh(itemByCode);
+            void loadUnits();
+            void handleRefresh(itemByCode, catalogItems);
           }}
-          onFirst={() => void navigate("first", itemByCode)}
-          onPrev={() => void navigate("prev", itemByCode)}
-          onNext={() => void navigate("next", itemByCode)}
-          onLast={() => void navigate("last", itemByCode)}
+          onFirst={() => void navigate("first", itemByCode, catalogItems)}
+          onPrev={() => void navigate("prev", itemByCode, catalogItems)}
+          onNext={() => void navigate("next", itemByCode, catalogItems)}
+          onLast={() => void navigate("last", itemByCode, catalogItems)}
           onSearch={() => setSearchOpen(true)}
         />
 
@@ -402,7 +525,7 @@ export function PurchasePageContent() {
                     parentId={PURCHASE_MOV_PARENT_ID}
                     token={token}
                     value={selectedMovement}
-                    disabled={!isEditable || pthIdLoading}
+                    disabled={hasRecord || !isEditable || pthIdLoading}
                     onChange={(item) => void handleMovementChange(item)}
                   />
                 </FormFieldInlineWrap>
@@ -411,7 +534,11 @@ export function PurchasePageContent() {
                     Loading next PthId…
                   </p>
                 ) : null}
-                <HeaderPrimaryFields form={form} disabled={!isEditable} />
+                <HeaderPrimaryFields
+                  key={recordId ?? "new"}
+                  form={form}
+                  disabled={!isEditable}
+                />
               </div>
             )}
           </CardContent>
@@ -423,12 +550,16 @@ export function PurchasePageContent() {
               rows={details}
               token={token}
               catalogItems={catalogItems}
+              itemByCode={itemByCode}
+              units={units}
+              unitsLoading={unitsLoading}
               catalogLoading={catalogLoading}
               catalogLoaded={catalogLoaded}
               disabled={!isEditable || loading}
               selectedRowIndex={selectedRowIndex}
               onSelectRow={setSelectedRowIndex}
               onChangeRow={updateDetailRow}
+              onCatalogItemApplied={handleCatalogItemApplied}
               onAddRow={() =>
                 addDetailRow(selectedMovement?.movStor?.trim() ?? "")
               }
@@ -455,7 +586,11 @@ export function PurchasePageContent() {
           open={searchOpen}
           onOpenChange={setSearchOpen}
           onSearch={runSearch}
-          onSelect={(row) => void loadRecord(row.id, itemByCode)}
+          onSelect={async (row) => {
+            const map = await loadRecord(row.id, itemByCode, catalogItems);
+            if (map && map.size > 0) setItemByCode(map);
+            await syncMovementFromLoadedHeader();
+          }}
         />
       </div>
     </PageGuard>

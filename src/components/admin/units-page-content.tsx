@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { FormFieldInline } from "@/components/ui/form-field-inline";
 import { DataTable } from "@/components/data-table";
+import { parseUnitCode } from "@/lib/unit-code";
 
 export function UnitsPageContent() {
   const { data: session, status } = useSession();
@@ -107,8 +108,14 @@ export function UnitsPageContent() {
     setSaving(true);
     try {
       const service = createUnitService(token);
+      const code = parseUnitCode(uCode);
+      if (code == null) {
+        toast.error("Unit code must be a positive number.");
+        return;
+      }
+
       const { queued } = await service.createUnit({
-        uCode: uCode.trim(),
+        uCode: code,
         uNameAr: uNameAr.trim(),
         uNameEn: uNameEn.trim(),
       });
@@ -220,7 +227,9 @@ export function UnitsPageContent() {
                 <FormFieldInline
                   id="uCode"
                   label="Unit code"
-                  placeholder="PCS"
+                  type="number"
+                  min={1}
+                  placeholder="1"
                   value={uCode}
                   onChange={(e) => setUCode(e.target.value)}
                   required

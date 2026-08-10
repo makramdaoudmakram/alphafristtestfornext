@@ -135,6 +135,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/transactions/purchase",
         permission: null,
       },
+      {
+        title: "Stock",
+        href: "/dashboard/stock",
+        permission: PERMISSIONS.stock.view,
+      },
     ],
   },
 ];
@@ -156,6 +161,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
+  "/dashboard/stock": "Stock Control",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",
 };

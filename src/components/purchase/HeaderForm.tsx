@@ -57,6 +57,13 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {/* Keep movement-mapped header fields registered so zodResolver does not wipe them */}
+      <input type="hidden" {...register("id", {
+        setValueAs: (value) => {
+          if (value === "" || value == null) return null;
+          const parsed = Number(value);
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        },
+      })} />
       <input
         type="hidden"
         {...register("movId", {

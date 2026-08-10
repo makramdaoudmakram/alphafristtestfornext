@@ -15,6 +15,7 @@ function readString(obj: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const value = obj[key];
     if (typeof value === "string") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
   }
   return "";
 }
@@ -31,23 +32,19 @@ function readNumber(obj: Record<string, unknown>, ...keys: string[]): number {
   return 0;
 }
 
-function parseUnitIdForApi(unitId: string): number | undefined {
-  const trimmed = unitId?.trim() ?? "";
-  if (!trimmed) return undefined;
-  const n = Number(trimmed);
-  if (Number.isFinite(n) && n > 0) return n;
-  return undefined;
-}
-
-function readUnitId(obj: Record<string, unknown>): string {
+function readUnitId(obj: Record<string, unknown>): number | null {
   for (const key of ["unitId", "UnitId"]) {
     const value = obj[key];
-    if (typeof value === "string") return value;
-    if (typeof value === "number" && Number.isFinite(value) && value !== 0) {
-      return String(value);
+    if (value === null || value === undefined) continue;
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value.trim());
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
     }
   }
-  return "";
+  return null;
 }
 
 function readNullableNumber(
@@ -67,14 +64,31 @@ function readNullableNumber(
 }
 
 function formatDateInput(value: unknown): string {
-  if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString().slice(0, 10);
+    }
+    return trimmed.slice(0, 10);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
   return "";
 }
 
 function formatExpDateFromApi(value: unknown): string {
-  if (!value) return "";
-  const raw = typeof value === "string" ? value : "";
+  if (value === null || value === undefined) return "";
+  const raw =
+    typeof value === "string"
+      ? value
+      : value instanceof Date
+        ? value.toISOString()
+        : String(value);
   const month = expDateToMonthInput(raw);
   return month ? monthInputToExpDate(month) : "";
 }
@@ -99,10 +113,15 @@ export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
     bonus: 0,
     itmPurPrice: 0,
     itmSell: 0,
-    itmDisPer: 0,
-    itmDisMon: 0,
+    itmTaxPrice: 0,
     itmTaxTotal: 0,
-    unitId: "",
+    itmExtraDis: 0,
+    itmDisMon: 0,
+    itmDisPer: 0,
+    itmCost: 0,
+    itmNet: 0,
+    stdItmStock: 0,
+    unitId: null,
     stoId,
     lineTotal: 0,
   };
@@ -158,6 +177,21 @@ export function filterDetailsWithItemCode(details: PurchaseDetail[]): PurchaseDe
   return details.filter((row) => row.itmId.trim().length > 0);
 }
 
+/** Detail ids present on load but absent from the save payload were deleted in the UI. */
+export function computeDeletedDetailIds(
+  initialDetailIds: readonly number[],
+  submittedDetails: readonly PurchaseDetail[],
+  trackedDeletedIds: readonly number[]
+): number[] {
+  const submittedIds = new Set(
+    submittedDetails
+      .map((row) => row.id)
+      .filter((id): id is number => id != null && id > 0)
+  );
+  const removedSinceLoad = initialDetailIds.filter((id) => !submittedIds.has(id));
+  return [...new Set([...trackedDeletedIds, ...removedSinceLoad])];
+}
+
 export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
   const row: PurchaseDetail = {
     id: readNullableNumber(raw, "id", "Id"),
@@ -171,9 +205,14 @@ export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
     bonus: readNumber(raw, "bonus", "Bonus"),
     itmPurPrice: readNumber(raw, "itmPurPrice", "ItmPurPrice"),
     itmSell: readNumber(raw, "itmSell", "ItmSell"),
-    itmDisPer: readNumber(raw, "itmDisPer", "ItmDisPer"),
-    itmDisMon: readNumber(raw, "itmDisMon", "ItmDisMon"),
+    itmTaxPrice: readNumber(raw, "itmTaxPrice", "ItmTaxPrice"),
     itmTaxTotal: readNumber(raw, "itmTaxTotal", "ItmTaxTotal"),
+    itmExtraDis: readNumber(raw, "itmExtraDis", "ItmExtraDis"),
+    itmDisMon: readNumber(raw, "itmDisMon", "ItmDisMon"),
+    itmDisPer: readNumber(raw, "itmDisPer", "ItmDisPer"),
+    itmCost: readNumber(raw, "itmCost", "ItmCost"),
+    itmNet: readNumber(raw, "itmNet", "ItmNet"),
+    stdItmStock: readNumber(raw, "stdItmStock", "StdItmStock"),
     unitId: readUnitId(raw),
     stoId: readString(raw, "stoId", "StoId"),
     lineTotal: 0,
@@ -209,8 +248,17 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
 }
 
 export function mapDocumentFromApi(raw: Record<string, unknown>): PurchaseDocument {
-  const header = mapHeaderFromApi(raw);
+  const headerSource =
+    (raw.header as Record<string, unknown> | undefined) ??
+    (raw.Header as Record<string, unknown> | undefined) ??
+    (raw.document as Record<string, unknown> | undefined) ??
+    (raw.Document as Record<string, unknown> | undefined) ??
+    raw;
+  const header = mapHeaderFromApi(headerSource);
   const detailsRaw =
+    (headerSource.purTransDetails as Record<string, unknown>[] | undefined) ??
+    (headerSource.PurTransDetails as Record<string, unknown>[] | undefined) ??
+    (headerSource.details as Record<string, unknown>[] | undefined) ??
     (raw.purTransDetails as Record<string, unknown>[] | undefined) ??
     (raw.PurTransDetails as Record<string, unknown>[] | undefined) ??
     (raw.details as Record<string, unknown>[] | undefined) ??
@@ -298,9 +346,10 @@ export function applyMovementStoToDetails(
 
 export function toUpsertPayload(
   header: PurchaseHeaderFormValues,
-  details: PurchaseDetail[]
+  details: PurchaseDetail[],
+  deletedDetailIds?: number[]
 ): PurchaseUpsertPayload {
-  return {
+  const payload: PurchaseUpsertPayload = {
     header: {
       id: header.id,
       pthId: header.pthId,
@@ -327,7 +376,6 @@ export function toUpsertPayload(
         unitId,
         ...rest
       }) => {
-        const apiUnitId = parseUnitIdForApi(unitId ?? "");
         const line: Omit<
           PurchaseDetail,
           "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
@@ -340,14 +388,25 @@ export function toUpsertPayload(
           bonus: rest.bonus,
           itmPurPrice: rest.itmPurPrice,
           itmSell: rest.itmSell,
+          itmTaxPrice: rest.itmTaxPrice,
+          itmTaxTotal: rest.itmTaxTotal,
+          itmExtraDis: rest.itmExtraDis,
           itmDisPer: rest.itmDisPer,
           itmDisMon: rest.itmDisMon,
-          itmTaxTotal: rest.itmTaxTotal,
+          itmCost: rest.itmCost,
+          itmNet: rest.itmNet,
+          stdItmStock: rest.stdItmStock,
           stoId: rest.stoId?.trim() ?? "",
         };
-        if (apiUnitId !== undefined) line.unitId = apiUnitId;
+        if (unitId != null && unitId > 0) line.unitId = unitId;
         return line;
       }
     ),
   };
+
+  if (deletedDetailIds != null && deletedDetailIds.length > 0) {
+    payload.deletedDetailIds = [...new Set(deletedDetailIds)];
+  }
+
+  return payload;
 }

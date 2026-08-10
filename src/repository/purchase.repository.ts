@@ -10,6 +10,38 @@ import type {
   PurchaseUpsertPayload,
 } from "@/types/purchase";
 
+type PurchaseApiValidationError = {
+  detailIndex?: number;
+  itmCode?: string | null;
+  itmName?: string | null;
+  field?: string;
+  message?: string;
+};
+
+function formatPurchaseApiError(body: Record<string, unknown>): string | null {
+  const errors = body.errors;
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+
+  const summary =
+    (typeof body.message === "string" && body.message) ||
+    "Purchase invoice contains validation errors.";
+
+  const lines = errors
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as PurchaseApiValidationError;
+      const index =
+        typeof row.detailIndex === "number" ? row.detailIndex : "?";
+      const code = row.itmCode?.trim() || "—";
+      const text = row.message?.trim() || "Invalid value.";
+      return `Row ${index}: ${code} — ${text}`;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  if (lines.length === 0) return summary;
+  return `${summary}\n${lines.join("\n")}`;
+}
+
 export class PurchaseRepositoryError extends Error {
   status: number;
 
@@ -77,6 +109,7 @@ export class PurchaseRepository {
     }
 
     const message =
+      formatPurchaseApiError(body) ||
       (typeof body.message === "string" && body.message) ||
       (typeof body.Message === "string" && body.Message) ||
       (typeof body.title === "string" && body.title) ||
@@ -146,7 +179,7 @@ export class PurchaseRepository {
   /** Build API body with PascalCase property names for reliable ASP.NET binding. */
   private toApiBody(payload: PurchaseUpsertPayload) {
     const h = payload.header;
-    return {
+    const body: Record<string, unknown> = {
       Header: {
         Id: h.id,
         PthId: h.pthId,
@@ -165,7 +198,7 @@ export class PurchaseRepository {
         PthNotice: h.pthNotice,
       },
       Details: payload.details.map((d) => ({
-        Id: d.id,
+        Id: d.id && d.id > 0 ? d.id : null,
         ItmId: d.itmId,
         CId: d.cId,
         ExpDate: d.expDate || null,
@@ -173,13 +206,24 @@ export class PurchaseRepository {
         Bonus: d.bonus,
         ItmPurPrice: d.itmPurPrice,
         ItmSell: d.itmSell,
+        ItmTaxPrice: d.itmTaxPrice,
+        ItmTaxTotal: d.itmTaxTotal,
+        ItmExtraDis: d.itmExtraDis,
         ItmDisPer: d.itmDisPer,
         ItmDisMon: d.itmDisMon,
-        ItmTaxTotal: d.itmTaxTotal,
+        ItmCost: d.itmCost,
+        ItmNet: d.itmNet,
+        StdItmStock: d.stdItmStock,
         UnitId: d.unitId,
         StoId: d.stoId || null,
       })),
     };
+
+    if (payload.deletedDetailIds != null && payload.deletedDetailIds.length > 0) {
+      body.DeletedDetailIds = payload.deletedDetailIds;
+    }
+
+    return body;
   }
 
   async create(payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {

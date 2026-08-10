@@ -1,5 +1,6 @@
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
+import { resolveUnitIdForItem } from "@/lib/item-unit-options";
 
 export const ITEM_AUTOCOMPLETE_LIMIT = 15;
 
@@ -35,6 +36,7 @@ export function patchDetailFromCatalogItem(
     itmNameEn: item.itmNameEn?.trim() ?? "",
     itmPurPrice,
     itmSell,
+    unitId: null,
   };
 }
 
@@ -129,5 +131,6 @@ export function enrichDetailFromCatalog(
     itmNameEn: row.itmNameEn || item.itmNameEn?.trim() || "",
     itmPurPrice: row.itmPurPrice || itmPurPrice,
     itmSell: row.itmSell || itmSell,
+    unitId: resolveUnitIdForItem(item, row.unitId),
   };
 }

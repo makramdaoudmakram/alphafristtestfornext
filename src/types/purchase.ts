@@ -44,10 +44,15 @@ export type PurchaseDetail = {
   bonus: number;
   itmPurPrice: number;
   itmSell: number;
-  itmDisPer: number;
-  itmDisMon: number;
+  itmTaxPrice: number;
   itmTaxTotal: number;
-  unitId: string;
+  itmExtraDis: number;
+  itmDisMon: number;
+  itmDisPer: number;
+  itmCost: number;
+  itmNet: number;
+  stdItmStock: number;
+  unitId: number | null;
   /** Store from movement MovStor — one value per detail line */
   stoId: string;
   /** Computed: quantity × price − discounts + tax */
@@ -92,4 +97,6 @@ export type PurchaseUpsertPayload = {
     PurchaseDetail,
     "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
   > & { unitId?: number })[];
+  /** Existing PurTransD ids removed on save (update only). */
+  deletedDetailIds?: number[];
 };

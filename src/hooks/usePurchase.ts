@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   applyMovementStoToDetails,
   applyMovementToHeader,
   createEmptyDetailRow,
+  computeDeletedDetailIds,
   documentToFormValues,
   emptyPurchaseHeader,
   filterDetailsWithItemCode,
@@ -17,6 +18,7 @@ import {
   mergeSavedDetailsWithPrior,
 } from "@/lib/purchase.mapper";
 import { enrichDetailFromCatalog } from "@/lib/item-catalog-search";
+import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import {
   createPurchaseService,
@@ -39,6 +41,11 @@ export function usePurchase(token: string | undefined) {
   const [saving, setSaving] = useState(false);
   const [navIds, setNavIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [deletedDetailIds, setDeletedDetailIds] = useState<number[]>([]);
+  /** Synchronous mirrors — React state can lag one frame behind Save. */
+  const loadedRecordIdRef = useRef<number | null>(null);
+  const initialDetailIdsRef = useRef<number[]>([]);
+  const deletedDetailIdsRef = useRef<number[]>([]);
 
   const form = useForm<PurchaseHeaderFormValues, unknown, PurchaseHeaderFormValues>({
     resolver: zodResolver(purchaseHeaderSchema) as Resolver<PurchaseHeaderFormValues>,
@@ -103,32 +110,55 @@ export function usePurchase(token: string | undefined) {
       form.reset(documentToFormValues(header, nextDetails));
       setDetails(nextDetails.length ? nextDetails : [createEmptyDetailRow()]);
       setSelectedRowIndex(0);
+      loadedRecordIdRef.current =
+        header.id != null && header.id > 0 ? header.id : null;
+      initialDetailIdsRef.current = nextDetails
+        .map((line) => line.id)
+        .filter((id): id is number => id != null && id > 0);
+      deletedDetailIdsRef.current = [];
+      setDeletedDetailIds([]);
     },
     [form]
   );
 
   const loadRecord = useCallback(
-    async (id: number, itemByCode?: Map<string, ItemCatalogItem>) => {
+    async (
+      id: number,
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
+    ) => {
       if (!service) return;
       setLoading(true);
       try {
         const doc = await service.loadById(id);
-        const details =
-          itemByCode && itemByCode.size > 0
-            ? doc.details.map((line) => enrichDetailFromCatalog(line, itemByCode))
-            : doc.details;
+
+        let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+        if (token) {
+          catalogMap = await ensureCatalogItemsForItmCodes(
+            doc.details,
+            catalogMap,
+            catalogItems,
+            token
+          );
+        }
+
+        const details = doc.details.map((line) =>
+          enrichDetailFromCatalog(line, catalogMap)
+        );
         applyDocument(doc.header, details);
         setMode("view");
         toast.success(`Loaded purchase #${doc.header.pthId ?? id}`);
+        return catalogMap;
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Failed to load purchase"
         );
+        return undefined;
       } finally {
         setLoading(false);
       }
     },
-    [applyDocument, service]
+    [applyDocument, service, token]
   );
 
   useEffect(() => {
@@ -140,6 +170,10 @@ export function usePurchase(token: string | undefined) {
     form.reset(headerToFormValues(empty));
     setDetails([createEmptyDetailRow()]);
     setSelectedRowIndex(0);
+    loadedRecordIdRef.current = null;
+    initialDetailIdsRef.current = [];
+    deletedDetailIdsRef.current = [];
+    setDeletedDetailIds([]);
     setMode("new");
   }, [form]);
 
@@ -154,14 +188,18 @@ export function usePurchase(token: string | undefined) {
   const handleSave = useCallback(
     async (
       itemByCode?: Map<string, ItemCatalogItem>,
-      selectedMovement?: MovmentLookupItem | null
+      selectedMovement?: MovmentLookupItem | null,
+      catalogItems?: ItemCatalogItem[]
     ) => {
       if (!service) return;
 
       // Re-apply movement mapping at save time so values cannot be lost
       // between selection and submit (zodResolver / unregistered fields).
       const header = applyMovementToHeader(
-        form.getValues(),
+        {
+          ...form.getValues(),
+          id: form.getValues("id") ?? currentId ?? null,
+        },
         selectedMovement ?? null
       );
 
@@ -171,19 +209,60 @@ export function usePurchase(token: string | undefined) {
       );
       const removedCount = detailsWithTotals.length - detailsForSave.length;
 
-      if (detailsForSave.length === 0) {
+      const recordId =
+        (header.id != null && header.id > 0 ? header.id : null) ??
+        (currentId != null && currentId > 0 ? currentId : null) ??
+        (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+          ? loadedRecordIdRef.current
+          : null);
+
+      const isUpdate = recordId != null;
+      const allowEmptyDetails = isUpdate && detailsForSave.length === 0;
+
+      const effectiveDeletedDetailIds = isUpdate
+        ? computeDeletedDetailIds(
+            initialDetailIdsRef.current,
+            detailsForSave,
+            deletedDetailIdsRef.current
+          )
+        : [];
+
+      if (detailsForSave.length === 0 && !allowEmptyDetails) {
         toast.error("At least one detail line with an item code is required");
         return;
       }
 
-      if (removedCount > 0) {
+      if (allowEmptyDetails && recordId == null) {
+        toast.error(
+          "Could not determine the invoice to update. Reload the purchase and try again."
+        );
+        return;
+      }
+
+      if (removedCount > 0 && !allowEmptyDetails) {
         setDetails(mapDetailsWithLineTotals(detailsForSave));
         setSelectedRowIndex((i) => Math.min(i, Math.max(0, detailsForSave.length - 1)));
       }
 
-      const validation = service.validateDocument(header, detailsForSave);
+      let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+      if (token && detailsForSave.length > 0) {
+        catalogMap = await ensureCatalogItemsForDetails(
+          detailsForSave,
+          catalogMap,
+          catalogItems,
+          token
+        );
+      }
+
+      const validation = service.validateDocument(
+        header,
+        detailsForSave,
+        catalogMap,
+        catalogItems,
+        { allowEmptyDetails, isUpdate }
+      );
       if (!validation.success) {
-        const issue = validation.error.errors[0];
+        const issue = validation.error.issues[0];
         toast.error(issue?.message ?? "Validation failed");
         return;
       }
@@ -191,14 +270,22 @@ export function usePurchase(token: string | undefined) {
       setSaving(true);
       try {
         const saved = await service.save({
-          header: validation.data.header,
+          header: {
+            ...validation.data.header,
+            id: recordId ?? validation.data.header.id,
+          },
+          recordId,
           details: validation.data.details,
+          deletedDetailIds: isUpdate ? effectiveDeletedDetailIds : undefined,
         });
-        const mergedDetails = mergeSavedDetailsWithPrior(
-          saved.details,
-          validation.data.details,
-          itemByCode
-        );
+        const mergedDetails =
+          validation.data.details.length > 0
+            ? mergeSavedDetailsWithPrior(
+                saved.details,
+                validation.data.details,
+                catalogMap
+              )
+            : saved.details;
         applyDocument(saved.header, mergedDetails);
         setMode("view");
         await refreshNavIds();
@@ -218,7 +305,7 @@ export function usePurchase(token: string | undefined) {
         setSaving(false);
       }
     },
-    [applyDocument, detailsWithTotals, form, refreshNavIds, service]
+    [applyDocument, currentId, deletedDetailIds, detailsWithTotals, form, refreshNavIds, service, token]
   );
 
   const handleDelete = useCallback(async () => {
@@ -240,8 +327,11 @@ export function usePurchase(token: string | undefined) {
   }, [currentId, handleNew, refreshNavIds, service]);
 
   const handleRefresh = useCallback(
-    async (itemByCode?: Map<string, ItemCatalogItem>) => {
-      if (currentId) await loadRecord(currentId, itemByCode);
+    async (
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
+    ) => {
+      if (currentId) await loadRecord(currentId, itemByCode, catalogItems);
       else await refreshNavIds();
     },
     [currentId, loadRecord, refreshNavIds]
@@ -250,7 +340,8 @@ export function usePurchase(token: string | undefined) {
   const navigate = useCallback(
     async (
       target: "first" | "prev" | "next" | "last",
-      itemByCode?: Map<string, ItemCatalogItem>
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
     ) => {
       if (!navIds.length) {
         toast.message("No purchase records available to navigate.");
@@ -263,7 +354,7 @@ export function usePurchase(token: string | undefined) {
       else if (target === "prev") nextIndex = idx <= 0 ? 0 : idx - 1;
       else nextIndex = idx < 0 ? 0 : Math.min(idx + 1, navIds.length - 1);
 
-      await loadRecord(navIds[nextIndex]!, itemByCode);
+      await loadRecord(navIds[nextIndex]!, itemByCode, catalogItems);
     },
     [currentId, loadRecord, navIds]
   );
@@ -293,15 +384,25 @@ export function usePurchase(token: string | undefined) {
 
   const removeDetailRow = useCallback((index: number) => {
     setDetails((rows) => {
-      if (rows.length <= 1) {
-        toast.error("At least one detail row is required");
-        return rows;
+      const removed = rows[index];
+      if (!removed) return rows;
+
+      if (removed.id != null && removed.id > 0) {
+        const nextDeleted = deletedDetailIdsRef.current.includes(removed.id)
+          ? deletedDetailIdsRef.current
+          : [...deletedDetailIdsRef.current, removed.id];
+        deletedDetailIdsRef.current = nextDeleted;
+        setDeletedDetailIds(nextDeleted);
       }
+
       const next = rows.filter((_, i) => i !== index);
+      const stoId = next[0]?.stoId?.trim() || removed.stoId?.trim() || "";
+      const result = next.length === 0 ? [createEmptyDetailRow(stoId)] : next;
+
       setSelectedRowIndex((current) =>
-        Math.min(current, Math.max(0, next.length - 1))
+        Math.min(current, Math.max(0, result.length - 1))
       );
-      return next;
+      return result;
     });
   }, []);
 

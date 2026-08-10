@@ -76,7 +76,7 @@ export function UnitFormSheet({
                 Unit code
               </Label>
               <Input
-                value={unit.uCode}
+                value={String(unit.uCode)}
                 disabled
                 className={cn("bg-muted/40", formControlFocusClass)}
               />

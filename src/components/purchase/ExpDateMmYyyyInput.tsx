@@ -62,7 +62,7 @@ export function ExpDateMmYyyyInput({
         }
         setText(formatExpDateMmYyyy(storedValue));
       }}
-      className={cn("h-8 w-[6.5rem] tabular-nums", formControlFocusClass)}
+      className={cn("h-8 w-full min-w-0 tabular-nums", formControlFocusClass)}
     />
   );
 }

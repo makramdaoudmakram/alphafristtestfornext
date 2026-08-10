@@ -15,6 +15,7 @@ import {
   ensureUnitSyncHandlersRegistered,
   UNIT_ENTITY_TYPE,
 } from "@/lib/offline/units/unit-sync";
+import { parseUnitCode } from "@/lib/unit-code";
 import { unitRepository } from "@/repository/unit.repository";
 import type {
   CreateUnitRequest,
@@ -34,10 +35,6 @@ export type UnitMutationResult = {
   queued: boolean;
   unit?: UnitItem;
 };
-
-function normalizeCode(code: string): string {
-  return code.trim();
-}
 
 function requestBackgroundSync(): void {
   if (getSimulateOffline()) return;
@@ -84,7 +81,11 @@ export function createUnitService(token: string) {
     },
 
     async createUnit(data: CreateUnitRequest): Promise<UnitMutationResult> {
-      const uCode = normalizeCode(data.uCode);
+      const uCode = parseUnitCode(data.uCode);
+      if (uCode == null) {
+        throw new Error("Unit code must be a positive number.");
+      }
+
       const payload: CreateUnitRequest = {
         uCode,
         uNameAr: data.uNameAr.trim(),
@@ -111,10 +112,14 @@ export function createUnitService(token: string) {
     },
 
     async updateUnit(
-      uCode: string,
+      uCode: number,
       data: UpdateUnitRequest
     ): Promise<UnitMutationResult> {
-      const code = normalizeCode(uCode);
+      const code = parseUnitCode(uCode);
+      if (code == null) {
+        throw new Error("Unit code must be a positive number.");
+      }
+
       const payload = {
         uNameAr: data.uNameAr.trim(),
         uNameEn: data.uNameEn.trim(),
@@ -143,7 +148,7 @@ export function createUnitService(token: string) {
         entityType: UNIT_ENTITY_TYPE,
         operation: "update",
         clientMutationId: `unit:update:${code}`,
-        entityId: code,
+        entityId: String(code),
         payload: { uCode: code, ...payload },
       });
       void requestBackgroundSync();
@@ -151,8 +156,11 @@ export function createUnitService(token: string) {
       return { queued: true, unit };
     },
 
-    async deleteUnit(uCode: string): Promise<UnitMutationResult> {
-      const code = normalizeCode(uCode);
+    async deleteUnit(uCode: number): Promise<UnitMutationResult> {
+      const code = parseUnitCode(uCode);
+      if (code == null) {
+        throw new Error("Unit code must be a positive number.");
+      }
 
       if (!isOfflineDbAvailable()) {
         await unitRepository.delete(code, token);
@@ -176,7 +184,7 @@ export function createUnitService(token: string) {
         entityType: UNIT_ENTITY_TYPE,
         operation: "delete",
         clientMutationId: `unit:delete:${code}`,
-        entityId: code,
+        entityId: String(code),
         payload: { uCode: code },
       });
       void requestBackgroundSync();
@@ -200,7 +208,7 @@ async function queueUnitCreate(
     entityType: UNIT_ENTITY_TYPE,
     operation: "create",
     clientMutationId: `unit:create:${uCode}`,
-    entityId: uCode,
+    entityId: String(uCode),
     payload,
   });
   void requestBackgroundSync();

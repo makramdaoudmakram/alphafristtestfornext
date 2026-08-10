@@ -56,6 +56,12 @@ import type {
 } from "@/types/user";
 import type { PharmFormValues, PharmItem } from "@/types/pharm";
 import type {
+  StockBalanceItem,
+  StockBatchItem,
+  StockPagedResult,
+  StockSearchFilters,
+} from "@/types/stock";
+import type {
   ExcelEntityMetadata,
   ExcelImportCommitResponse,
   ExcelImportError,
@@ -67,6 +73,7 @@ import type {
   ExcelTemplateDownload,
   ExcelTemplateRequest,
 } from "@/types/excel";
+import { parseUnitCode } from "@/lib/unit-code";
 import {
   excelImportJobStatusFromApiValue,
   excelImportModeFromApiValue,
@@ -83,6 +90,14 @@ function readString(
     if (value != null && typeof value !== "object") return String(value);
   }
   return "";
+}
+
+function readNullableString(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  const value = readString(obj, ...keys);
+  return value ? value : null;
 }
 
 function readNumber(
@@ -213,7 +228,7 @@ function normalizeRoleSummary(item: Record<string, unknown>): RoleSummary {
 
 function normalizeUnitItem(item: Record<string, unknown>): UnitItem {
   return {
-    uCode: readString(item, "uCode", "U_Code", "u_Code"),
+    uCode: readNumber(item, "uCode", "U_Code", "u_Code"),
     uNameAr: readString(item, "uNameAr", "U_Name_Ar", "u_Name_Ar"),
     uNameEn: readString(item, "uNameEn", "U_Name_En", "u_Name_En"),
   };
@@ -406,6 +421,20 @@ function readNullableNumber(
   return null;
 }
 
+/** ASP.NET camelCase serializes Itm_Unit1 as itm_Unit1 — include all variants. */
+function readItemCatalogUnit(
+  obj: Record<string, unknown>,
+  unitIndex: 1 | 2 | 3
+): number | null {
+  return readNullableNumber(
+    obj,
+    `itmUnit${unitIndex}`,
+    `itm_Unit${unitIndex}`,
+    `Itm_Unit${unitIndex}`,
+    `ItmUnit${unitIndex}`
+  );
+}
+
 function normalizeGroupItem(item: Record<string, unknown>): GroupItem {
   return {
     id: readNumber(item, "id", "Id"),
@@ -513,9 +542,9 @@ function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogIte
     itmNotes: readString(item, "itmNotes", "Itm_Notes") || null,
     itmMaxDiscPer: readNullableNumber(item, "itmMaxDiscPer", "Itm_MaxDisc_Per"),
     itmMaxDiscVal: readNullableNumber(item, "itmMaxDiscVal", "Itm_MaxDisc_Val"),
-    itmUnit1: readNullableNumber(item, "itmUnit1", "Itm_Unit1"),
-    itmUnit2: readNullableNumber(item, "itmUnit2", "Itm_Unit2"),
-    itmUnit3: readNullableNumber(item, "itmUnit3", "Itm_Unit3"),
+    itmUnit1: readItemCatalogUnit(item, 1),
+    itmUnit2: readItemCatalogUnit(item, 2),
+    itmUnit3: readItemCatalogUnit(item, 3),
     itmUnit1Unit2: readNullableNumber(item, "itmUnit1Unit2", "Itm_Unit1Unit2"),
     itmUnit1Unit3: readNullableNumber(item, "itmUnit1Unit3", "Itm_Unit1_Unit3"),
     child: normalizeItemCatalogChild(
@@ -1114,17 +1143,17 @@ export function createUnit(data: CreateUnitRequest, token: string) {
 }
 
 export function updateUnit(
-  uCode: string,
+  uCode: number,
   data: UpdateUnitRequest,
   token: string
 ) {
-  const code = uCode.trim();
-  if (!code) {
+  const code = parseUnitCode(uCode);
+  if (code == null) {
     return Promise.reject(new ApiError(400, "Unit code is missing."));
   }
 
   return apiFetch<void>(
-    `Unit/${encodeURIComponent(code)}`,
+    `Unit/${code}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -1136,17 +1165,13 @@ export function updateUnit(
   );
 }
 
-export function deleteUnit(uCode: string, token: string) {
-  const code = uCode.trim();
-  if (!code) {
+export function deleteUnit(uCode: number, token: string) {
+  const code = parseUnitCode(uCode);
+  if (code == null) {
     return Promise.reject(new ApiError(400, "Unit code is missing."));
   }
 
-  return apiFetch<void>(
-    `Unit/${encodeURIComponent(code)}`,
-    { method: "DELETE" },
-    token
-  );
+  return apiFetch<void>(`Unit/${code}`, { method: "DELETE" }, token);
 }
 
 export function getItemFormats(token: string) {
@@ -1480,6 +1505,91 @@ export function deletePharm(parmId: number, token: string) {
   return apiFetch<void>(`Pharm/${parmId}`, { method: "DELETE" }, token);
 }
 
+function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
+    storeId: readString(item, "storeId", "StoreId"),
+    expDate: readNullableString(item, "expDate", "ExpDate"),
+    qty: readNumber(item, "qty", "Qty"),
+    purshPrice: readNumber(item, "purshPrice", "PurshPrice"),
+    salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+    costPrice: readNumber(item, "costPrice", "CostPrice"),
+    unitId: readNullableNumber(item, "unitId", "UnitId"),
+  };
+}
+
+function normalizeStockBalanceItem(item: Record<string, unknown>): StockBalanceItem {
+  return {
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
+    storeId: readNullableString(item, "storeId", "StoreId"),
+    totalQty: readNumber(item, "totalQty", "TotalQty"),
+    batchCount: readNumber(item, "batchCount", "BatchCount"),
+  };
+}
+
+function normalizeStockPagedResult(data: unknown): StockPagedResult {
+  if (Array.isArray(data)) {
+    return {
+      items: data.map((item) => normalizeStockBatchItem(item as Record<string, unknown>)),
+      totalCount: data.length,
+      pageNumber: 1,
+      pageSize: data.length,
+    };
+  }
+
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const items = parseArrayOrPaged(data, normalizeStockBatchItem);
+
+  return {
+    items,
+    totalCount: readNumber(raw, "totalCount", "TotalCount") || items.length,
+    pageNumber: readNumber(raw, "pageNumber", "PageNumber") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || items.length,
+  };
+}
+
+export function searchStockBatches(token: string, filters: StockSearchFilters = {}) {
+  const params = new URLSearchParams();
+  if (filters.itemCode?.trim()) params.set("itemCode", filters.itemCode.trim());
+  if (filters.itemName?.trim()) params.set("itemName", filters.itemName.trim());
+  if (filters.storeId?.trim()) params.set("storeId", filters.storeId.trim());
+  if (filters.expFrom?.trim()) params.set("expFrom", filters.expFrom.trim());
+  if (filters.expTo?.trim()) params.set("expTo", filters.expTo.trim());
+  params.set("pageNumber", String(filters.pageNumber ?? 1));
+  params.set("pageSize", String(filters.pageSize ?? 100));
+
+  const query = params.toString();
+  return apiFetch<unknown>(`Stock${query ? `?${query}` : ""}`, {}, token).then(
+    normalizeStockPagedResult
+  );
+}
+
+export function getStockBalanceByItem(
+  itemCode: string,
+  token: string,
+  storeId?: string
+) {
+  const params = new URLSearchParams();
+  if (storeId?.trim()) params.set("storeId", storeId.trim());
+  const query = params.toString();
+
+  return apiFetch<unknown>(
+    `Stock/balance/${encodeURIComponent(itemCode)}${query ? `?${query}` : ""}`,
+    {},
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((item) => normalizeStockBalanceItem(item as Record<string, unknown>));
+    }
+    return parseArrayOrPaged(data, normalizeStockBalanceItem);
+  });
+}
+
 export function getGroups(token: string) {
   return fetchAllPaged("Group", token, normalizeGroupItem);
 }
@@ -1670,9 +1780,9 @@ function normalizeItemCatalogLookupItem(
     itmNotes: null,
     itmMaxDiscPer: null,
     itmMaxDiscVal: null,
-    itmUnit1: null,
-    itmUnit2: null,
-    itmUnit3: null,
+    itmUnit1: readItemCatalogUnit(item, 1),
+    itmUnit2: readItemCatalogUnit(item, 2),
+    itmUnit3: readItemCatalogUnit(item, 3),
     itmUnit1Unit2: null,
     itmUnit1Unit3: null,
     child: null,

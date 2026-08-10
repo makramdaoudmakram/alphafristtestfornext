@@ -41,6 +41,7 @@ type ItemCatalogAutocompleteCellProps = {
   onFocusRow: () => void;
   onChangeRow: (patch: Partial<PurchaseDetail>) => void;
   onAfterApply?: () => void;
+  onItemApplied?: (item: ItemCatalogItem) => void;
 };
 
 type MenuPosition = {
@@ -61,6 +62,7 @@ export function ItemCatalogAutocompleteCell({
   onFocusRow,
   onChangeRow,
   onAfterApply,
+  onItemApplied,
 }: ItemCatalogAutocompleteCellProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -170,13 +172,27 @@ export function ItemCatalogAutocompleteCell({
 
   const applyItem = useCallback(
     (item: ItemCatalogItem) => {
+      console.log("[Purchase item selected]", {
+        Id: item.id,
+        Itm_Code: item.itmCode,
+        Itm_Name_Ar: item.itmNameAr,
+        Itm_Name_En: item.itmNameEn,
+        Itm_DefSell_Price: item.itmDefSellPrice,
+        Itm_DefPharm_Price: item.itmDefPharmPrice,
+        Itm_Unit1: item.itmUnit1,
+        Itm_Unit2: item.itmUnit2,
+        Itm_Unit3: item.itmUnit3,
+        selectedFrom: field,
+      });
+
+      onItemApplied?.(item);
       onChangeRow(patchDetailFromCatalogItem(item));
       setWantList(false);
       if (onAfterApply) {
         requestAnimationFrame(() => onAfterApply());
       }
     },
-    [onChangeRow, onAfterApply]
+    [field, onChangeRow, onAfterApply, onItemApplied]
   );
 
   const onInputChange = (text: string) => {

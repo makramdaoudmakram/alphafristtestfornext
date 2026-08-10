@@ -14,6 +14,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-origins": "ItemOrigin.View",
   "/dashboard/companies": "Company.View",
   "/dashboard/pharm": "Pharm.View",
+  "/dashboard/stock": "Stock.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/transactions/purchase": null,
@@ -63,6 +64,9 @@ export const PERMISSIONS = {
     create: "Pharm.Create",
     edit: "Pharm.Edit",
     delete: "Pharm.Delete",
+  },
+  stock: {
+    view: "Stock.View",
   },
   itemCatalog: {
     view: "ItemCatalog.View",
