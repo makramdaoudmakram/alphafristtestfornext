@@ -21,6 +21,7 @@ import type { AccountSelectItem } from "@/types/collected-voucher";
  *   dbo.GetAccCode('Suppliers') = '2140' → Collected From Supplier leaves under 2140
  */
 export const GET_ACC_CODE_MAP: Record<string, string> = {
+  Payable: process.env.NEXT_PUBLIC_GET_ACC_CODE_PAYABLE?.trim() || "",
   Bank: "111",
   Safe: process.env.NEXT_PUBLIC_GET_ACC_CODE_SAFE?.trim() || "110",
   Customers: process.env.NEXT_PUBLIC_GET_ACC_CODE_CUSTOMERS?.trim() || "114",
@@ -39,8 +40,10 @@ export function resolveGetAccCode(
         ? "Bank"
         : groupName.trim().toLowerCase().startsWith("cust")
           ? "Customers"
-          : groupName.trim().toLowerCase().startsWith("supp")
-            ? "Suppliers"
+      : groupName.trim().toLowerCase().startsWith("supp")
+          ? "Suppliers"
+          : groupName.trim().toLowerCase().startsWith("pay")
+            ? "Payable"
             : groupName.trim();
 
   const mapped = GET_ACC_CODE_MAP[key]?.trim();

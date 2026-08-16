@@ -20,19 +20,20 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  createCollectedVoucher,
+  createPaymentVoucher,
   getAccountChildren,
   getAccountCurrency,
   getAccountSources,
-  getCollectedVoucher,
-  getCollectedVoucherAdjacent,
-  getCollectedVoucherJournal,
-  getCollectedVoucherLast,
+  getPaymentVoucher,
+  getPaymentVoucherAdjacent,
+  getPaymentVoucherJournal,
+  getPaymentVoucherLast,
   getCollectionVoucherBanks,
   getCollectionVoucherSafes,
-  getReceiptChartLeaves,
-  postCollectedVoucher,
-  searchCollectedVouchers,
+  getPaymentChartLeaves,
+  getPaymentPayableAccounts,
+  postPaymentVoucher,
+  searchPaymentVouchers,
 } from "@/lib/api-client";
 import { amountInArabicWords } from "@/lib/amount-in-words-ar";
 import type {
@@ -256,15 +257,15 @@ function validateHeaderForm(v: HeaderValidationInput): string | null {
     }
   }
 
-  // Collected From
+  // Paid To
   if (v.vSource === "Other") {
     if (!v.collectedName.trim()) {
       focusCollectField("collectedName");
-      return "Please enter the Collected From name.";
+      return "Please enter the Paid To name.";
     }
   } else if (!v.collectedCode.trim()) {
     focusCollectField("collectedCode");
-    return "Please select the Collected From party.";
+    return "Please select the Paid To party.";
   }
 
   return null;
@@ -307,7 +308,7 @@ function validateJournalForm(
   return null;
 }
 
-export function CollectionVoucherPageContent() {
+export function PaymentVoucherPageContent() {
   const { data: session } = useSession();
   const token = session?.accessToken;
   const userName = session?.user?.name ?? session?.user?.email ?? "system";
@@ -349,7 +350,7 @@ export function CollectionVoucherPageContent() {
   const [chartAccounts, setChartAccounts] = useState<AccountSelectItem[]>([]);
 
   const [lines, setLines] = useState<LedgerLine[]>([]);
-  const [lineType, setLineType] = useState("Credit");
+  const [lineType, setLineType] = useState("Debit");
   const [lineAccount, setLineAccount] = useState("");
   const [lineAmount, setLineAmount] = useState("");
   const [lineDescription, setLineDescription] = useState("");
@@ -404,7 +405,10 @@ export function CollectionVoucherPageContent() {
     [token, loadAccountCurrency]
   );
 
-  /** Web Forms drpCBank_SelectedIndexChanged */
+  /**
+   * Web Forms drpCBank_SelectedIndexChanged:
+   * BankCode = selected bank; Account NO list = Payable children (not bank children).
+   */
   const onChequeBankChange = useCallback(
     async (code: string, preserveAccount?: string) => {
       setChequeBank(code);
@@ -413,10 +417,10 @@ export function CollectionVoucherPageContent() {
         setChequeAccount("");
         return;
       }
-      const children = await getAccountChildren(code, token);
-      setChequeAccounts(children);
+      const payables = await getPaymentPayableAccounts(token);
+      setChequeAccounts(payables);
       const next =
-        preserveAccount && children.some((c) => c.accCode === preserveAccount)
+        preserveAccount && payables.some((c) => c.accCode === preserveAccount)
           ? preserveAccount
           : "";
       setChequeAccount(next);
@@ -516,7 +520,7 @@ export function CollectionVoucherPageContent() {
     async (no: number, voucher: CollectedVoucherItem) => {
       if (!token) return;
       try {
-        const journal = await getCollectedVoucherJournal(no, token);
+        const journal = await getPaymentVoucherJournal(no, token);
         if (journal.length > 0) {
           setLines(
             journal.map((l, i) => ({
@@ -529,10 +533,10 @@ export function CollectionVoucherPageContent() {
           return;
         }
       } catch {
-        /* unposted — fall through to seed Debit like Web Forms ReadJornal */
+        /* unposted — fall through to seed Credit like Web Forms ReadJornal */
       }
 
-      // Web Forms ReadJornal: if no GL yet, seed ONE Debit from AccountNO (Cash/Cheque/Transfer)
+      // Web Forms ReadJornal: if no GL yet, seed ONE Credit from AccountNO (Cash/Cheque/Transfer)
       const amt = voucher.amount ?? 0;
       const r = voucher.rate ?? 1;
       const code = voucher.accountNO ?? "";
@@ -551,7 +555,7 @@ export function CollectionVoucherPageContent() {
       setLines([
         {
           rowId: `seed-${no}-${code}`,
-          type: "Debit",
+          type: "Credit",
           acccountCode: code,
           accName: name,
           description: voucher.description ?? "",
@@ -626,7 +630,7 @@ export function CollectionVoucherPageContent() {
   const loadLast = useCallback(async () => {
     if (!token) return;
     try {
-      const v = await getCollectedVoucherLast(token);
+      const v = await getPaymentVoucherLast(token);
       await applyVoucher(v);
     } catch {
       setIsNew(true);
@@ -648,7 +652,7 @@ export function CollectionVoucherPageContent() {
       try {
         const [s, receiptLeaves] = await Promise.all([
           getCollectionVoucherSafes(token),
-          getReceiptChartLeaves(token),
+          getPaymentChartLeaves(token),
         ]);
         if (cancelled) return;
         setSafes(s);
@@ -658,11 +662,11 @@ export function CollectionVoucherPageContent() {
       }
       if (cancelled) return;
 
-      // PendingVoucher / TreasuryIn: ?ReceiptNO= loads that voucher (else last)
+      // PendingVoucher / TreasuryOut: ?ReceiptNO= loads that voucher (else last)
       const openNo = deepLinkId ? Number(deepLinkId) : NaN;
       if (Number.isFinite(openNo) && openNo > 0) {
         try {
-          const v = await getCollectedVoucher(openNo, token);
+          const v = await getPaymentVoucher(openNo, token);
           if (!cancelled) await applyVoucher(v);
         } catch (e) {
           if (!cancelled) {
@@ -680,9 +684,7 @@ export function CollectionVoucherPageContent() {
   }, [token, deepLinkId]); // eslint-disable-line react-hooks/exhaustive-deps — Page_Load once per token/deep-link
 
   // NOTE: Do NOT sync/rebuild `lines` from header fields after load.
-  // A previous effect did: setLines([newDebit, ...prev.filter(l => !l.locked)])
-  // which dropped Row 1 whenever the first user-added row was also locked/Debit,
-  // or replaced the full list incorrectly. Web Forms seeds Debit once in ReadJornal only.
+  // Web Forms TreasuryOut seeds Credit once in ReadJornal only; user adds Debit rows.
 
   const refreshAmountWords = () => {
     try {
@@ -718,9 +720,9 @@ export function CollectionVoucherPageContent() {
   const navigate = async (direction: string) => {
     if (!token || receiptNo == null) return;
     try {
-      const next = await getCollectedVoucherAdjacent(receiptNo, direction, token);
+      const next = await getPaymentVoucherAdjacent(receiptNo, direction, token);
       if (next == null) return;
-      const v = await getCollectedVoucher(next, token);
+      const v = await getPaymentVoucher(next, token);
       await applyVoucher(v);
     } catch {
       /* edge */
@@ -730,7 +732,7 @@ export function CollectionVoucherPageContent() {
   const doSearch = async () => {
     if (!token || !searchValue.trim()) return;
     try {
-      setSearchRows(await searchCollectedVouchers(searchValue.trim(), token));
+      setSearchRows(await searchPaymentVouchers(searchValue.trim(), token));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     }
@@ -738,7 +740,7 @@ export function CollectionVoucherPageContent() {
 
   const openSearchRow = async (no: number) => {
     if (!token) return;
-    const v = await getCollectedVoucher(no, token);
+    const v = await getPaymentVoucher(no, token);
     await applyVoucher(v);
     setFindOpen(false);
   };
@@ -818,7 +820,7 @@ export function CollectionVoucherPageContent() {
 
     setBusy(true);
     try {
-      const created = await createCollectedVoucher(
+      const created = await createPaymentVoucher(
         {
           receiptDate: receiptDate ? new Date(receiptDate).toISOString() : null,
           saveCode,
@@ -842,7 +844,7 @@ export function CollectionVoucherPageContent() {
       );
       toast.success(`Receipt Number ( ${created.receiptNO} ) updated Done`);
       toast.message(
-        "Header saved. Add Credit row(s), then press Update to post Debit+Credit to General Ledger."
+        "Header saved. Add Debit row(s), then press Update to post Debit+Credit to General Ledger."
       );
       await applyVoucher(created);
     } catch (e) {
@@ -890,7 +892,7 @@ export function CollectionVoucherPageContent() {
     ]);
     setLineAmount("");
     setLineAccount("");
-    setLineType("Credit");
+    setLineType("Debit");
   };
 
   const removeLine = (idx: number) => {
@@ -909,7 +911,7 @@ export function CollectionVoucherPageContent() {
     setBusy(true);
     try {
       const r = parseFloat(rate) || 1;
-      await postCollectedVoucher(
+      await postPaymentVoucher(
         receiptNo,
         lines.map((l) => {
           const isDebit = l.type === "Debit";
@@ -934,7 +936,7 @@ export function CollectionVoucherPageContent() {
         token
       );
       toast.success(`Receipt Number ( ${receiptNo} ) updated Done`);
-      const v = await getCollectedVoucher(receiptNo, token);
+      const v = await getPaymentVoucher(receiptNo, token);
       await applyVoucher(v);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -974,7 +976,7 @@ export function CollectionVoucherPageContent() {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-4xl font-bold tracking-tight text-slate-950 md:text-[2.6rem]">
-                Collect Voucher
+                Payment Voucher
               </h1>
               <Badge variant="outline" className={cn("rounded-full px-3 py-1 font-semibold", statusClass)}>
                 {statusLabel}
@@ -987,10 +989,10 @@ export function CollectionVoucherPageContent() {
             </div>
             <p className="text-lg text-slate-700">
               {isNew
-                ? "Create and manage collection transactions"
+                ? "Create and manage payment transactions"
                 : approved
-                  ? "Posted collection voucher — journal locked"
-                  : "Edit collection voucher — add accounting rows, then update to post"}
+                  ? "Posted payment voucher — journal locked"
+                  : "Edit payment voucher — add accounting rows, then update to post"}
             </p>
             <Breadcrumb>
               <BreadcrumbList className="text-base text-slate-700">
@@ -1006,7 +1008,7 @@ export function CollectionVoucherPageContent() {
                 <BreadcrumbSeparator />
                 <BreadcrumbItem>
                   <BreadcrumbPage>
-                    Collect Voucher{isNew ? " · New" : approved ? " · Posted" : " · Edit"}
+                    Payment Voucher{isNew ? " · New" : approved ? " · Posted" : " · Edit"}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -1122,7 +1124,7 @@ export function CollectionVoucherPageContent() {
                   />
                 </div>
                 <div>
-                  <FieldLabel required>Collection Method</FieldLabel>
+                  <FieldLabel required>Payment Method</FieldLabel>
                   <Select
                     value={paymentMethod}
                     onValueChange={(v) => {
@@ -1188,7 +1190,7 @@ export function CollectionVoucherPageContent() {
                   </div>
                 </div>
                 <div>
-                  <FieldLabel required>Collected From</FieldLabel>
+                  <FieldLabel required>Paid To</FieldLabel>
                   <Select
                     value={vSource}
                     onValueChange={(v) => {
@@ -1387,7 +1389,7 @@ export function CollectionVoucherPageContent() {
               <VoucherAttachmentsPanel
                 variant="embedded"
                 className="min-h-0 flex-1"
-                voucherType="Collect"
+                voucherType="Payment"
                 voucherId={isNew ? null : receiptNo}
                 voucherRef={recRef || (receiptNo != null ? String(receiptNo) : null)}
               />
@@ -1420,13 +1422,13 @@ export function CollectionVoucherPageContent() {
 
           {canEditJournal ? (
             <div className="border-b border-amber-300 bg-amber-100 px-5 py-2.5 text-base text-amber-950">
-              Unposted voucher: Credit rows are kept in this screen until you press{" "}
+              Unposted voucher: Debit rows are kept in this screen until you press{" "}
               <strong>Update Voucher</strong> (Debit must equal Credit).
             </div>
           ) : null}
           {approved ? (
             <div className="border-b border-emerald-300 bg-emerald-100 px-5 py-2.5 text-base text-emerald-950">
-              Posted — lines loaded from General Ledger (TransType CJ).
+              Posted — lines loaded from General Ledger (TransType PJ).
             </div>
           ) : null}
 
@@ -1501,7 +1503,7 @@ export function CollectionVoucherPageContent() {
                         className="px-3 py-10 text-center text-lg text-slate-600"
                       >
                         {isNew
-                          ? "Save the voucher header first to seed the Debit row."
+                          ? "Save the voucher header first to seed the Credit row."
                           : "No ledger lines yet."}
                       </td>
                     </tr>
@@ -1649,7 +1651,7 @@ export function CollectionVoucherPageContent() {
         <Dialog open={findOpen} onOpenChange={setFindOpen}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Find Collection Voucher</DialogTitle>
+              <DialogTitle>Find payment voucher</DialogTitle>
             </DialogHeader>
             <div className="flex flex-wrap gap-2">
               <Input

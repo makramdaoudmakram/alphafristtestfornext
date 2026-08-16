@@ -127,6 +127,18 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/collection-voucher",
           },
           {
+            title: "Payment Voucher",
+            href: "/dashboard/payment-voucher",
+          },
+          {
+            title: "Pending Vouchers",
+            href: "/dashboard/pending-vouchers",
+          },
+          {
+            title: "Manual Journal",
+            href: "/dashboard/manual-journal",
+          },
+          {
             title: "Cost Centers",
             href: "/dashboard/cost-centers",
           },
@@ -172,6 +184,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm": "Pharm",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",
+  "/dashboard/payment-voucher": "Payment Voucher",
+  "/dashboard/pending-vouchers": "Pending Vouchers",
+  "/dashboard/manual-journal": "Manual Journal",
   "/dashboard/cost-centers": "Cost Centers",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",

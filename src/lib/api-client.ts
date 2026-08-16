@@ -61,6 +61,10 @@ import type {
   VoucherLedgerLineRequest,
 } from "@/types/collected-voucher";
 import type {
+  VoucherAttachmentItem,
+  VoucherAttachmentType,
+} from "@/types/voucher-attachment";
+import type {
   ItemCatalogItem,
   ItemCatalogPageQuery,
   ItemCatalogPagedResult,
@@ -2016,6 +2020,88 @@ export async function getAccountCurrency(accCode: string, token: string) {
 }
 
 /**
+ * Old TreasuryIn journal account ComboBox:
+ *   SELECT ACCCode, ACCCode + ' -' + ACCAName AS Name
+ *   FROM ChartView WHERE Receipt = 1
+ */
+export async function getReceiptChartLeaves(
+  token: string
+): Promise<AccountSelectItem[]> {
+  try {
+    const data = await apiFetch<unknown>("AccountsChart/receipt-leaves", {}, token);
+    if (Array.isArray(data)) {
+      return data.map((x) => {
+        const row = x as Record<string, unknown>;
+        const accCode = readString(row, "accCode", "ACCCode");
+        const name =
+          readString(row, "name", "Name", "accaName", "ACCAName") || accCode;
+        return { accCode, name };
+      });
+    }
+  } catch {
+    /* fall through to ChartView-equivalent client filter */
+  }
+
+  const chart = await getVoucherAccountsChart(token);
+  const parentCodes = new Set(
+    chart.map((a) => a.parentCode).filter((p): p is string => !!p)
+  );
+  return chart
+    .filter((a) => a.receipt && !parentCodes.has(a.accCode))
+    .map((a) => ({
+      accCode: a.accCode,
+      // Name only — UI formats "ACCCode - Name" for display (ACCCode is business code).
+      name: (a.accAName ?? a.accName ?? a.accCode).trim() || a.accCode,
+    }));
+}
+
+/** TreasuryOut journal ComboBox: ChartView WHERE Payment = 1 */
+export async function getPaymentChartLeaves(
+  token: string
+): Promise<AccountSelectItem[]> {
+  try {
+    const data = await apiFetch<unknown>("AccountsChart/payment-leaves", {}, token);
+    if (Array.isArray(data)) {
+      return data.map((x) => {
+        const row = x as Record<string, unknown>;
+        const accCode = readString(row, "accCode", "ACCCode");
+        const name =
+          readString(row, "name", "Name", "accaName", "ACCAName") || accCode;
+        return { accCode, name };
+      });
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const chart = await getVoucherAccountsChart(token);
+  const parentCodes = new Set(
+    chart.map((a) => a.parentCode).filter((p): p is string => !!p)
+  );
+  return chart
+    .filter((a) => a.payment && !parentCodes.has(a.accCode))
+    .map((a) => ({
+      accCode: a.accCode,
+      name: (a.accAName ?? a.accName ?? a.accCode).trim() || a.accCode,
+    }));
+}
+
+/**
+ * TreasuryOut Cheque Account NO = Payable children (GetAccCode('Payable')).
+ * Set NEXT_PUBLIC_GET_ACC_CODE_PAYABLE when the API DB has no GetAccCode UDF.
+ */
+export async function getPaymentPayableAccounts(token: string) {
+  const parent =
+    (typeof process !== "undefined" &&
+      process.env.NEXT_PUBLIC_GET_ACC_CODE_PAYABLE?.trim()) ||
+    "";
+  if (parent) {
+    return getAccountChildren(parent, token);
+  }
+  return getAccountsByGroup("Payable", token);
+}
+
+/**
  * Old TreasuryIn Customer/Supplier CTE under GetAccCode('Customers'|'Suppliers').
  * This site: Customers → parent 114, Suppliers → parent 2140 (leaf accounts only).
  */
@@ -2128,6 +2214,310 @@ export function postCollectedVoucher(
 ) {
   return apiFetch<Record<string, unknown>>(
     `CollectedVoucher/${receiptNo}/post`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        Lines: lines.map((l) => ({
+          ACCcountCode: l.acccountCode,
+          Description: l.description,
+          Currancy: l.currancy,
+          Rate: l.rate,
+          BankAccount: l.bankAccount,
+          ChequeNO: l.chequeNO,
+          Amount: l.amount,
+          Depit: l.depit,
+          Credit: l.credit,
+          Notes: l.notes,
+          DueDate: l.dueDate,
+          CostCenter: l.costCenter,
+        })),
+      }),
+    },
+    token
+  ).then(normalizeCollectedVoucher);
+}
+
+function normalizeVoucherAttachment(raw: Record<string, unknown>): VoucherAttachmentItem {
+  return {
+    id: readNumber(raw, "id", "Id"),
+    voucherType: readString(raw, "voucherType", "VoucherType"),
+    voucherId: readNumber(raw, "voucherId", "VoucherId"),
+    originalFileName: readString(raw, "originalFileName", "OriginalFileName"),
+    fileExtension: readString(raw, "fileExtension", "FileExtension"),
+    contentType: readString(raw, "contentType", "ContentType"),
+    fileSize: readNumber(raw, "fileSize", "FileSize"),
+    uploadedAt: readString(raw, "uploadedAt", "UploadedAt"),
+    uploadedBy: readNullableString(raw, "uploadedBy", "UploadedBy"),
+  };
+}
+
+/** List attachments for Collect or Payment voucher (ReceiptNO). */
+export async function getVoucherAttachments(
+  voucherType: VoucherAttachmentType,
+  voucherId: number,
+  token: string
+): Promise<VoucherAttachmentItem[]> {
+  const data = await apiFetch<unknown>(
+    `voucher-attachments/${encodeURIComponent(voucherType)}/${voucherId}`,
+    {},
+    token
+  );
+  if (!Array.isArray(data)) return [];
+  return data.map((x) => normalizeVoucherAttachment(x as Record<string, unknown>));
+}
+
+/** Upload PDF/image to an existing saved voucher. */
+export async function uploadVoucherAttachment(
+  voucherType: VoucherAttachmentType,
+  voucherId: number,
+  file: File,
+  token: string
+): Promise<VoucherAttachmentItem> {
+  const formData = new FormData();
+  formData.append("voucherType", voucherType);
+  formData.append("voucherId", String(voucherId));
+  formData.append("file", file);
+
+  const response = await fetch(alfaUrl("voucher-attachments/upload"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+  return normalizeVoucherAttachment(data);
+}
+
+export async function deleteVoucherAttachment(id: number, token: string) {
+  return apiFetch<{ message?: string }>(
+    `voucher-attachments/${id}`,
+    { method: "DELETE" },
+    token
+  );
+}
+
+/** Authenticated blob download/view URL fetch. */
+export async function downloadVoucherAttachmentBlob(
+  id: number,
+  token: string
+): Promise<{ blob: Blob; fileName: string; contentType: string }> {
+  const response = await fetch(alfaUrl(`voucher-attachments/${id}/download`), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(disposition);
+  const fileName = match
+    ? decodeURIComponent(match[1]!.replace(/"/g, "").trim())
+    : `attachment-${id}`;
+  const contentType =
+    response.headers.get("Content-Type") ?? "application/octet-stream";
+  const blob = await response.blob();
+  return { blob, fileName, contentType };
+}
+
+/** Payment voucher by ReceiptNO. */
+export function getPaymentVoucher(receiptNo: number, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `PaymentVoucher/${receiptNo}`,
+    {},
+    token
+  ).then(normalizeCollectedVoucher);
+}
+
+export function searchPaymentVouchers(search: string, token: string) {
+  return fetchAllPaged("PaymentVoucher", token, normalizeCollectedVoucher, {
+    search,
+    sortBy: "receiptno",
+    sortDesc: "true",
+  });
+}
+
+/** Web Forms PendingVoucher.aspx — PaymentVoucher where Approved = 0. */
+export async function getPendingPaymentVouchers(token: string) {
+  try {
+    const data = await apiFetch<unknown>("PaymentVoucher/pending", {}, token);
+    if (Array.isArray(data)) {
+      return data.map((x) => {
+        const row = x as Record<string, unknown>;
+        return {
+          receiptNO: readNumber(row, "receiptNO", "ReceiptNO"),
+          receiptDate: readNullableString(row, "receiptDate", "ReceiptDate"),
+          amount: readNullableNumber(row, "amount", "Amount"),
+          currency: readNullableString(row, "currency", "Currency"),
+          type: readNullableString(row, "type", "Type"),
+          vSource: readNullableString(row, "vSource", "VSource"),
+          partyName: readNullableString(
+            row,
+            "paidToName",
+            "PaidToName",
+            "collectedName",
+            "CollectedName"
+          ),
+        };
+      });
+    }
+  } catch (e) {
+    // Running API may not have /pending yet — reuse existing approved filter.
+    if (!(e instanceof ApiError) || e.status !== 404) throw e;
+  }
+
+  const rows = await fetchAllPaged(
+    "PaymentVoucher",
+    token,
+    normalizeCollectedVoucher,
+    { approved: "false", sortBy: "receiptno", sortDesc: "false" }
+  );
+  return rows.map((v) => ({
+    receiptNO: v.receiptNO,
+    receiptDate: v.receiptDate,
+    amount: v.amount,
+    currency: v.currency,
+    type: v.type,
+    vSource: v.vSource,
+    partyName: v.collectedName,
+  }));
+}
+
+/** Web Forms PendingVoucher.aspx — CollectedVoucher where Approved = 0. */
+export async function getPendingCollectedVouchers(token: string) {
+  try {
+    const data = await apiFetch<unknown>("CollectedVoucher/pending", {}, token);
+    if (Array.isArray(data)) {
+      return data.map((x) => {
+        const row = x as Record<string, unknown>;
+        return {
+          receiptNO: readNumber(row, "receiptNO", "ReceiptNO"),
+          receiptDate: readNullableString(row, "receiptDate", "ReceiptDate"),
+          amount: readNullableNumber(row, "amount", "Amount"),
+          currency: readNullableString(row, "currency", "Currency"),
+          type: readNullableString(row, "type", "Type"),
+          vSource: readNullableString(row, "vSource", "VSource"),
+          partyName: readNullableString(row, "collectedName", "CollectedName"),
+        };
+      });
+    }
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 404) throw e;
+  }
+
+  const rows = await fetchAllPaged(
+    "CollectedVoucher",
+    token,
+    normalizeCollectedVoucher,
+    { approved: "false", sortBy: "receiptno", sortDesc: "false" }
+  );
+  return rows.map((v) => ({
+    receiptNO: v.receiptNO,
+    receiptDate: v.receiptDate,
+    amount: v.amount,
+    currency: v.currency,
+    type: v.type,
+    vSource: v.vSource,
+    partyName: v.collectedName,
+  }));
+}
+
+export async function getPaymentVoucherLast(token: string) {
+  try {
+    return await apiFetch<Record<string, unknown>>(
+      "PaymentVoucher/last",
+      {},
+      token
+    ).then(normalizeCollectedVoucher);
+  } catch {
+    const rows = await fetchAllPaged(
+      "PaymentVoucher",
+      token,
+      normalizeCollectedVoucher,
+      { sortBy: "receiptno", sortDesc: "true" }
+    );
+    if (!rows.length) throw new Error("No payment vouchers found");
+    return rows[0]!;
+  }
+}
+
+export function getPaymentVoucherAdjacent(
+  receiptNo: number,
+  direction: string,
+  token: string
+) {
+  return apiFetch<{ receiptNo?: number; ReceiptNo?: number }>(
+    `PaymentVoucher/${receiptNo}/adjacent?direction=${encodeURIComponent(direction)}`,
+    {},
+    token
+  ).then((r) => r.receiptNo ?? r.ReceiptNo ?? null);
+}
+
+export function getPaymentVoucherJournal(receiptNo: number, token: string) {
+  return apiFetch<unknown>(`PaymentVoucher/${receiptNo}/journal`, {}, token).then(
+    (data) =>
+      Array.isArray(data)
+        ? data.map((x) => normalizeJournalLine(x as Record<string, unknown>))
+        : []
+  );
+}
+
+export function createPaymentVoucher(
+  data: CollectedVoucherUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "PaymentVoucher",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        RecRef: data.recRef,
+        ReceiptDate: data.receiptDate,
+        SaveCode: data.saveCode,
+        Amount: data.amount,
+        Currency: data.currency,
+        Rate: data.rate,
+        Type: data.type,
+        VSource: data.vSource,
+        CollectedCode: data.collectedCode,
+        CollectedName: data.collectedName,
+        Description: data.description,
+        AddedUser: data.addedUser,
+        ChequeNO: data.chequeNO,
+        BankCode: data.bankCode,
+        DueDate: data.dueDate,
+        AccountNO: data.accountNO,
+        TotalString: data.totalString,
+        CostCenter: data.costCenter,
+      }),
+    },
+    token
+  ).then(normalizeCollectedVoucher);
+}
+
+export function postPaymentVoucher(
+  receiptNo: number,
+  lines: VoucherLedgerLineRequest[],
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    `PaymentVoucher/${receiptNo}/post`,
     {
       method: "POST",
       body: JSON.stringify({

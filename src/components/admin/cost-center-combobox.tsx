@@ -52,10 +52,15 @@ export function CostCenterCombobox({
   const options = useMemo<ComboboxOption[]>(() => {
     const mapped = items
       .filter((item) => item.code?.trim())
-      .map((item) => ({
-        value: item.code!.trim(),
-        label: `${item.code} — ${item.name?.trim() || "—"}`,
-      }));
+      .map((item) => {
+        const code = item.code!.trim();
+        const name = item.name?.trim() || "";
+        // Value = business Code (never DB Id). Label = name, with business code when useful.
+        return {
+          value: code,
+          label: name && name !== code ? `${code} - ${name}` : name || code,
+        };
+      });
     return mapped;
   }, [items]);
 
@@ -67,6 +72,7 @@ export function CostCenterCombobox({
       placeholder={loading ? "Loading…" : placeholder}
       disabled={disabled || loading || status === "loading"}
       emptyMessage="No cost centers found."
+      size="lg"
     />
   );
 }

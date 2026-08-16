@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { CollectionVoucherPageContent } from "@/components/admin/collection-voucher-page-content";
 
 export default function CollectionVoucherPage() {
-  return <CollectionVoucherPageContent />;
+  return (
+    <Suspense fallback={null}>
+      <CollectionVoucherPageContent />
+    </Suspense>
+  );
 }

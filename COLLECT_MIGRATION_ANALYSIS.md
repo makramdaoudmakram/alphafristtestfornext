@@ -355,6 +355,27 @@ UNKNOWN — NEEDS CONFIRMATION
 
 ---
 
+## Implementation status (after confirmation)
+
+Aligned with this analysis in Alfa API + Next.js (`D:\cursore test`):
+
+| Item | Status |
+|------|--------|
+| Web Forms 1 Debit seed row (not 2 starter rows) | Done |
+| `GET AccountsChart/receipt-leaves` (ChartView + Receipt=1) | Done |
+| Post validates Debit == Credit (API authority) | Done |
+| Post transaction: GL lines + `Approved=true` / rollback | Done |
+| Cash/Cheque/Transfer TreasuryCode, BankAccount, ChequeNO | Done |
+| GL Description built server-side (`من حساب` / `إلى حساب`) | Done |
+| UI: Total Debit / Credit / Difference + Add New Row | Done |
+| EF mirrors `AddLadger` INSERT (project convention; SPs not called from Alfa yet) | Done |
+
+```text
+UNKNOWN — still open: live AccountsChart.Receipt seed values in your DB
+```
+
+---
+
 ## Quick answer checklist (requested)
 
 1. **Web Forms page:** `TreasuryIn.aspx` / `TreasuryIn.aspx.cs`
