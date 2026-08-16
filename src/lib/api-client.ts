@@ -44,6 +44,23 @@ import type {
   UpdateGroupRequest,
 } from "@/types/group";
 import type {
+  AccountsChartItem,
+  AccountsChartUpsertRequest,
+} from "@/types/accounts-chart";
+import type {
+  CostCenterCompoItem,
+  CostCenterItem,
+  CostCenterUpsertRequest,
+} from "@/types/cost-center";
+import type {
+  AccountCurrencyItem,
+  AccountSelectItem,
+  CollectedVoucherItem,
+  CollectedVoucherUpsertRequest,
+  VoucherJournalLine,
+  VoucherLedgerLineRequest,
+} from "@/types/collected-voucher";
+import type {
   ItemCatalogItem,
   ItemCatalogPageQuery,
   ItemCatalogPagedResult,
@@ -441,6 +458,40 @@ function normalizeGroupItem(item: Record<string, unknown>): GroupItem {
     gNameAr: readString(item, "gNameAr", "GNameAr") || null,
     gNameEn: readString(item, "gNameEn", "GNameEn") || null,
     gParent: readNullableNumber(item, "gParent", "GParent"),
+  };
+}
+
+function normalizeAccountsChartItem(
+  item: Record<string, unknown>
+): AccountsChartItem {
+  return {
+    accCode: readString(item, "accCode", "ACCCode"),
+    parentCode: readNullableString(item, "parentCode", "PARENTCode"),
+    accName: readNullableString(item, "accName", "ACCName"),
+    accAName: readNullableString(item, "accAName", "ACCAName"),
+    currency: readNullableString(item, "currency", "Currency"),
+    accKind: readBoolean(item, "accKind", "ACCKind"),
+    accType: readBoolean(item, "accType", "ACCType"),
+    receipt: readBoolean(item, "receipt", "Receipt"),
+    payment: readBoolean(item, "payment", "Payment"),
+  };
+}
+
+function normalizeCostCenterItem(item: Record<string, unknown>): CostCenterItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    code: readNullableString(item, "code", "Code"),
+    name: readNullableString(item, "name", "Name"),
+  };
+}
+
+function normalizeCostCenterCompoItem(
+  item: Record<string, unknown>
+): CostCenterCompoItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    code: readNullableString(item, "code", "Code"),
+    name: readNullableString(item, "name", "Name"),
   };
 }
 
@@ -1622,6 +1673,482 @@ export function updateGroup(id: number, data: UpdateGroupRequest, token: string)
 
 export function deleteGroup(id: number, token: string) {
   return apiFetch<void>(`Group/${id}`, { method: "DELETE" }, token);
+}
+
+export function getAccountsCharts(token: string) {
+  return fetchAllPaged("AccountsChart", token, normalizeAccountsChartItem, {
+    sortBy: "accCode",
+  });
+}
+
+export function createAccountsChart(
+  data: AccountsChartUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "AccountsChart",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ACCCode: data.accCode,
+        PARENTCode: data.parentCode,
+        ACCName: data.accName,
+        ACCAName: data.accAName,
+        Currency: data.currency,
+        ACCKind: data.accKind,
+        ACCType: data.accType,
+        Receipt: data.receipt,
+        Payment: data.payment,
+      }),
+    },
+    token
+  ).then((item) => normalizeAccountsChartItem(item));
+}
+
+export function updateAccountsChart(
+  accCode: string,
+  data: AccountsChartUpsertRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `AccountsChart/${encodeURIComponent(accCode)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        ACCCode: data.accCode,
+        PARENTCode: data.parentCode,
+        ACCName: data.accName,
+        ACCAName: data.accAName,
+        Currency: data.currency,
+        ACCKind: data.accKind,
+        ACCType: data.accType,
+        Receipt: data.receipt,
+        Payment: data.payment,
+      }),
+    },
+    token
+  );
+}
+
+export function deleteAccountsChart(accCode: string, token: string) {
+  return apiFetch<void>(
+    `AccountsChart/${encodeURIComponent(accCode)}`,
+    { method: "DELETE" },
+    token
+  );
+}
+
+export function getCostCenters(token: string) {
+  return fetchAllPaged("CostCenter", token, normalizeCostCenterItem, {
+    sortBy: "code",
+  });
+}
+
+export function getCostCentersForComp(token: string) {
+  return fetchAllPaged(
+    "CostCenter/for-comp",
+    token,
+    normalizeCostCenterCompoItem
+  );
+}
+
+export function createCostCenter(
+  data: CostCenterUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "CostCenter",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        Code: data.code,
+        Name: data.name,
+      }),
+    },
+    token
+  ).then((item) => normalizeCostCenterItem(item));
+}
+
+export function updateCostCenter(
+  id: number,
+  data: CostCenterUpsertRequest,
+  token: string
+) {
+  return apiFetch<void>(`CostCenter/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      Code: data.code,
+      Name: data.name,
+    }),
+  }, token);
+}
+
+export function deleteCostCenter(id: number, token: string) {
+  return apiFetch<void>(`CostCenter/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeAccountSelect(item: Record<string, unknown>): AccountSelectItem {
+  return {
+    accCode: readString(item, "accCode", "ACCCode"),
+    name: readString(item, "name", "Name", "accaName", "ACCAName") || readString(item, "accCode", "ACCCode"),
+  };
+}
+
+function normalizeAccountCurrency(item: Record<string, unknown>): AccountCurrencyItem {
+  return {
+    code: readString(item, "code", "Code"),
+    rate: readNullableNumber(item, "rate", "Rate"),
+  };
+}
+
+function normalizeCollectedVoucher(item: Record<string, unknown>): CollectedVoucherItem {
+  return {
+    receiptNO: readNumber(item, "receiptNO", "ReceiptNO"),
+    recRef: readNullableString(item, "recRef", "RecRef"),
+    receiptDate: readNullableString(item, "receiptDate", "ReceiptDate"),
+    saveCode: readNullableString(item, "saveCode", "SaveCode"),
+    amount: readNullableNumber(item, "amount", "Amount"),
+    currency: readNullableString(item, "currency", "Currency"),
+    rate: readNullableNumber(item, "rate", "Rate"),
+    type: readNullableString(item, "type", "Type"),
+    vSource: readNullableString(item, "vSource", "VSource"),
+    collectedCode: readNullableString(item, "collectedCode", "CollectedCode"),
+    collectedName: readNullableString(item, "collectedName", "CollectedName"),
+    description: readNullableString(item, "description", "Description"),
+    addedUser: readNullableString(item, "addedUser", "AddedUser"),
+    chequeNO: readNullableString(item, "chequeNO", "ChequeNO"),
+    bankCode: readNullableString(item, "bankCode", "BankCode"),
+    dueDate: readNullableString(item, "dueDate", "DueDate"),
+    accountNO: readNullableString(item, "accountNO", "AccountNO"),
+    totalString: readNullableString(item, "totalString", "TotalString"),
+    costCenter: readNullableString(item, "costCenter", "CostCenter"),
+    approved: readBoolean(item, "approved", "Approved"),
+  };
+}
+
+function normalizeJournalLine(item: Record<string, unknown>): VoucherJournalLine {
+  return {
+    type: readString(item, "type", "Type") || "Debit",
+    acccountCode: readString(item, "acccountCode", "ACCcountCode", "accCode", "ACCCode"),
+    accName: readNullableString(item, "accName", "AccName"),
+    description: readNullableString(item, "description", "Description"),
+    amount: readNullableNumber(item, "amount", "Amount"),
+    amountEGP: readNullableNumber(item, "amountEGP", "AmountEGP"),
+  };
+}
+
+/** Shared chart cache for voucher ComboBox filters (old GetAccCode / PARENTCode queries). */
+let voucherChartCache: AccountsChartItem[] | null = null;
+let voucherChartToken: string | null = null;
+
+export async function getVoucherAccountsChart(token: string): Promise<AccountsChartItem[]> {
+  if (voucherChartCache && voucherChartToken === token) return voucherChartCache;
+  voucherChartCache = await getAccountsCharts(token);
+  voucherChartToken = token;
+  return voucherChartCache;
+}
+
+export function invalidateVoucherAccountsChartCache() {
+  voucherChartCache = null;
+  voucherChartToken = null;
+}
+
+/** Bank parent ACCCode — dbo.GetAccCode('Bank') for this installation. */
+export const COLLECTION_VOUCHER_BANK_PARENT = "111";
+
+/** Safe parent ACCCode — dbo.GetAccCode('Safe') for this installation (Cash). */
+export const COLLECTION_VOUCHER_SAFE_PARENT = "110";
+
+/** Customer parent — dbo.GetAccCode('Customers') for this installation. */
+export const COLLECTION_VOUCHER_CUSTOMER_PARENT = "114";
+
+/** Supplier parent — dbo.GetAccCode('Suppliers') for this installation. */
+export const COLLECTION_VOUCHER_SUPPLIER_PARENT = "2140";
+
+/**
+ * Collection Voucher Bank Name ComboBox.
+ * Old / required:
+ *   SELECT ACCCode, ACCAName FROM AccountsChart WHERE PARENTCode = '111'
+ *
+ * Server filters via AccountsChart?parentCode=111 — does NOT load all chart rows.
+ */
+export async function getCollectionVoucherBanks(
+  token: string
+): Promise<AccountSelectItem[]> {
+  const rows = await fetchAllPaged(
+    "AccountsChart",
+    token,
+    normalizeAccountsChartItem,
+    {
+      sortBy: "accCode",
+      parentCode: COLLECTION_VOUCHER_BANK_PARENT,
+    }
+  );
+  return rows.map((a) => ({
+    accCode: a.accCode,
+    // Old DataTextField = ACCAName
+    name: (a.accAName ?? a.accName ?? a.accCode).trim() || a.accCode,
+  }));
+}
+
+/**
+ * Collection Voucher Cash Safe NO. ComboBox.
+ *   SELECT ACCCode, ACCAName FROM AccountsChart WHERE PARENTCode = '110'
+ * Server filters via AccountsChart?parentCode=110 — does NOT load all chart rows.
+ */
+export async function getCollectionVoucherSafes(
+  token: string
+): Promise<AccountSelectItem[]> {
+  const rows = await fetchAllPaged(
+    "AccountsChart",
+    token,
+    normalizeAccountsChartItem,
+    {
+      sortBy: "accCode",
+      parentCode: COLLECTION_VOUCHER_SAFE_PARENT,
+    }
+  );
+  return rows.map((a) => ({
+    accCode: a.accCode,
+    name: (a.accAName ?? a.accName ?? a.accCode).trim() || a.accCode,
+  }));
+}
+
+/**
+ * Old: WHERE PARENTCode IN (dbo.GetAccCode('Safe'|'Bank'))
+ * Cash Safe = PARENTCode 110; Bank Name = PARENTCode 111.
+ */
+export async function getAccountsByGroup(groupName: string, token: string) {
+  const normalized =
+    groupName.trim().toLowerCase() === "safe"
+      ? "Safe"
+      : groupName.trim().toLowerCase() === "bank"
+        ? "Bank"
+        : groupName.trim();
+
+  if (normalized === "Bank") {
+    return getCollectionVoucherBanks(token);
+  }
+  if (normalized === "Safe") {
+    return getCollectionVoucherSafes(token);
+  }
+
+  try {
+    const data = await apiFetch<unknown>(
+      `AccountsChart/by-group/${encodeURIComponent(normalized)}`,
+      {},
+      token
+    );
+    if (Array.isArray(data) && data.length > 0) {
+      return data.map((x) => {
+        const row = x as Record<string, unknown>;
+        const accCode = readString(row, "accCode", "ACCCode");
+        const name =
+          readString(row, "name", "Name", "accaName", "ACCAName") || accCode;
+        return { accCode, name };
+      });
+    }
+  } catch {
+    /* fall through */
+  }
+
+  const { GET_ACC_CODE_MAP, resolveGetAccCode } = await import(
+    "@/lib/accounts-chart-voucher"
+  );
+  const mapped = GET_ACC_CODE_MAP[normalized]?.trim();
+  if (mapped) {
+    return getAccountChildren(mapped, token);
+  }
+
+  const chart = await getVoucherAccountsChart(token);
+  const roots = resolveGetAccCode(chart, normalized);
+  if (roots.length === 1) {
+    return getAccountChildren(roots[0], token);
+  }
+  if (roots.length > 1) {
+    const lists = await Promise.all(
+      roots.map((r) => getAccountChildren(r, token))
+    );
+    return lists.flat();
+  }
+  return [];
+}
+
+/**
+ * Account NO. / Safe Currency — direct children only:
+ *   SELECT … FROM AccountsChart WHERE PARENTCode = @selectedBankOrSafe
+ * Uses API parentCode filter only (no full-chart client filter).
+ */
+export async function getAccountChildren(parentCode: string, token: string) {
+  if (!parentCode) return [];
+
+  const rows = await fetchAllPaged(
+    "AccountsChart",
+    token,
+    normalizeAccountsChartItem,
+    { sortBy: "accCode", parentCode }
+  );
+  return rows.map((a) => ({
+    accCode: a.accCode,
+    name: (a.accAName ?? a.accName ?? a.accCode).trim() || a.accCode,
+  }));
+}
+
+/**
+ * Old: Select Rate, C.code From Currency C, AccountsChart A
+ *      where C.code = A.Currency and A.ACCCode = @acc
+ * Uses AccountsChart.Currency when Currency/GetRate API is not available.
+ */
+export async function getAccountCurrency(accCode: string, token: string) {
+  try {
+    const row = await apiFetch<Record<string, unknown>>(
+      `AccountsChart/account-currency/${encodeURIComponent(accCode)}`,
+      {},
+      token
+    );
+    return normalizeAccountCurrency(row);
+  } catch {
+    const { currencyFromAccount } = await import("@/lib/accounts-chart-voucher");
+    const accounts = await getVoucherAccountsChart(token);
+    const cur = currencyFromAccount(accounts, accCode);
+    return { code: cur.code, rate: cur.rate };
+  }
+}
+
+/**
+ * Old TreasuryIn Customer/Supplier CTE under GetAccCode('Customers'|'Suppliers').
+ * This site: Customers → parent 114, Suppliers → parent 2140 (leaf accounts only).
+ */
+export async function getAccountSources(sourceType: string, token: string) {
+  const {
+    selectSourceLeavesUnderRoots,
+  } = await import("@/lib/accounts-chart-voucher");
+  const isSupplier = sourceType.toLowerCase().startsWith("supp");
+  const root = isSupplier
+    ? COLLECTION_VOUCHER_SUPPLIER_PARENT
+    : COLLECTION_VOUCHER_CUSTOMER_PARENT;
+  const accounts = await getVoucherAccountsChart(token);
+  return selectSourceLeavesUnderRoots(accounts, [root]);
+}
+
+export async function getCollectedVoucherLast(token: string) {
+  try {
+    return await apiFetch<Record<string, unknown>>(
+      "CollectedVoucher/last",
+      {},
+      token
+    ).then(normalizeCollectedVoucher);
+  } catch {
+    // Fallback: highest ReceiptNO (old Page_Load Max(ReceiptNO))
+    const rows = await fetchAllPaged(
+      "CollectedVoucher",
+      token,
+      normalizeCollectedVoucher,
+      { sortBy: "receiptno", sortDesc: "true" }
+    );
+    if (!rows.length) throw new Error("No collection vouchers found");
+    return rows[0];
+  }
+}
+
+export function getCollectedVoucher(receiptNo: number, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `CollectedVoucher/${receiptNo}`,
+    {},
+    token
+  ).then(normalizeCollectedVoucher);
+}
+
+export function getCollectedVoucherAdjacent(
+  receiptNo: number,
+  direction: string,
+  token: string
+) {
+  return apiFetch<{ receiptNo?: number; ReceiptNo?: number }>(
+    `CollectedVoucher/${receiptNo}/adjacent?direction=${encodeURIComponent(direction)}`,
+    {},
+    token
+  ).then((r) => r.receiptNo ?? r.ReceiptNo ?? null);
+}
+
+export function getCollectedVoucherJournal(receiptNo: number, token: string) {
+  return apiFetch<unknown>(`CollectedVoucher/${receiptNo}/journal`, {}, token).then(
+    (data) =>
+      Array.isArray(data)
+        ? data.map((x) => normalizeJournalLine(x as Record<string, unknown>))
+        : []
+  );
+}
+
+export function searchCollectedVouchers(search: string, token: string) {
+  return fetchAllPaged("CollectedVoucher", token, normalizeCollectedVoucher, {
+    search,
+    sortBy: "receiptno",
+    sortDesc: "true",
+  });
+}
+
+export function createCollectedVoucher(
+  data: CollectedVoucherUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "CollectedVoucher",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        RecRef: data.recRef,
+        ReceiptDate: data.receiptDate,
+        SaveCode: data.saveCode,
+        Amount: data.amount,
+        Currency: data.currency,
+        Rate: data.rate,
+        Type: data.type,
+        VSource: data.vSource,
+        CollectedCode: data.collectedCode,
+        CollectedName: data.collectedName,
+        Description: data.description,
+        AddedUser: data.addedUser,
+        ChequeNO: data.chequeNO,
+        BankCode: data.bankCode,
+        DueDate: data.dueDate,
+        AccountNO: data.accountNO,
+        TotalString: data.totalString,
+        CostCenter: data.costCenter,
+      }),
+    },
+    token
+  ).then(normalizeCollectedVoucher);
+}
+
+export function postCollectedVoucher(
+  receiptNo: number,
+  lines: VoucherLedgerLineRequest[],
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    `CollectedVoucher/${receiptNo}/post`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        Lines: lines.map((l) => ({
+          ACCcountCode: l.acccountCode,
+          Description: l.description,
+          Currancy: l.currancy,
+          Rate: l.rate,
+          BankAccount: l.bankAccount,
+          ChequeNO: l.chequeNO,
+          Amount: l.amount,
+          Depit: l.depit,
+          Credit: l.credit,
+          Notes: l.notes,
+          DueDate: l.dueDate,
+          CostCenter: l.costCenter,
+        })),
+      }),
+    },
+    token
+  ).then(normalizeCollectedVoucher);
 }
 
 export function getItemCatalogs(token: string) {

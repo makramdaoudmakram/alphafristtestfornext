@@ -118,6 +118,18 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/companies",
             permission: PERMISSIONS.company.view,
           },
+          {
+            title: "Accounts Chart",
+            href: "/dashboard/accounts-chart",
+          },
+          {
+            title: "Collection Voucher",
+            href: "/dashboard/collection-voucher",
+          },
+          {
+            title: "Cost Centers",
+            href: "/dashboard/cost-centers",
+          },
         ],
       },
     ],
@@ -158,6 +170,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/units": "Units",
   "/dashboard/companies": "Company",
   "/dashboard/pharm": "Pharm",
+  "/dashboard/accounts-chart": "Accounts Chart",
+  "/dashboard/collection-voucher": "Collection Voucher",
+  "/dashboard/cost-centers": "Cost Centers",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
