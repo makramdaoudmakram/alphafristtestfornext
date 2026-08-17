@@ -60,17 +60,6 @@ const ICONS: Record<string, ElementType> = {
   "Role Permissions": ListChecks,
 };
 
-function groupIsActive(group: NavGroupItem, pathname: string) {
-  return group.items.some((item) => pathname === item.href);
-}
-
-function itemTreeIsActive(item: NavItem, pathname: string) {
-  if (item.href && pathname === item.href) return true;
-  if (item.items?.some((sub) => pathname === sub.href)) return true;
-  if (item.groups?.some((group) => groupIsActive(group, pathname))) return true;
-  return false;
-}
-
 function NavLeafLink({
   href,
   title,

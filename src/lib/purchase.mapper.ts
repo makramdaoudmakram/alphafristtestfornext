@@ -367,41 +367,33 @@ export function toUpsertPayload(
       pOtherExpenses: Number(header.pOtherExpenses) || 0,
       pthNotice: header.pthNotice ?? "",
     },
-    details: details.map(
-      ({
-        clientRowId: _c,
-        lineTotal: _l,
-        itmNameAr: _ar,
-        itmNameEn: _en,
-        unitId,
-        ...rest
-      }) => {
-        const line: Omit<
-          PurchaseDetail,
-          "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
-        > & { unitId?: number } = {
-          id: rest.id,
-          itmId: rest.itmId.trim(),
-          cId: rest.cId,
-          expDate: rest.expDate || "",
-          qnty: rest.qnty,
-          bonus: rest.bonus,
-          itmPurPrice: rest.itmPurPrice,
-          itmSell: rest.itmSell,
-          itmTaxPrice: rest.itmTaxPrice,
-          itmTaxTotal: rest.itmTaxTotal,
-          itmExtraDis: rest.itmExtraDis,
-          itmDisPer: rest.itmDisPer,
-          itmDisMon: rest.itmDisMon,
-          itmCost: rest.itmCost,
-          itmNet: rest.itmNet,
-          stdItmStock: rest.stdItmStock,
-          stoId: rest.stoId?.trim() ?? "",
-        };
-        if (unitId != null && unitId > 0) line.unitId = unitId;
-        return line;
-      }
-    ),
+    details: details.map((detail) => {
+      const unitId = detail.unitId;
+      const line: Omit<
+        PurchaseDetail,
+        "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
+      > & { unitId?: number } = {
+        id: detail.id,
+        itmId: detail.itmId.trim(),
+        cId: detail.cId,
+        expDate: detail.expDate || "",
+        qnty: detail.qnty,
+        bonus: detail.bonus,
+        itmPurPrice: detail.itmPurPrice,
+        itmSell: detail.itmSell,
+        itmTaxPrice: detail.itmTaxPrice,
+        itmTaxTotal: detail.itmTaxTotal,
+        itmExtraDis: detail.itmExtraDis,
+        itmDisPer: detail.itmDisPer,
+        itmDisMon: detail.itmDisMon,
+        itmCost: detail.itmCost,
+        itmNet: detail.itmNet,
+        stdItmStock: detail.stdItmStock,
+        stoId: detail.stoId?.trim() ?? "",
+      };
+      if (unitId != null && unitId > 0) line.unitId = unitId;
+      return line;
+    }),
   };
 
   if (deletedDetailIds != null && deletedDetailIds.length > 0) {

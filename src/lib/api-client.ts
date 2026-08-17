@@ -1791,13 +1791,6 @@ export function deleteCostCenter(id: number, token: string) {
   return apiFetch<void>(`CostCenter/${id}`, { method: "DELETE" }, token);
 }
 
-function normalizeAccountSelect(item: Record<string, unknown>): AccountSelectItem {
-  return {
-    accCode: readString(item, "accCode", "ACCCode"),
-    name: readString(item, "name", "Name", "accaName", "ACCAName") || readString(item, "accCode", "ACCCode"),
-  };
-}
-
 function normalizeAccountCurrency(item: Record<string, unknown>): AccountCurrencyItem {
   return {
     code: readString(item, "code", "Code"),

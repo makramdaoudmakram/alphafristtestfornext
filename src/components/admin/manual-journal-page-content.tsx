@@ -399,7 +399,7 @@ export function ManualJournalPageContent() {
   const voucherDisplay = refNo || receiptNo || "—";
 
   return (
-    <PageGuard>
+    <PageGuard permission={null}>
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 p-4 pb-28 md:p-6 md:pb-32">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">

@@ -230,7 +230,7 @@ export function PendingVoucherPageContent() {
   };
 
   return (
-    <PageGuard>
+    <PageGuard permission={null}>
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-4 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">

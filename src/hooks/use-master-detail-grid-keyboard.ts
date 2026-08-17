@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useCallback, type KeyboardEvent, type RefObject } from "react";
 
 export type UseMasterDetailGridKeyboardOptions = {
   containerRef: RefObject<HTMLElement | null>;

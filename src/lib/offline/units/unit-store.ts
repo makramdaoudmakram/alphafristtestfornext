@@ -38,7 +38,7 @@ export async function getAllCachedUnits(): Promise<UnitItem[]> {
 
   const rows = await getAllCachedUnitRows();
 
-  return rows.map(({ pendingSync: _p, ...unit }) => unit);
+  return rows.map(({ uCode, uNameAr, uNameEn }) => ({ uCode, uNameAr, uNameEn }));
 
 }
 

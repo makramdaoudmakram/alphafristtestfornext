@@ -41,7 +41,6 @@ export function usePurchase(token: string | undefined) {
   const [saving, setSaving] = useState(false);
   const [navIds, setNavIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [deletedDetailIds, setDeletedDetailIds] = useState<number[]>([]);
   /** Synchronous mirrors — React state can lag one frame behind Save. */
   const loadedRecordIdRef = useRef<number | null>(null);
   const initialDetailIdsRef = useRef<number[]>([]);
@@ -116,7 +115,6 @@ export function usePurchase(token: string | undefined) {
         .map((line) => line.id)
         .filter((id): id is number => id != null && id > 0);
       deletedDetailIdsRef.current = [];
-      setDeletedDetailIds([]);
     },
     [form]
   );
@@ -173,7 +171,6 @@ export function usePurchase(token: string | undefined) {
     loadedRecordIdRef.current = null;
     initialDetailIdsRef.current = [];
     deletedDetailIdsRef.current = [];
-    setDeletedDetailIds([]);
     setMode("new");
   }, [form]);
 
@@ -305,7 +302,7 @@ export function usePurchase(token: string | undefined) {
         setSaving(false);
       }
     },
-    [applyDocument, currentId, deletedDetailIds, detailsWithTotals, form, refreshNavIds, service, token]
+    [applyDocument, currentId, detailsWithTotals, form, refreshNavIds, service, token]
   );
 
   const handleDelete = useCallback(async () => {
@@ -392,7 +389,6 @@ export function usePurchase(token: string | undefined) {
           ? deletedDetailIdsRef.current
           : [...deletedDetailIdsRef.current, removed.id];
         deletedDetailIdsRef.current = nextDeleted;
-        setDeletedDetailIds(nextDeleted);
       }
 
       const next = rows.filter((_, i) => i !== index);

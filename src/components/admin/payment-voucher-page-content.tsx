@@ -681,7 +681,9 @@ export function PaymentVoucherPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, deepLinkId]); // eslint-disable-line react-hooks/exhaustive-deps — Page_Load once per token/deep-link
+    // Page_Load once per token/deep-link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, deepLinkId]);
 
   // NOTE: Do NOT sync/rebuild `lines` from header fields after load.
   // Web Forms TreasuryOut seeds Credit once in ReadJornal only; user adds Debit rows.

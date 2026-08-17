@@ -40,7 +40,6 @@ export function getGroupPath(
 }
 
 export function buildGroupTree(groups: GroupItem[]): GroupTreeNode[] {
-  const lookup = buildGroupLookup(groups);
   const nodes = new Map<number, GroupTreeNode>();
 
   for (const group of groups) {

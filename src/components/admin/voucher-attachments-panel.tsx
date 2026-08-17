@@ -58,7 +58,6 @@ type Props = {
 export function VoucherAttachmentsPanel({
   voucherType,
   voucherId,
-  voucherRef,
   disabled,
   variant = "embedded",
   className,

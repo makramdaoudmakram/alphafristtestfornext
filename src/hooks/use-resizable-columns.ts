@@ -4,7 +4,6 @@ import type { CSSProperties } from "react";
 import {
   useGridPreferences,
   type ResizeHandleProps,
-  type UseGridPreferencesOptions,
 } from "@/hooks/use-grid-preferences";
 import type { GridColumnDefinition } from "@/types/grid-column";
 
