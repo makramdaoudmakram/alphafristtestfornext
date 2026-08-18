@@ -19,7 +19,10 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/payment-voucher": null,
   "/dashboard/pending-vouchers": null,
   "/dashboard/manual-journal": null,
+  "/dashboard/journal": null,
+  "/dashboard/ledger": null,
   "/dashboard/cost-centers": null,
+  "/dashboard/vendors": null,
   "/dashboard/stock": "Stock.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
@@ -140,6 +143,11 @@ export const NAV_LINKS = [
     href: "/dashboard/permissions",
     label: "Role Permissions",
     permission: PERMISSIONS.permissions.manage,
+  },
+  {
+    href: "/dashboard/vendors",
+    label: "Vendors",
+    permission: null,
   },
   {
     href: "/dashboard/customers",

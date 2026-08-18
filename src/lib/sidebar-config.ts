@@ -139,17 +139,29 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/manual-journal",
           },
           {
+            title: "Journal",
+            href: "/dashboard/journal",
+          },
+          {
+            title: "Ledger",
+            href: "/dashboard/ledger",
+          },
+          {
             title: "Cost Centers",
             href: "/dashboard/cost-centers",
+          },
+          {
+            title: "Customers",
+            href: "/dashboard/customers",
+            permission: PERMISSIONS.customer.view,
+          },
+          {
+            title: "Vendors",
+            href: "/dashboard/vendors",
           },
         ],
       },
     ],
-  },
-  {
-    title: "Customers",
-    href: "/dashboard/customers",
-    permission: PERMISSIONS.customer.view,
   },
   {
     title: "Transaction",
@@ -187,7 +199,10 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/payment-voucher": "Payment Voucher",
   "/dashboard/pending-vouchers": "Pending Vouchers",
   "/dashboard/manual-journal": "Manual Journal",
+  "/dashboard/journal": "Journal",
+  "/dashboard/ledger": "Ledger",
   "/dashboard/cost-centers": "Cost Centers",
+  "/dashboard/vendors": "Vendors",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
