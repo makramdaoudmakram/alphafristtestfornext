@@ -12,6 +12,7 @@ import {
 import { PharmFormSheet } from "@/components/admin/pharm-form-sheet";
 import { PharmFormFields } from "@/components/admin/pharm-form-fields";
 import { usePharmColumns } from "@/components/admin/pharm-table-columns";
+import { VoucherAttachmentsPanel } from "@/components/admin/voucher-attachments-panel";
 import { ActionGuard, PageGuard } from "@/components/permissions/page-guard";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
@@ -81,10 +82,12 @@ export function PharmPageContent() {
 
     setSaving(true);
     try {
-      await createPharm(formValues, token);
-      toast.success("Pharm created");
+      const created = await createPharm(formValues, token);
+      toast.success("Pharm created. You can now attach documents.");
       setFormValues(emptyPharmFormValues);
       await loadItems();
+      setEditingItem(created);
+      setSheetOpen(true);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to create pharm"
@@ -150,9 +153,10 @@ export function PharmPageContent() {
     <PageGuard permission={PERMISSIONS.pharm.view}>
       <div className="space-y-6">
         <div>
-          <h2 className="text-lg font-semibold">Pharm</h2>
+          <h2 className="text-lg font-semibold">Parm (Pharmacy branches)</h2>
           <p className="text-muted-foreground text-sm">
-            Manage pharmacy branches (Parm) from the Alfa API.
+            Manage Parm records. Cost center uses CostCenter code; store uses
+            Stor Id from the Stor table.
           </p>
         </div>
 
@@ -170,6 +174,13 @@ export function PharmPageContent() {
                   values={formValues}
                   onChange={patchForm}
                   idPrefix="new-"
+                />
+                <VoucherAttachmentsPanel
+                  variant="card"
+                  voucherType="Parm"
+                  voucherId={null}
+                  multiple
+                  saveFirstMessage="Create the pharm record first, then attach PDF or image documents."
                 />
                 <Button type="submit" disabled={saving}>
                   {saving ? "Creating..." : "Create pharm"}

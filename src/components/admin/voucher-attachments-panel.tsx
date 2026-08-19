@@ -53,6 +53,9 @@ type Props = {
    */
   variant?: "embedded" | "card";
   className?: string;
+  /** Allow selecting more than one file at a time. */
+  multiple?: boolean;
+  saveFirstMessage?: string;
 };
 
 export function VoucherAttachmentsPanel({
@@ -61,13 +64,15 @@ export function VoucherAttachmentsPanel({
   disabled,
   variant = "embedded",
   className,
+  multiple = false,
+  saveFirstMessage = "Save the voucher first to attach documents.",
 }: Props) {
   const { data: session } = useSession();
   const token = session?.accessToken;
   const [items, setItems] = useState<VoucherAttachmentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selected, setSelected] = useState<File | null>(null);
+  const [selected, setSelected] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const canUpload = voucherId != null && voucherId > 0 && !disabled;
@@ -93,46 +98,54 @@ export function VoucherAttachmentsPanel({
     void reload();
   }, [reload]);
 
-  const onPick = (file: File | null) => {
-    if (!file) {
-      setSelected(null);
+  const onPick = (files: FileList | null) => {
+    if (!files?.length) {
+      setSelected([]);
       return;
     }
-    const ext = file.name.includes(".")
-      ? `.${file.name.split(".").pop()!.toLowerCase()}`
-      : "";
-    if (![".pdf", ".jpg", ".jpeg", ".png"].includes(ext)) {
-      toast.error("Only PDF, JPG, JPEG, and PNG files are allowed.");
-      setSelected(null);
-      if (inputRef.current) inputRef.current.value = "";
-      return;
+
+    const accepted: File[] = [];
+    for (const file of Array.from(files)) {
+      const ext = file.name.includes(".")
+        ? `.${file.name.split(".").pop()!.toLowerCase()}`
+        : "";
+      if (![".pdf", ".jpg", ".jpeg", ".png"].includes(ext)) {
+        toast.error(`${file.name}: only PDF, JPG, JPEG, and PNG files are allowed.`);
+        continue;
+      }
+      if (file.size <= 0) {
+        toast.error(`${file.name}: file is empty.`);
+        continue;
+      }
+      if (file.size > MAX_MB * 1024 * 1024) {
+        toast.error(`${file.name}: exceeds the maximum size of ${MAX_MB} MB.`);
+        continue;
+      }
+      accepted.push(file);
     }
-    if (file.size <= 0) {
-      toast.error("File is empty.");
-      setSelected(null);
-      if (inputRef.current) inputRef.current.value = "";
-      return;
-    }
-    if (file.size > MAX_MB * 1024 * 1024) {
-      toast.error(`File exceeds the maximum size of ${MAX_MB} MB.`);
-      setSelected(null);
-      if (inputRef.current) inputRef.current.value = "";
-      return;
-    }
-    setSelected(file);
+
+    setSelected(accepted);
+    if (accepted.length === 0 && inputRef.current) inputRef.current.value = "";
   };
 
   const onUpload = async () => {
-    if (!token || !selected || voucherId == null) return;
+    if (!token || selected.length === 0 || voucherId == null) return;
     setUploading(true);
     try {
-      await uploadVoucherAttachment(voucherType, voucherId, selected, token);
-      toast.success(`Uploaded ${selected.name}`);
-      setSelected(null);
+      for (const file of selected) {
+        await uploadVoucherAttachment(voucherType, voucherId, file, token);
+      }
+      toast.success(
+        selected.length === 1
+          ? `Uploaded ${selected[0].name}`
+          : `Uploaded ${selected.length} documents`
+      );
+      setSelected([]);
       if (inputRef.current) inputRef.current.value = "";
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
+      await reload();
     } finally {
       setUploading(false);
     }
@@ -208,7 +221,7 @@ export function VoucherAttachmentsPanel({
               compact ? "px-2.5 py-2 text-sm" : "px-4 py-3 text-base"
             )}
           >
-            Save the voucher first to attach documents.
+            {saveFirstMessage}
           </p>
         ) : (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -216,6 +229,7 @@ export function VoucherAttachmentsPanel({
               ref={inputRef}
               type="file"
               accept={ACCEPT}
+              multiple={multiple}
               className={cn(
                 "min-w-0 flex-1 cursor-pointer file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:font-semibold",
                 compact
@@ -223,7 +237,7 @@ export function VoucherAttachmentsPanel({
                   : "h-12 text-base file:text-sm file:px-3 file:py-2"
               )}
               disabled={uploading}
-              onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+              onChange={(e) => onPick(e.target.files)}
             />
             <Button
               type="button"
@@ -231,7 +245,7 @@ export function VoucherAttachmentsPanel({
                 "shrink-0 bg-blue-800 font-semibold hover:bg-blue-900",
                 compact ? "h-10 text-base" : "h-12 text-lg"
               )}
-              disabled={!selected || uploading}
+              disabled={selected.length === 0 || uploading}
               onClick={() => void onUpload()}
             >
               {uploading ? (
@@ -243,12 +257,19 @@ export function VoucherAttachmentsPanel({
             </Button>
           </div>
         )}
-        {selected ? (
+        {selected.length > 0 ? (
           <p className="mt-1 truncate text-sm text-slate-700">
-            {selected.name} · {formatSize(selected.size)}
+            {selected.length === 1
+              ? `${selected[0].name} · ${formatSize(selected[0].size)}`
+              : `${selected.length} files selected · ${formatSize(
+                  selected.reduce((sum, file) => sum + file.size, 0)
+                )}`}
           </p>
         ) : canUpload ? (
-          <p className="mt-1 text-sm text-slate-500">PDF, JPG, PNG · max {MAX_MB} MB</p>
+          <p className="mt-1 text-sm text-slate-500">
+            PDF, JPG, PNG · max {MAX_MB} MB
+            {multiple ? " · multiple files allowed" : ""}
+          </p>
         ) : null}
       </div>
 

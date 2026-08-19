@@ -53,6 +53,12 @@ import type {
   CostCenterUpsertRequest,
 } from "@/types/cost-center";
 import type {
+  StorAccountOption,
+  StorItem,
+  StorUpsertRequest,
+} from "@/types/stor";
+import { STOR_ACCOUNT_PARENT_CODE } from "@/types/stor";
+import type {
   AccountCurrencyItem,
   AccountSelectItem,
   CollectedVoucherItem,
@@ -496,6 +502,32 @@ function normalizeCostCenterCompoItem(
     id: readNumber(item, "id", "Id"),
     code: readNullableString(item, "code", "Code"),
     name: readNullableString(item, "name", "Name"),
+  };
+}
+
+function normalizeStorItem(item: Record<string, unknown>): StorItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    storArName: readNullableString(
+      item,
+      "storArName",
+      "StorArName",
+      "Stor_ArName"
+    ),
+    storEnName: readNullableString(
+      item,
+      "storEnName",
+      "StorEnName",
+      "Stor_EnName"
+    ),
+    costCenterId: readNumber(item, "costCenterId", "CostCenterId"),
+    accountNo: readNullableString(item, "accountNo", "AccountNo"),
+    costCenterName: readNullableString(
+      item,
+      "costCenterName",
+      "CostCenterName"
+    ),
+    accountName: readNullableString(item, "accountName", "AccountName"),
   };
 }
 
@@ -1497,6 +1529,9 @@ function normalizePharmItem(item: Record<string, unknown>): PharmItem {
     parmMangerTel: readString(item, "parmMangerTel", "ParmMangerTel"),
     parmMangerMob: readString(item, "parmMangerMob", "ParmMangerMob"),
     parmOrder: readNumber(item, "parmOrder", "ParmOrder"),
+    costCenter: readString(item, "costCenter", "CostCenter"),
+    costCenterName: readString(item, "costCenterName", "CostCenterName"),
+    storName: readString(item, "storName", "StorName"),
   };
 }
 
@@ -1520,22 +1555,20 @@ function pharmFormToApiBody(values: PharmFormValues) {
     ParmMangerTel: values.parmMangerTel.trim() || null,
     ParmMangerMob: values.parmMangerMob.trim() || null,
     ParmOrder: Number.isFinite(order) ? order : 0,
+    CostCenter: values.costCenter.trim() || null,
   };
 }
 
 export function getPharms(token: string) {
-  return fetchAllPaged("Pharm", token, normalizePharmItem);
+  return fetchAllPaged("Parm", token, normalizePharmItem, { sortBy: "order" });
 }
 
 export function createPharm(data: PharmFormValues, token: string) {
   return apiFetch<Record<string, unknown>>(
-    "Pharm",
+    "Parm",
     {
       method: "POST",
-      body: JSON.stringify({
-        ParmId: 0,
-        ...pharmFormToApiBody(data),
-      }),
+      body: JSON.stringify(pharmFormToApiBody(data)),
     },
     token
   ).then((item) => normalizePharmItem(item));
@@ -1547,7 +1580,7 @@ export function updatePharm(
   token: string
 ) {
   return apiFetch<void>(
-    `Pharm/${parmId}`,
+    `Parm/${parmId}`,
     {
       method: "PUT",
       body: JSON.stringify(pharmFormToApiBody(data)),
@@ -1557,7 +1590,7 @@ export function updatePharm(
 }
 
 export function deletePharm(parmId: number, token: string) {
-  return apiFetch<void>(`Pharm/${parmId}`, { method: "DELETE" }, token);
+  return apiFetch<void>(`Parm/${parmId}`, { method: "DELETE" }, token);
 }
 
 function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem {
@@ -1789,6 +1822,51 @@ export function updateCostCenter(
 
 export function deleteCostCenter(id: number, token: string) {
   return apiFetch<void>(`CostCenter/${id}`, { method: "DELETE" }, token);
+}
+
+export function getStors(token: string) {
+  return fetchAllPaged("Stor", token, normalizeStorItem, {
+    sortBy: "id",
+  });
+}
+
+/** AccountsChart rows for Stor Account No — API filters PARENTCode = 116. */
+export async function getStorAccountOptions(
+  token: string
+): Promise<StorAccountOption[]> {
+  return getAccountChildren(STOR_ACCOUNT_PARENT_CODE, token);
+}
+
+export function createStor(data: StorUpsertRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "Stor",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        StorArName: data.storArName,
+        StorEnName: data.storEnName,
+        CostCenterId: data.costCenterId,
+        AccountNo: data.accountNo,
+      }),
+    },
+    token
+  ).then((item) => normalizeStorItem(item));
+}
+
+export function updateStor(id: number, data: StorUpsertRequest, token: string) {
+  return apiFetch<void>(`Stor/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      StorArName: data.storArName,
+      StorEnName: data.storEnName,
+      CostCenterId: data.costCenterId,
+      AccountNo: data.accountNo,
+    }),
+  }, token);
+}
+
+export function deleteStor(id: number, token: string) {
+  return apiFetch<void>(`Stor/${id}`, { method: "DELETE" }, token);
 }
 
 function normalizeAccountCurrency(item: Record<string, unknown>): AccountCurrencyItem {
@@ -2244,7 +2322,7 @@ function normalizeVoucherAttachment(raw: Record<string, unknown>): VoucherAttach
   };
 }
 
-/** List attachments for Collect or Payment voucher (ReceiptNO). */
+/** List attachments for Collect/Payment voucher (ReceiptNO) or Parm (ParmId). */
 export async function getVoucherAttachments(
   voucherType: VoucherAttachmentType,
   voucherId: number,
@@ -2259,7 +2337,7 @@ export async function getVoucherAttachments(
   return data.map((x) => normalizeVoucherAttachment(x as Record<string, unknown>));
 }
 
-/** Upload PDF/image to an existing saved voucher. */
+/** Upload PDF/image to an existing saved voucher or Parm record. */
 export async function uploadVoucherAttachment(
   voucherType: VoucherAttachmentType,
   voucherId: number,

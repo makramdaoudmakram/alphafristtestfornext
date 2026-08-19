@@ -214,7 +214,8 @@ export function MovmentPageContent() {
         <div>
           <h2 className="text-lg font-semibold">Movement Setting</h2>
           <p className="text-muted-foreground text-sm">
-            Manage movements. Account entry fields use ActivityType; store fields use BranchType.
+            Manage movements. Store fields use the Stor table (Arabic name).
+            Account entry fields use Accounts Chart.
           </p>
         </div>
 
@@ -222,7 +223,8 @@ export function MovmentPageContent() {
           <CardHeader>
             <CardTitle>New movement</CardTitle>
             <CardDescription>
-              Link each movement to a move parient and configure account/store comboboxes.
+              Link each movement to a move parient. Stores load from Stor;
+              account entries load from Accounts Chart.
             </CardDescription>
           </CardHeader>
           <CardContent>

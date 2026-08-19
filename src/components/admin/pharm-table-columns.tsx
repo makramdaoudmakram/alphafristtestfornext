@@ -27,28 +27,34 @@ export function usePharmColumns(): ColumnDef<PharmItem>[] {
       },
       {
         accessorKey: "parmArName",
-        header: "ParmArName",
+        header: "Arabic name",
         cell: ({ row }) => cellText(row.original.parmArName),
       },
       {
         accessorKey: "parmEnName",
-        header: "ParmEnName",
+        header: "English name",
         cell: ({ row }) => cellText(row.original.parmEnName),
       },
       {
+        id: "costCenter",
+        header: "Cost center",
+        cell: ({ row }) =>
+          cellText(row.original.costCenterName || row.original.costCenter),
+      },
+      {
+        id: "stor",
+        header: "Store",
+        cell: ({ row }) => cellText(row.original.storName || row.original.parmStor),
+      },
+      {
         accessorKey: "parmTel",
-        header: "ParmTel",
+        header: "Telephone",
         cell: ({ row }) => cellText(row.original.parmTel),
       },
       {
         accessorKey: "parmAdress",
-        header: "ParmAdress",
+        header: "Address",
         cell: ({ row }) => cellText(row.original.parmAdress),
-      },
-      {
-        accessorKey: "parmStor",
-        header: "ParmStor",
-        cell: ({ row }) => cellText(row.original.parmStor),
       },
       {
         accessorKey: "parmBussReg",

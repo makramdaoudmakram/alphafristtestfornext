@@ -1,13 +1,19 @@
 "use client";
 
+import { useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { PharmFormValues } from "@/types/pharm";
+import { CostCenterCombobox } from "@/components/admin/cost-center-combobox";
+import { StorIdCombobox } from "@/components/admin/stor-id-combobox";
+import { normalizeLedgerCode } from "@/lib/journal-binding";
+import type { PharmFormValues, PharmItem } from "@/types/pharm";
 
 type PharmFormFieldsProps = {
   values: PharmFormValues;
   onChange: (patch: Partial<PharmFormValues>) => void;
   idPrefix?: string;
+  /** For edit sheet — restore combobox labels when value not in loaded page. */
+  editingItem?: PharmItem | null;
 };
 
 function Field({
@@ -45,59 +51,97 @@ export function PharmFormFields({
   values,
   onChange,
   idPrefix = "",
+  editingItem,
 }: PharmFormFieldsProps) {
   const p = idPrefix;
+
+  const handleCostCenterChange = useCallback(
+    (code: string) => onChange({ costCenter: code }),
+    [onChange]
+  );
+
+  const handleStorChange = useCallback(
+    (storId: string) => onChange({ parmStor: storId }),
+    [onChange]
+  );
+
+  const originalCostCenter = editingItem?.costCenter ?? "";
+  const originalParmStor = editingItem?.parmStor ?? "";
+  const costCenterMatchesOriginal =
+    normalizeLedgerCode(values.costCenter) ===
+    normalizeLedgerCode(originalCostCenter);
+  const storMatchesOriginal =
+    values.parmStor.trim() === originalParmStor.trim();
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field
           id={`${p}parmArName`}
-          label="ParmArName"
+          label="Arabic name"
           value={values.parmArName}
           onChange={(v) => onChange({ parmArName: v })}
           dir="rtl"
         />
         <Field
           id={`${p}parmEnName`}
-          label="ParmEnName"
+          label="English name"
           value={values.parmEnName}
           onChange={(v) => onChange({ parmEnName: v })}
         />
         <Field
           id={`${p}parmTel`}
-          label="ParmTel"
+          label="Telephone"
           value={values.parmTel}
           onChange={(v) => onChange({ parmTel: v })}
         />
-        <Field
-          id={`${p}parmStor`}
-          label="ParmStor"
-          value={values.parmStor}
-          onChange={(v) => onChange({ parmStor: v })}
-        />
+        <div className="space-y-2">
+          <Label>Cost center</Label>
+          <CostCenterCombobox
+            value={values.costCenter}
+            onValueChange={handleCostCenterChange}
+            nameOnly
+            fallbackValue={originalCostCenter}
+            fallbackLabel={
+              costCenterMatchesOriginal ? editingItem?.costCenterName : null
+            }
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Store</Label>
+          <StorIdCombobox
+            value={values.parmStor}
+            onValueChange={handleStorChange}
+            fallbackValue={originalParmStor}
+            fallbackLabel={
+              storMatchesOriginal
+                ? editingItem?.storName ?? editingItem?.parmStor
+                : null
+            }
+          />
+        </div>
         <Field
           id={`${p}parmAdress`}
-          label="ParmAdress"
+          label="Address"
           value={values.parmAdress}
           onChange={(v) => onChange({ parmAdress: v })}
           className="space-y-2 sm:col-span-2 lg:col-span-3"
         />
         <Field
           id={`${p}parmBussReg`}
-          label="ParmBussReg"
+          label="Business registration"
           value={values.parmBussReg}
           onChange={(v) => onChange({ parmBussReg: v })}
         />
         <Field
           id={`${p}parmTaxNo`}
-          label="ParmTaxNo"
+          label="Tax no"
           value={values.parmTaxNo}
           onChange={(v) => onChange({ parmTaxNo: v })}
         />
         <Field
           id={`${p}parmOrder`}
-          label="ParmOrder"
+          label="Display order"
           type="number"
           value={values.parmOrder}
           onChange={(v) => onChange({ parmOrder: v })}
@@ -109,25 +153,25 @@ export function PharmFormFields({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
             id={`${p}parmOwnerName`}
-            label="ParmOwnerName"
+            label="Owner name"
             value={values.parmOwnerName}
             onChange={(v) => onChange({ parmOwnerName: v })}
           />
           <Field
             id={`${p}parmOwnerMob`}
-            label="ParmOwnerMob"
+            label="Owner mobile"
             value={values.parmOwnerMob}
             onChange={(v) => onChange({ parmOwnerMob: v })}
           />
           <Field
             id={`${p}parmOwnerTel`}
-            label="ParmOwnerTel"
+            label="Owner telephone"
             value={values.parmOwnerTel}
             onChange={(v) => onChange({ parmOwnerTel: v })}
           />
           <Field
             id={`${p}parmOwnerEMail`}
-            label="ParmOwnerEMail"
+            label="Owner email"
             type="email"
             value={values.parmOwnerEMail}
             onChange={(v) => onChange({ parmOwnerEMail: v })}
@@ -135,7 +179,7 @@ export function PharmFormFields({
           />
           <Field
             id={`${p}parmOwnerAdress`}
-            label="ParmOwnerAdress"
+            label="Owner address"
             value={values.parmOwnerAdress}
             onChange={(v) => onChange({ parmOwnerAdress: v })}
             className="space-y-2 sm:col-span-2 lg:col-span-3"
@@ -148,25 +192,25 @@ export function PharmFormFields({
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
             id={`${p}parmMangerName`}
-            label="ParmMangerName"
+            label="Manager name"
             value={values.parmMangerName}
             onChange={(v) => onChange({ parmMangerName: v })}
           />
           <Field
             id={`${p}parmMangerMob`}
-            label="ParmMangerMob"
+            label="Manager mobile"
             value={values.parmMangerMob}
             onChange={(v) => onChange({ parmMangerMob: v })}
           />
           <Field
             id={`${p}parmMangerTel`}
-            label="ParmMangerTel"
+            label="Manager telephone"
             value={values.parmMangerTel}
             onChange={(v) => onChange({ parmMangerTel: v })}
           />
           <Field
             id={`${p}parmMangerAdress`}
-            label="ParmMangerAdress"
+            label="Manager address"
             value={values.parmMangerAdress}
             onChange={(v) => onChange({ parmMangerAdress: v })}
             className="space-y-2 sm:col-span-2 lg:col-span-3"
@@ -195,6 +239,7 @@ export function pharmItemToFormValues(item: {
   parmMangerTel?: string;
   parmMangerMob?: string;
   parmOrder?: number;
+  costCenter?: string;
 }): PharmFormValues {
   return {
     parmArName: item.parmArName ?? "",
@@ -214,5 +259,6 @@ export function pharmItemToFormValues(item: {
     parmMangerTel: item.parmMangerTel ?? "",
     parmMangerMob: item.parmMangerMob ?? "",
     parmOrder: String(item.parmOrder ?? 0),
+    costCenter: item.costCenter ?? "",
   };
 }

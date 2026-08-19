@@ -22,6 +22,8 @@ type SearchableComboboxProps = {
   emptyMessage?: string;
   disabled?: boolean;
   className?: string;
+  /** Label when value is set but not present in options (legacy / loading). */
+  orphanLabel?: string | null;
   /** Larger text for ERP forms (~15% readability bump). */
   size?: "default" | "lg";
   /** Grid keyboard navigation (data-row / data-col). */
@@ -78,6 +80,7 @@ export function SearchableCombobox({
   emptyMessage = "No results.",
   disabled = false,
   className,
+  orphanLabel,
   size = "default",
   dataRow,
   dataCol,
@@ -87,6 +90,9 @@ export function SearchableCombobox({
   const [position, setPosition] = React.useState<DropdownPosition | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const lastSelectionRef = React.useRef<{ value: string; label: string } | null>(
+    null
+  );
   const optionTextClass = size === "lg" ? "text-base" : "text-sm";
   const triggerSizeClass = size === "lg" ? "h-11 min-h-11 text-base" : "";
 
@@ -101,7 +107,23 @@ export function SearchableCombobox({
     );
   }, [options, search]);
 
-  const selectedLabel = options.find((option) => option.value === value)?.label;
+  const selectedLabel = React.useMemo(() => {
+    const match = options.find((option) => option.value === value);
+    if (match) {
+      lastSelectionRef.current = { value, label: match.label };
+      return match.label;
+    }
+    if (lastSelectionRef.current?.value === value) {
+      return lastSelectionRef.current.label;
+    }
+    const orphan = orphanLabel?.trim();
+    if (value && orphan) return orphan;
+    return undefined;
+  }, [options, orphanLabel, value]);
+
+  React.useEffect(() => {
+    if (!value) lastSelectionRef.current = null;
+  }, [value]);
 
   const updatePosition = React.useCallback(() => {
     if (!triggerRef.current) return;
@@ -113,6 +135,28 @@ export function SearchableCombobox({
     setSearch("");
     setPosition(null);
   }, []);
+
+  const selectOption = React.useCallback(
+    (nextValue: string, nextLabel?: string) => {
+      if (nextValue && nextLabel) {
+        lastSelectionRef.current = { value: nextValue, label: nextLabel };
+      } else if (!nextValue) {
+        lastSelectionRef.current = null;
+      }
+      onValueChange(nextValue);
+      closeDropdown();
+    },
+    [closeDropdown, onValueChange]
+  );
+
+  const handleOptionPointerDown = React.useCallback(
+    (event: React.PointerEvent, nextValue: string, nextLabel?: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectOption(nextValue, nextLabel);
+    },
+    [selectOption]
+  );
 
   const openDropdown = React.useCallback(() => {
     if (!triggerRef.current) return;
@@ -135,7 +179,7 @@ export function SearchableCombobox({
 
     updatePosition();
 
-    function handlePointerDown(event: MouseEvent) {
+    function handlePointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (triggerRef.current?.contains(target)) return;
       if (panelRef.current?.contains(target)) return;
@@ -146,12 +190,12 @@ export function SearchableCombobox({
       updatePosition();
     }
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("resize", handleReposition);
     window.addEventListener("scroll", handleReposition, true);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("resize", handleReposition);
       window.removeEventListener("scroll", handleReposition, true);
     };
@@ -161,14 +205,24 @@ export function SearchableCombobox({
     open && position && typeof document !== "undefined"
       ? createPortal(
           <div
-            ref={panelRef}
+            ref={(node) => {
+              panelRef.current = node;
+              if (node) {
+                node.inert = false;
+                node.removeAttribute("inert");
+                node.setAttribute("aria-hidden", "false");
+              }
+            }}
             data-combobox-panel="true"
-            className="bg-popover fixed z-[300] rounded-md border shadow-md"
+            className="bg-popover pointer-events-auto fixed z-[400] rounded-md border shadow-md"
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             style={{
               top: position.top,
               left: position.left,
               width: position.width,
               maxHeight: position.maxHeight,
+              pointerEvents: "auto",
             }}
           >
             <div className="border-b p-2">
@@ -190,10 +244,7 @@ export function SearchableCombobox({
                   "hover:bg-accent flex w-full items-center rounded-sm px-2 py-1.5 text-left",
                   optionTextClass
                 )}
-                onClick={() => {
-                  onValueChange("");
-                  closeDropdown();
-                }}
+                onPointerDown={(event) => handleOptionPointerDown(event, "")}
               >
                 <Check className={cn("mr-2 size-4", value ? "opacity-0" : "opacity-100")} />
                 Clear selection
@@ -207,10 +258,9 @@ export function SearchableCombobox({
                       "hover:bg-accent flex w-full items-center rounded-sm px-2 py-1.5 text-left",
                       optionTextClass
                     )}
-                    onClick={() => {
-                      onValueChange(option.value);
-                      closeDropdown();
-                    }}
+                    onPointerDown={(event) =>
+                      handleOptionPointerDown(event, option.value, option.label)
+                    }
                   >
                     <Check
                       className={cn(

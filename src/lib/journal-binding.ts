@@ -17,8 +17,12 @@ export function formatAccountLabel(
 
 export function formatCostCenterLabel(
   code: string,
-  name?: string | null
+  name?: string | null,
+  nameOnly = false
 ): string {
+  const normalized = normalizeLedgerCode(code);
+  const label = (name ?? "").trim();
+  if (nameOnly) return label || normalized;
   return formatAccountLabel(code, name);
 }
 
@@ -117,7 +121,8 @@ export function toCostCenterComboboxOptions(
 export function mergeCostCenterComboboxOptions(
   base: ComboboxOption[],
   codes: Array<string | null | undefined>,
-  nameByCode: Map<string, string>
+  nameByCode: Map<string, string>,
+  nameOnly = false
 ): ComboboxOption[] {
   const byValue = new Map(base.map((option) => [option.value, option]));
   for (const raw of codes) {
@@ -125,7 +130,7 @@ export function mergeCostCenterComboboxOptions(
     if (!code || byValue.has(code)) continue;
     byValue.set(code, {
       value: code,
-      label: formatCostCenterLabel(code, nameByCode.get(code)),
+      label: formatCostCenterLabel(code, nameByCode.get(code), nameOnly),
     });
   }
   return [...byValue.values()].sort((a, b) =>

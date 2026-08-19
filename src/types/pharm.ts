@@ -17,6 +17,9 @@ export interface PharmItem {
   parmMangerTel: string;
   parmMangerMob: string;
   parmOrder: number;
+  costCenter: string;
+  costCenterName: string;
+  storName: string;
 }
 
 export type PharmFormValues = {
@@ -37,6 +40,7 @@ export type PharmFormValues = {
   parmMangerTel: string;
   parmMangerMob: string;
   parmOrder: string;
+  costCenter: string;
 };
 
 export const emptyPharmFormValues: PharmFormValues = {
@@ -57,6 +61,7 @@ export const emptyPharmFormValues: PharmFormValues = {
   parmMangerTel: "",
   parmMangerMob: "",
   parmOrder: "0",
+  costCenter: "",
 };
 
 export type UpdatePharmRequest = Omit<PharmFormValues, "parmOrder"> & {

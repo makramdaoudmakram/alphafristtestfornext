@@ -4,11 +4,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@/components/data-table";
 import type { MovmentItem } from "@/types/movment";
 import { Badge } from "@/components/ui/badge";
-import {
-  formatActivityTypeValue,
-  formatBranchTypeValue,
-  formatMovmentEffectValue,
-} from "@/lib/movment-enums";
+import { formatMovmentEffectValue } from "@/lib/movment-enums";
 
 export function useMovmentColumns(): ColumnDef<MovmentItem>[] {
   return useMemo(
@@ -38,13 +34,13 @@ export function useMovmentColumns(): ColumnDef<MovmentItem>[] {
         enableSorting: true,
         accessorKey: "movStor",
         header: "MovStor",
-        cell: ({ row }) => formatBranchTypeValue(row.original.movStor),
+        cell: ({ row }) => row.original.movStor?.trim() || "—",
       },
       {
         enableSorting: true,
         accessorKey: "movAccountEntry1",
         header: "Account 1",
-        cell: ({ row }) => formatActivityTypeValue(row.original.movAccountEntry1),
+        cell: ({ row }) => row.original.movAccountEntry1?.trim() || "—",
       },
       {
         enableSorting: true,

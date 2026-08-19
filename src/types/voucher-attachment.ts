@@ -1,4 +1,4 @@
-export type VoucherAttachmentType = "Collect" | "Payment";
+export type VoucherAttachmentType = "Collect" | "Payment" | "Parm";
 
 export type VoucherAttachmentItem = {
   id: number;

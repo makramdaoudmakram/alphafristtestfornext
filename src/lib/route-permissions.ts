@@ -22,6 +22,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/journal": null,
   "/dashboard/ledger": null,
   "/dashboard/cost-centers": null,
+  "/dashboard/stores": null,
   "/dashboard/vendors": null,
   "/dashboard/stock": "Stock.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
