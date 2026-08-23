@@ -211,6 +211,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
+  "/dashboard/transactions/purchase/import": "Import Purchase Excel",
   "/dashboard/stock": "Stock Control",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",

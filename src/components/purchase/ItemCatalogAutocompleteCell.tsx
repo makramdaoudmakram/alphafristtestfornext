@@ -162,6 +162,28 @@ export function ItemCatalogAutocompleteCell({
     return () => document.removeEventListener("mousedown", onDocDown);
   }, [showList]);
 
+  // Radix Dialog marks portaled siblings as inert; clicks never reach the list.
+  useEffect(() => {
+    if (!showList) return;
+    const node = listRef.current;
+    if (!node) return;
+
+    const unlock = () => {
+      node.inert = false;
+      node.removeAttribute("inert");
+      node.setAttribute("aria-hidden", "false");
+      node.style.pointerEvents = "auto";
+    };
+
+    unlock();
+    const observer = new MutationObserver(unlock);
+    observer.observe(node, {
+      attributes: true,
+      attributeFilter: ["inert", "aria-hidden"],
+    });
+    return () => observer.disconnect();
+  }, [showList, suggestions.length, lookupLoading]);
+
   useEffect(() => {
     if (!showList || !listRef.current) return;
     const option = listRef.current.querySelector<HTMLElement>(
@@ -172,19 +194,6 @@ export function ItemCatalogAutocompleteCell({
 
   const applyItem = useCallback(
     (item: ItemCatalogItem) => {
-      console.log("[Purchase item selected]", {
-        Id: item.id,
-        Itm_Code: item.itmCode,
-        Itm_Name_Ar: item.itmNameAr,
-        Itm_Name_En: item.itmNameEn,
-        Itm_DefSell_Price: item.itmDefSellPrice,
-        Itm_DefPharm_Price: item.itmDefPharmPrice,
-        Itm_Unit1: item.itmUnit1,
-        Itm_Unit2: item.itmUnit2,
-        Itm_Unit3: item.itmUnit3,
-        selectedFrom: field,
-      });
-
       onItemApplied?.(item);
       onChangeRow(patchDetailFromCatalogItem(item));
       setWantList(false);
@@ -192,7 +201,16 @@ export function ItemCatalogAutocompleteCell({
         requestAnimationFrame(() => onAfterApply());
       }
     },
-    [field, onChangeRow, onAfterApply, onItemApplied]
+    [onChangeRow, onAfterApply, onItemApplied]
+  );
+
+  const applyItemFromPointer = useCallback(
+    (item: ItemCatalogItem, event: React.SyntheticEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applyItem(item);
+    },
+    [applyItem]
   );
 
   const onInputChange = (text: string) => {
@@ -244,14 +262,18 @@ export function ItemCatalogAutocompleteCell({
         ref={listRef}
         id={listId}
         role="listbox"
+        data-combobox-panel="true"
         style={{
           position: "fixed",
           top: menuPos.top,
           left: menuPos.left,
           width: menuPos.width,
-          zIndex: 9999,
+          zIndex: 400,
+          pointerEvents: "auto",
         }}
-        className="bg-popover max-h-52 overflow-y-auto rounded-md border py-1 shadow-md"
+        className="bg-popover pointer-events-auto max-h-52 overflow-y-auto rounded-md border py-1 shadow-md"
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
       >
         {lookupLoading && suggestions.length === 0 ? (
           <li className="text-muted-foreground px-2 py-1.5 text-xs">
@@ -271,8 +293,9 @@ export function ItemCatalogAutocompleteCell({
                 "hover:bg-accent flex w-full flex-col items-start px-2 py-1.5 text-left text-sm",
                 index === highlight && "bg-accent"
               )}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => applyItem(item)}
+              onPointerDown={(e) => applyItemFromPointer(item, e)}
+              onMouseDown={(e) => applyItemFromPointer(item, e)}
+              onClick={(e) => applyItemFromPointer(item, e)}
               onMouseEnter={() => setHighlight(index)}
             >
               <span className="font-medium">
@@ -292,6 +315,7 @@ export function ItemCatalogAutocompleteCell({
       ref={rootRef}
       className="relative min-w-[5.5rem]"
       data-autocomplete-root
+      data-combobox-root="true"
       data-autocomplete-open={showList ? "true" : "false"}
     >
       <Input

@@ -80,9 +80,31 @@ export function mergeGridPreferences(
       )
     : [];
 
+  const previouslyKnown = new Set<string>(storedVisible);
+  if (Array.isArray(input.columnOrder)) {
+    for (const key of input.columnOrder) {
+      if (typeof key === "string") previouslyKnown.add(key);
+    }
+  }
+  if (input.columnWidths && typeof input.columnWidths === "object") {
+    for (const key of Object.keys(input.columnWidths)) {
+      previouslyKnown.add(key);
+    }
+  }
+
   const visibleSet = new Set<string>(storedVisible);
   for (const key of requiredKeys) {
     visibleSet.add(key);
+  }
+
+  // Newly added default-visible columns (e.g. TaxPercent) must appear even
+  // when older LocalStorage preferences were saved before the column existed.
+  for (const column of columns) {
+    if (previouslyKnown.has(column.key)) continue;
+    if (column.hideFromMenu) continue;
+    if (column.required || column.defaultVisible !== false) {
+      visibleSet.add(column.key);
+    }
   }
 
   if (visibleSet.size === 0) {

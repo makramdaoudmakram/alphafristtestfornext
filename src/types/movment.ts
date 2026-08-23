@@ -28,6 +28,7 @@ export interface MovmentLookupItem {
   movChiledName: string | null;
   movParientId: number | null;
   movStor: string | null;
+  movStor2?: string | null;
   movSingleStore: boolean;
   movAccountEntry1: string | null;
   movAccountEntry2: string | null;

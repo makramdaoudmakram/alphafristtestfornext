@@ -16,7 +16,9 @@ export function isComboboxOverlayTarget(target: EventTarget | null): boolean {
   if (!el) return false;
   return Boolean(
     el.closest('[data-combobox-panel="true"]') ||
-      el.closest('[data-combobox-root="true"]')
+      el.closest('[data-combobox-root="true"]') ||
+      el.closest("[data-autocomplete-root]") ||
+      el.closest('[role="listbox"]')
   );
 }
 

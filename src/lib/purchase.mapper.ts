@@ -113,7 +113,8 @@ export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
     bonus: 0,
     itmPurPrice: 0,
     itmSell: 0,
-    itmTaxPrice: 0,
+    taxPercent: null,
+    itmTaxPrice: null,
     itmTaxTotal: 0,
     itmExtraDis: 0,
     itmDisMon: 0,
@@ -205,6 +206,7 @@ export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
     bonus: readNumber(raw, "bonus", "Bonus"),
     itmPurPrice: readNumber(raw, "itmPurPrice", "ItmPurPrice"),
     itmSell: readNumber(raw, "itmSell", "ItmSell"),
+    taxPercent: null,
     itmTaxPrice: readNumber(raw, "itmTaxPrice", "ItmTaxPrice"),
     itmTaxTotal: readNumber(raw, "itmTaxTotal", "ItmTaxTotal"),
     itmExtraDis: readNumber(raw, "itmExtraDis", "ItmExtraDis"),
@@ -274,12 +276,22 @@ export function mapSearchResultFromApi(raw: Record<string, unknown>): PurchaseSe
   return {
     id: readNumber(raw, "id", "Id"),
     pthId: readNumber(raw, "pthId", "PthId"),
-    venId: readString(raw, "venId", "VenId"),
-    venBillNo: readString(raw, "venBillNo", "VenBillNo"),
-    venBillDate: formatDateInput(raw.venBillDate ?? raw.VenBillDate) || null,
+    movementName: readString(
+      raw,
+      "movementName",
+      "MovementName",
+      "movChiledName",
+      "MovChiledName"
+    ),
     phtDate: formatDateInput(raw.phtDate ?? raw.PhtDate) || null,
     pthNetBill: readNumber(raw, "pthNetBill", "PthNetBill"),
   };
+}
+
+/** Search-grid Movement name: real name when present, otherwise ------. */
+export function displaySearchMovementName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? "";
+  return trimmed ? trimmed : "------";
 }
 
 export function mergeSavedDetailsWithPrior(
@@ -293,6 +305,7 @@ export function mergeSavedDetailsWithPrior(
       ...line,
       itmNameAr: line.itmNameAr || fromPrior?.itmNameAr || "",
       itmNameEn: line.itmNameEn || fromPrior?.itmNameEn || "",
+      taxPercent: fromPrior?.taxPercent ?? line.taxPercent ?? null,
     };
     if (itemByCode && itemByCode.size > 0) {
       merged = enrichDetailFromCatalog(merged, itemByCode);
@@ -330,17 +343,18 @@ export function applyMovementToHeader(
   };
 }
 
-/** Apply movement MovStor onto each detail line StoId. */
+/** Apply the Movement's first store onto detail lines that have no StoreId. */
 export function applyMovementStoToDetails(
   details: PurchaseDetail[],
-  movement: { movStor: string | null } | null
+  movement: { movStor?: string | null; movStor2?: string | null } | null
 ): PurchaseDetail[] {
   if (!movement) return details;
-  const movStor = movement.movStor?.trim() ?? "";
-  if (!movStor) return details;
+  const defaultStoreId =
+    movement.movStor?.trim() || movement.movStor2?.trim() || "";
+  if (!defaultStoreId) return details;
   return details.map((row) => ({
     ...row,
-    stoId: row.stoId?.trim() || movStor,
+    stoId: row.stoId?.trim() || defaultStoreId,
   }));
 }
 
@@ -371,8 +385,16 @@ export function toUpsertPayload(
       const unitId = detail.unitId;
       const line: Omit<
         PurchaseDetail,
-        "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
-      > & { unitId?: number } = {
+        | "clientRowId"
+        | "lineTotal"
+        | "itmNameAr"
+        | "itmNameEn"
+        | "unitId"
+        | "taxPercent"
+        | "baseItmPurPrice"
+        | "baseItmSell"
+        | "priceQtyNet"
+      > & { unitId?: number; itmTaxPrice: number } = {
         id: detail.id,
         itmId: detail.itmId.trim(),
         cId: detail.cId,
@@ -381,7 +403,7 @@ export function toUpsertPayload(
         bonus: detail.bonus,
         itmPurPrice: detail.itmPurPrice,
         itmSell: detail.itmSell,
-        itmTaxPrice: detail.itmTaxPrice,
+        itmTaxPrice: detail.itmTaxPrice ?? 0,
         itmTaxTotal: detail.itmTaxTotal,
         itmExtraDis: detail.itmExtraDis,
         itmDisPer: detail.itmDisPer,

@@ -1,9 +1,4 @@
 import { z } from "zod";
-import { BranchType } from "@/lib/movment-enums";
-
-const branchTypeValues = new Set(
-  Object.values(BranchType).map((value) => String(value))
-);
 
 /** Header fields edited on the form (readonly fields validated separately on save) */
 export const purchaseHeaderSchema = z.object({
@@ -50,7 +45,10 @@ export const purchaseDetailRowSchema = z.object({
   bonus: z.coerce.number().min(0).default(0),
   itmPurPrice: z.coerce.number().min(0),
   itmSell: z.coerce.number().min(0).default(0),
-  itmTaxPrice: z.coerce.number().min(0).default(0),
+  itmTaxPrice: z.preprocess(
+    (value) => (value == null || value === "" ? 0 : value),
+    z.coerce.number().min(0)
+  ),
   itmTaxTotal: z.coerce.number().min(0).default(0),
   itmExtraDis: z.coerce.number().min(0).default(0),
   itmDisMon: z.coerce.number().min(0).default(0),
@@ -62,10 +60,7 @@ export const purchaseDetailRowSchema = z.object({
   stoId: z
     .string()
     .trim()
-    .min(1, "Store (StoId) is required for each line")
-    .refine((value) => branchTypeValues.has(value), {
-      message: "Select a valid store (Br1–Br10)",
-    }),
+    .min(1, "Store is required for each line"),
   lineTotal: z.number(),
 });
 

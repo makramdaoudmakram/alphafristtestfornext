@@ -2,7 +2,7 @@ import { getMovmentById, lookupMovments } from "@/lib/api-client";
 import type { MovmentItem, MovmentLookupItem } from "@/types/movment";
 import type { PurchaseHeader } from "@/types/purchase";
 
-function toMovmentLookupItem(
+export function toMovmentLookupItem(
   item: MovmentItem | MovmentLookupItem
 ): MovmentLookupItem {
   return {
@@ -11,6 +11,7 @@ function toMovmentLookupItem(
     movChiledName: item.movChiledName,
     movParientId: item.movParientId,
     movStor: item.movStor,
+    movStor2: item.movStor2 ?? null,
     movSingleStore: item.movSingleStore,
     movAccountEntry1: item.movAccountEntry1,
     movAccountEntry2: item.movAccountEntry2,

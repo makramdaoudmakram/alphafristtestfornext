@@ -131,6 +131,9 @@ export class PurchaseRepository {
         venBillNo: filters.venBillNo,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
+        itmId: filters.itmId,
+        itemCode: filters.itmId,
+        movId: filters.movId,
       }),
       { headers: this.authHeaders(), cache: "no-store" }
     );
@@ -206,7 +209,7 @@ export class PurchaseRepository {
         Bonus: d.bonus,
         ItmPurPrice: d.itmPurPrice,
         ItmSell: d.itmSell,
-        ItmTaxPrice: d.itmTaxPrice,
+        ItmTaxPrice: d.itmTaxPrice ?? 0,
         ItmTaxTotal: d.itmTaxTotal,
         ItmExtraDis: d.itmExtraDis,
         ItmDisPer: d.itmDisPer,

@@ -44,7 +44,28 @@ export type PurchaseDetail = {
   bonus: number;
   itmPurPrice: number;
   itmSell: number;
-  itmTaxPrice: number;
+  /**
+   * UI-only Unit 1 / original purchase price. Used so unit changes do not compound.
+   * Never persisted or sent to the API.
+   */
+  baseItmPurPrice?: number;
+  /**
+   * UI-only Unit 1 / original sales price. Used so unit changes do not compound.
+   * Never persisted or sent to the API.
+   */
+  baseItmSell?: number;
+  /**
+   * UI-only last PriceQtyNet from GetUnitConversionInfo.
+   * Never persisted or sent to the API.
+   */
+  priceQtyNet?: number | null;
+  /**
+   * UI-only. Never persisted or sent to the API.
+   * null/undefined = empty, 0 = zero, > 0 = percentage.
+   */
+  taxPercent?: number | null;
+  /** null = empty in the UI; 0 and values greater than zero are distinct. */
+  itmTaxPrice: number | null;
   itmTaxTotal: number;
   itmExtraDis: number;
   itmDisMon: number;
@@ -59,6 +80,53 @@ export type PurchaseDetail = {
   lineTotal: number;
 };
 
+export type PurTransDExcelPreviewRow = {
+  excelRowNumber: number;
+  itmId: string;
+  itmNameAr: string;
+  itmNameEn: string;
+  qnty: string;
+  bonus: string;
+  unitId: string;
+  itmPurPrice: string;
+  itmSell: string;
+  itmTaxPrice: string;
+  itmExtraDis: string;
+  itmDisPer: string;
+  itmDisMon: string;
+  expDate: string;
+  stoId: string;
+};
+
+export type PurTransDExcelFieldError = {
+  field: string;
+  columnTitle: string;
+  message: string;
+};
+
+export type PurTransDExcelPreviewRowValidated = PurTransDExcelPreviewRow & {
+  isValid: boolean;
+  errors: PurTransDExcelFieldError[];
+};
+
+export type PurTransDExcelPreview = {
+  fileName: string;
+  sheetName: string;
+  rowCount: number;
+  rows: PurTransDExcelPreviewRow[];
+};
+
+export type PurTransDExcelPreviewValidated = Omit<
+  PurTransDExcelPreview,
+  "rows"
+> & {
+  isValid: boolean;
+  rows: PurTransDExcelPreviewRowValidated[];
+};
+
+export const PURTRANS_D_EXCEL_VALIDATION_SUMMARY =
+  "The Excel file contains invalid data. Please correct the highlighted rows.";
+
 export type PurchaseDocument = {
   header: PurchaseHeader;
   details: PurchaseDetail[];
@@ -70,14 +138,16 @@ export type PurchaseSearchFilters = {
   venBillNo?: string;
   dateFrom?: string;
   dateTo?: string;
+  /** Selected ItemCatalog.Itm_Code — used to search PurTransD, not the typed name. */
+  itmId?: string;
+  /** Selected Movement.MovChiledId when Movement is chosen. */
+  movId?: string;
 };
 
 export type PurchaseSearchResult = {
   id: number;
   pthId: number;
-  venId: string;
-  venBillNo: string;
-  venBillDate: string | null;
+  movementName: string;
   phtDate: string | null;
   pthNetBill: number;
 };
@@ -95,8 +165,16 @@ export type PurchaseUpsertPayload = {
   >;
   details: (Omit<
     PurchaseDetail,
-    "clientRowId" | "lineTotal" | "itmNameAr" | "itmNameEn" | "unitId"
-  > & { unitId?: number })[];
+    | "clientRowId"
+    | "lineTotal"
+    | "itmNameAr"
+    | "itmNameEn"
+    | "unitId"
+    | "taxPercent"
+    | "baseItmPurPrice"
+    | "baseItmSell"
+    | "priceQtyNet"
+  > & { unitId?: number; itmTaxPrice: number })[];
   /** Existing PurTransD ids removed on save (update only). */
   deletedDetailIds?: number[];
 };

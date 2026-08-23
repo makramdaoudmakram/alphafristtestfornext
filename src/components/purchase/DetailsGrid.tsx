@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2 } from "lucide-react";
 import { MasterDetailGrid } from "@/components/grid/master-detail-grid";
@@ -8,14 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   SearchableCombobox,
+  type ComboboxOption,
 } from "@/components/ui/searchable-combobox";
 import { ExpDateMmYyyyInput } from "@/components/purchase/ExpDateMmYyyyInput";
 import { ItemCatalogAutocompleteCell } from "@/components/purchase/ItemCatalogAutocompleteCell";
@@ -26,25 +20,56 @@ import {
   PURCHASE_DETAIL_GRID_LEGACY_WIDTH_KEY,
   PURCHASE_DETAIL_GRID_STORAGE_KEY,
 } from "@/components/purchase/purchase-detail-grid-columns";
-import { getBranchTypeSelectOptions } from "@/lib/movment-enums";
+import { getUnitConversionInfo } from "@/lib/api-client";
+import { catalogDefaultPrices } from "@/lib/item-catalog-search";
 import {
   buildRowUnitComboboxOptions,
   findCatalogItemByCode,
+  getItemDefaultUnitId,
 } from "@/lib/item-unit-options";
+import { toastStockUnitConversion } from "@/lib/purchase-stock-conversion-toast";
+import { formatStorDisplayName } from "@/lib/purchase-stores";
+import {
+  applyPriceQtyNetToBasePrices,
+  basePricesFromDisplayed,
+  resolveRowBasePrices,
+} from "@/lib/purchase-unit-conversion";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
+import type { StorItem } from "@/types/stor";
 import type { UnitItem } from "@/types/unit";
 
-const branchTypeOptions = getBranchTypeSelectOptions();
 const gridInputClass = cn("h-8 w-full min-w-0 tabular-nums", formControlFocusClass);
+
+function stockConversionQuantity(row: PurchaseDetail): number {
+  return (Number(row.qnty) || 0) + (Number(row.bonus) || 0);
+}
+
+function parseOptionalNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Keep Qty + Bonus from the same visible detail row when recalculating tax. */
+function withSameRowQtyBonus(
+  row: PurchaseDetail,
+  patch: Partial<PurchaseDetail>
+): Partial<PurchaseDetail> {
+  return {
+    qnty: row.qnty,
+    bonus: row.bonus,
+    ...patch,
+  };
+}
 
 type NumericDetailField =
   | "qnty"
   | "bonus"
   | "itmPurPrice"
   | "itmSell"
-  | "itmTaxPrice"
   | "itmTaxTotal"
   | "itmExtraDis"
   | "itmDisPer"
@@ -53,12 +78,16 @@ type NumericDetailField =
   | "itmNet"
   | "stdItmStock";
 
+type OptionalNumericDetailField = "taxPercent" | "itmTaxPrice";
+
 type DetailsGridProps = {
   rows: PurchaseDetail[];
   catalogItems: ItemCatalogItem[];
   itemByCode: Map<string, ItemCatalogItem>;
   units: UnitItem[];
   unitsLoading?: boolean;
+  stores: StorItem[];
+  storesLoading?: boolean;
   token?: string | null;
   catalogLoading?: boolean;
   catalogLoaded?: boolean;
@@ -77,6 +106,8 @@ export function DetailsGrid({
   itemByCode,
   units,
   unitsLoading = false,
+  stores,
+  storesLoading = false,
   token,
   catalogLoading = false,
   catalogLoaded = false,
@@ -91,6 +122,91 @@ export function DetailsGrid({
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
   } | null>(null);
+  const conversionSeqRef = useRef(new Map<string, number>());
+
+  const storeOptions = useMemo<ComboboxOption[]>(
+    () =>
+      stores
+        .map((store) => ({
+          value: String(store.id),
+          label: formatStorDisplayName(store),
+        }))
+        .filter((option) => option.label.length > 0),
+    [stores]
+  );
+
+  const applyUnitConversionToRow = useCallback((
+    rowIndex: number,
+    row: PurchaseDetail,
+    itemCode: string,
+    unitId: number | null,
+    basePrices?: { baseItmPurPrice: number; baseItmSell: number }
+  ) => {
+    const code = itemCode.trim();
+    if (!token || !code || unitId == null || unitId <= 0) return;
+
+    const requestId = (conversionSeqRef.current.get(row.clientRowId) ?? 0) + 1;
+    conversionSeqRef.current.set(row.clientRowId, requestId);
+
+    void (async () => {
+      let base = basePrices;
+      if (!base && (row.baseItmPurPrice == null || row.baseItmSell == null)) {
+        if (row.unitId != null && row.unitId > 0 && row.unitId !== unitId) {
+          const current = await getUnitConversionInfo(
+            token,
+            code,
+            row.unitId,
+            stockConversionQuantity(row)
+          );
+          if (conversionSeqRef.current.get(row.clientRowId) !== requestId) return;
+          base = basePricesFromDisplayed(
+            row.itmPurPrice,
+            row.itmSell,
+            current.priceQtyNet
+          );
+        }
+      }
+      base ??= resolveRowBasePrices(row);
+
+      const info = await getUnitConversionInfo(
+        token,
+        code,
+        unitId,
+        stockConversionQuantity(row)
+      );
+      if (conversionSeqRef.current.get(row.clientRowId) !== requestId) return;
+
+      const nextPrices = applyPriceQtyNetToBasePrices(
+        base.baseItmPurPrice,
+        base.baseItmSell,
+        info.priceQtyNet
+      );
+
+      onChangeRow(
+        rowIndex,
+        withSameRowQtyBonus(row, {
+          unitId,
+          itmPurPrice: nextPrices.itmPurPrice,
+          itmSell: nextPrices.itmSell,
+          baseItmPurPrice: base.baseItmPurPrice,
+          baseItmSell: base.baseItmSell,
+          priceQtyNet: nextPrices.priceQtyNet,
+        })
+      );
+
+      void toastStockUnitConversion(
+        token,
+        code,
+        unitId,
+        stockConversionQuantity(row),
+        {
+          purchasePrice: nextPrices.itmPurPrice,
+          salesPrice: nextPrices.itmSell,
+        },
+        info
+      );
+    })();
+  }, [onChangeRow, token]);
 
   const columns = useMemo<ColumnDef<PurchaseDetail>[]>(() => {
     const numberCell = (
@@ -110,14 +226,69 @@ export function DetailsGrid({
           disabled={disabled}
           value={row.original[field]}
           onFocus={() => onSelectRow(row.index)}
-          onChange={(e) =>
-            onChangeRow(row.index, {
-              [field]: Number(e.target.value) || 0,
-            } as Partial<PurchaseDetail>)
-          }
+          onChange={(e) => {
+            const nextValue = Number(e.target.value) || 0;
+            const patch = {
+              [field]: nextValue,
+            } as Partial<PurchaseDetail>;
+            if (field === "itmPurPrice" || field === "itmSell") {
+              const recovered = basePricesFromDisplayed(
+                field === "itmPurPrice" ? nextValue : row.original.itmPurPrice,
+                field === "itmSell" ? nextValue : row.original.itmSell,
+                row.original.priceQtyNet
+              );
+              patch.baseItmPurPrice = recovered.baseItmPurPrice;
+              patch.baseItmSell = recovered.baseItmSell;
+            }
+            onChangeRow(
+              row.index,
+              field === "qnty" ||
+              field === "bonus" ||
+              field === "itmPurPrice" ||
+              field === "itmExtraDis" ||
+              field === "itmSell" ||
+              field === "itmNet"
+                ? withSameRowQtyBonus(row.original, patch)
+                : patch
+            );
+          }}
           className={gridInputClass}
         />
       ),
+    });
+
+    const optionalNumberCell = (
+      field: OptionalNumericDetailField,
+      dataCol: string,
+      header: string
+    ): ColumnDef<PurchaseDetail> => ({
+      id: field,
+      accessorKey: field,
+      header,
+      cell: ({ row }) => {
+        const value = row.original[field];
+        return (
+          <Input
+            data-row={row.index}
+            data-col={dataCol}
+            type="number"
+            step="0.01"
+            disabled={disabled}
+            value={value == null ? "" : value}
+            onFocus={() => onSelectRow(row.index)}
+            onChange={(e) => {
+              const parsed = parseOptionalNumber(e.target.value);
+              onChangeRow(
+                row.index,
+                withSameRowQtyBonus(row.original, {
+                  [field]: parsed,
+                } as Partial<PurchaseDetail>)
+              );
+            }}
+            className={gridInputClass}
+          />
+        );
+      },
     });
 
     return [
@@ -141,7 +312,16 @@ export function DetailsGrid({
             inputClassName="w-full min-w-0"
             onFocusRow={() => onSelectRow(row.index)}
             onChangeRow={(patch) => onChangeRow(row.index, patch)}
-            onItemApplied={onCatalogItemApplied}
+            onItemApplied={(item) => {
+              onCatalogItemApplied?.(item);
+              const itemCode = item.itmCode?.trim() ?? "";
+              const unitId = getItemDefaultUnitId(item);
+              const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
+              applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
+                baseItmPurPrice: itmPurPrice,
+                baseItmSell: itmSell,
+              });
+            }}
             onAfterApply={() =>
               keyboardRef.current?.focusColumnAfter(row.index, "itmNameAr")
             }
@@ -163,7 +343,16 @@ export function DetailsGrid({
             inputClassName="w-full min-w-0"
             onFocusRow={() => onSelectRow(row.index)}
             onChangeRow={(patch) => onChangeRow(row.index, patch)}
-            onItemApplied={onCatalogItemApplied}
+            onItemApplied={(item) => {
+              onCatalogItemApplied?.(item);
+              const itemCode = item.itmCode?.trim() ?? "";
+              const unitId = getItemDefaultUnitId(item);
+              const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
+              applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
+                baseItmPurPrice: itmPurPrice,
+                baseItmSell: itmSell,
+              });
+            }}
             onAfterApply={() =>
               keyboardRef.current?.focusColumnAfter(row.index, "itmNameEn")
             }
@@ -199,9 +388,15 @@ export function DetailsGrid({
               }
               onValueChange={(value) => {
                 const parsed = Number(value);
-                onChangeRow(row.index, {
-                  unitId: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
-                });
+                const unitId =
+                  Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+                onChangeRow(row.index, { unitId });
+                applyUnitConversionToRow(
+                  row.index,
+                  row.original,
+                  row.original.itmId?.trim() ?? "",
+                  unitId
+                );
               }}
               options={rowUnitOptions}
               disabled={disabled || unitsLoading}
@@ -223,7 +418,8 @@ export function DetailsGrid({
       },
       numberCell("itmPurPrice", "itmPurPrice", "Purch"),
       numberCell("itmSell", "itmSell", "ItmSell"),
-      numberCell("itmTaxPrice", "itmTaxPrice", "Tax price"),
+      optionalNumberCell("taxPercent", "taxPercent", "TaxPercent"),
+      optionalNumberCell("itmTaxPrice", "itmTaxPrice", "Tax price"),
       numberCell("itmTaxTotal", "itmTaxTotal", "Tax"),
       numberCell("itmExtraDis", "itmExtraDis", "Extra disc"),
       numberCell("itmDisPer", "itmDisPer", "Disc %"),
@@ -235,29 +431,29 @@ export function DetailsGrid({
         id: "stoId",
         accessorKey: "stoId",
         header: "Store",
-        cell: ({ row }) => (
-          <Select
-            value={row.original.stoId?.trim() || undefined}
-            onValueChange={(value) => onChangeRow(row.index, { stoId: value })}
-            disabled={disabled}
-          >
-            <SelectTrigger
-              className={cn("h-8 w-full min-w-0 text-xs", formControlFocusClass)}
-              data-row={row.index}
-              data-col="stoId"
-              onFocus={() => onSelectRow(row.index)}
-            >
-              <SelectValue placeholder="Store" />
-            </SelectTrigger>
-            <SelectContent>
-              {branchTypeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ),
+        cell: ({ row }) => {
+          const storeId = row.original.stoId?.trim() ?? "";
+          const known = storeOptions.some((option) => option.value === storeId);
+          return (
+            <SearchableCombobox
+              value={storeId}
+              onValueChange={(value) => onChangeRow(row.index, { stoId: value })}
+              options={storeOptions}
+              orphanLabel={known || !storeId ? null : "—"}
+              disabled={disabled || storesLoading}
+              dataRow={row.index}
+              dataCol="stoId"
+              placeholder={storesLoading ? "Loading…" : "Store"}
+              searchPlaceholder="Search store..."
+              emptyMessage={
+                storesLoading
+                  ? "Loading stores…"
+                  : "No stores found. Select a Movement that has stores."
+              }
+              className="h-8 w-full min-w-0 text-xs"
+            />
+          );
+        },
       },
       {
         id: "expDate",
@@ -308,10 +504,13 @@ export function DetailsGrid({
     token,
     units,
     unitsLoading,
+    storeOptions,
+    storesLoading,
     onCatalogItemApplied,
     onChangeRow,
     onRemoveRow,
     onSelectRow,
+    applyUnitConversionToRow,
   ]);
 
   return (
@@ -376,6 +575,11 @@ export function DetailsGrid({
           {unitsLoading ? (
             <span className="text-muted-foreground block pt-1">
               Loading unit names…
+            </span>
+          ) : null}
+          {storesLoading ? (
+            <span className="text-muted-foreground block pt-1">
+              Loading stores…
             </span>
           ) : null}
           {catalogLoaded && catalogItems.length === 0 ? (

@@ -1,15 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   ApiError,
+  downloadPurTransDExcelTemplate,
   fetchAllItemCatalogItems,
   getItemCatalog,
   getItemCatalogPage,
   getMovmentById,
   getNextMovValue,
+  getStors,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
@@ -31,11 +35,17 @@ import { PageGuard } from "@/components/permissions/page-guard";
 import {
   FormFieldInlineWrap,
 } from "@/components/ui/form-field-inline";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveMovementForPurchaseHeader } from "@/lib/purchase-movement";
+import {
+  applyDefaultStoreToNewDetailRows,
+  getDefaultMovementStoreId,
+} from "@/lib/purchase-stores";
 import { usePurchase } from "@/hooks/usePurchase";
 import type { MovmentLookupItem } from "@/types/movment";
+import type { StorItem } from "@/types/stor";
 
 /** Purchase transactions use MovParent / MovParientId = 1 */
 const PURCHASE_MOV_PARENT_ID = 1;
@@ -47,17 +57,22 @@ export function PurchasePageContent() {
   const sessionAuthenticated = status === "authenticated" && !!token;
 
   const purchase = usePurchase(token);
+  const searchParams = useSearchParams();
+  const loadedFromUrlRef = useRef<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<ItemCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
+  const [stores, setStores] = useState<StorItem[]>([]);
+  const [storesLoading, setStoresLoading] = useState(false);
   const [itemByCode, setItemByCode] = useState<Map<string, ItemCatalogItem>>(
     () => new Map()
   );
   const [selectedMovement, setSelectedMovement] =
     useState<MovmentLookupItem | null>(null);
   const [pthIdLoading, setPthIdLoading] = useState(false);
+  const [templateDownloading, setTemplateDownloading] = useState(false);
   const nextValueAbortRef = useRef<AbortController | null>(null);
   const nextValueRequestRef = useRef(0);
 
@@ -173,6 +188,29 @@ export function PurchasePageContent() {
     }
   }, [token]);
 
+  const loadStores = useCallback(async () => {
+    if (!token) {
+      setStores([]);
+      setStoresLoading(false);
+      return;
+    }
+
+    setStoresLoading(true);
+    try {
+      setStores(await getStors(token));
+    } catch (err) {
+      setStores([]);
+      toast.error("Could not load stores.", {
+        description:
+          err instanceof Error
+            ? err.message
+            : "Check API connection and the Stor table.",
+      });
+    } finally {
+      setStoresLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     if (!sessionReady) return;
     if (!sessionAuthenticated) {
@@ -180,11 +218,13 @@ export function PurchasePageContent() {
       setItemByCode(new Map());
       setCatalogLoaded(true);
       setUnits([]);
+      setStores([]);
       return;
     }
     void loadItemCatalog();
     void loadUnits();
-  }, [sessionReady, sessionAuthenticated, loadItemCatalog, loadUnits]);
+    void loadStores();
+  }, [sessionReady, sessionAuthenticated, loadItemCatalog, loadUnits, loadStores]);
 
   const handleCatalogItemApplied = useCallback(
     (item: ItemCatalogItem) => {
@@ -273,6 +313,7 @@ export function PurchasePageContent() {
           movChiledName: `Movement #${headerMovId}`,
           movParientId: PURCHASE_MOV_PARENT_ID,
           movStor: null,
+          movStor2: null,
           movSingleStore: false,
           movAccountEntry1: form.getValues("movAccountsec") || null,
           movAccountEntry2: form.getValues("movAccount") || null,
@@ -289,6 +330,7 @@ export function PurchasePageContent() {
           movChiledName: `Movement #${headerMovId}`,
           movParientId: PURCHASE_MOV_PARENT_ID,
           movStor: null,
+          movStor2: null,
           movSingleStore: false,
           movAccountEntry1: form.getValues("movAccountsec") || null,
           movAccountEntry2: form.getValues("movAccount") || null,
@@ -303,6 +345,16 @@ export function PurchasePageContent() {
     void syncMovementFromLoadedHeader();
   }, [recordId, headerMovId, syncMovementFromLoadedHeader, token]);
 
+  useEffect(() => {
+    if (!token) return;
+    const raw = searchParams.get("id");
+    const id = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (loadedFromUrlRef.current === id) return;
+    loadedFromUrlRef.current = id;
+    void loadRecord(id, itemByCode, catalogItems);
+  }, [token, searchParams, loadRecord, itemByCode, catalogItems]);
+
   const onNew = useCallback(() => {
     handleNew();
     setSelectedMovement(null);
@@ -316,7 +368,7 @@ export function PurchasePageContent() {
       const entry1 = mapped.movAccountEntry1?.trim() ?? "";
       const entry2 = mapped.movAccountEntry2?.trim() ?? "";
       const entry3 = mapped.movAccountEntry3?.trim() ?? "";
-      const movStor = mapped.movStor?.trim() ?? "";
+      const defaultStoreId = getDefaultMovementStoreId(mapped);
 
       form.setValue("movmentRowId", mapped.id, {
         shouldDirty: true,
@@ -331,9 +383,7 @@ export function PurchasePageContent() {
         shouldValidate: false,
       });
 
-      if (movStor) {
-        setDetails((rows) => rows.map((row) => ({ ...row, stoId: movStor })));
-      }
+      setDetails((rows) => applyDefaultStoreToNewDetailRows(rows, defaultStoreId));
     },
     [form, setDetails]
   );
@@ -348,7 +398,7 @@ export function PurchasePageContent() {
         form.setValue("movAccountsec", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccount", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccounttherd", "", { shouldDirty: true, shouldValidate: false });
-        setDetails((rows) => rows.map((row) => ({ ...row, stoId: "" })));
+        setDetails((rows) => applyDefaultStoreToNewDetailRows(rows, ""));
         return;
       }
 
@@ -379,12 +429,19 @@ export function PurchasePageContent() {
           movChiledName: full.movChiledName,
           movParientId: full.movParientId,
           movStor: full.movStor,
+          movStor2: full.movStor2,
           movSingleStore: full.movSingleStore,
           movAccountEntry1: full.movAccountEntry1,
           movAccountEntry2: full.movAccountEntry2,
           movAccountEntry3: full.movAccountEntry3,
         };
         applyMovementFields(mapped);
+        if (!getDefaultMovementStoreId(mapped)) {
+          toast.message("Selected movement has no stores.", {
+            description:
+              "Assign a store to the movement, or choose a store on each new line.",
+          });
+        }
 
         const movChiledId = mapped.movChiledId;
         if (movChiledId == null) {
@@ -424,6 +481,33 @@ export function PurchasePageContent() {
     },
     [applyMovementFields, form, setDetails, token]
   );
+
+  async function handleCreateExcelTemplate() {
+    if (!token) {
+      toast.error("Sign in to download the Excel template.");
+      return;
+    }
+
+    setTemplateDownloading(true);
+    try {
+      const file = await downloadPurTransDExcelTemplate(token);
+      const url = URL.createObjectURL(file.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = file.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel template downloaded");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to download the Excel template."
+      );
+    } finally {
+      setTemplateDownloading(false);
+    }
+  }
 
   function confirmDelete() {
     toast("Delete this purchase document?", {
@@ -468,9 +552,25 @@ export function PurchasePageContent() {
               PurTransH / PurTransD — vendor purchase invoice entry
             </p>
           </div>
-          <span className="text-muted-foreground text-xs uppercase tracking-wide">
-            Mode: {mode}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!token || templateDownloading}
+              onClick={() => void handleCreateExcelTemplate()}
+            >
+              {templateDownloading ? "Downloading…" : "Create Excel Template"}
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/transactions/purchase/import">
+                Import Excel
+              </Link>
+            </Button>
+            <span className="text-muted-foreground text-xs uppercase tracking-wide">
+              Mode: {mode}
+            </span>
+          </div>
         </div>
 
         <Toolbar
@@ -560,8 +660,10 @@ export function PurchasePageContent() {
               onSelectRow={setSelectedRowIndex}
               onChangeRow={updateDetailRow}
               onCatalogItemApplied={handleCatalogItemApplied}
+              stores={stores}
+              storesLoading={storesLoading}
               onAddRow={() =>
-                addDetailRow(selectedMovement?.movStor?.trim() ?? "")
+                addDetailRow(getDefaultMovementStoreId(selectedMovement))
               }
               onRemoveRow={removeDetailRow}
             />
@@ -586,6 +688,12 @@ export function PurchasePageContent() {
           open={searchOpen}
           onOpenChange={setSearchOpen}
           onSearch={runSearch}
+          movement={selectedMovement}
+          onMovementChange={(item) => void handleMovementChange(item)}
+          movementParentId={PURCHASE_MOV_PARENT_ID}
+          token={token}
+          movementDisabled={hasRecord || !isEditable || pthIdLoading}
+          catalogItems={catalogItems}
           onSelect={async (row) => {
             const map = await loadRecord(row.id, itemByCode, catalogItems);
             if (map && map.size > 0) setItemByCode(map);

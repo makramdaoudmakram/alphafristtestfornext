@@ -5,7 +5,11 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import type { Resolver } from "react-hook-form";
-import { computeHeaderTotals, mapDetailsWithLineTotals } from "@/lib/purchase-calculations";
+import {
+  applyPurchaseDetailPatch,
+  computeHeaderTotals,
+  mapDetailsWithLineTotals,
+} from "@/lib/purchase-calculations";
 import {
   applyMovementStoToDetails,
   applyMovementToHeader,
@@ -279,7 +283,7 @@ export function usePurchase(token: string | undefined) {
           validation.data.details.length > 0
             ? mergeSavedDetailsWithPrior(
                 saved.details,
-                validation.data.details,
+                detailsForSave,
                 catalogMap
               )
             : saved.details;
@@ -405,7 +409,9 @@ export function usePurchase(token: string | undefined) {
   const updateDetailRow = useCallback(
     (index: number, patch: Partial<PurchaseDetail>) => {
       setDetails((rows) =>
-        rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+        rows.map((row, i) =>
+          i === index ? applyPurchaseDetailPatch(row, patch) : row
+        )
       );
     },
     []

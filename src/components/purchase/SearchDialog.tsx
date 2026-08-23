@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { MovementLookup } from "@/components/movement/MovementLookup";
+import { ItemCatalogAutocompleteCell } from "@/components/purchase/ItemCatalogAutocompleteCell";
+import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { MovmentLookupItem } from "@/types/movment";
+import { displaySearchMovementName } from "@/lib/purchase.mapper";
 import type { PurchaseSearchFilters, PurchaseSearchResult } from "@/types/purchase";
 
 type SearchDialogProps = {
@@ -29,6 +34,19 @@ type SearchDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSearch: (filters: PurchaseSearchFilters) => Promise<PurchaseSearchResult[]>;
   onSelect: (result: PurchaseSearchResult) => void;
+  movement: MovmentLookupItem | null;
+  onMovementChange: (item: MovmentLookupItem | null) => void;
+  movementParentId: number;
+  token?: string | null;
+  movementDisabled?: boolean;
+  catalogItems: ItemCatalogItem[];
+};
+
+const emptyFilters: PurchaseSearchFilters = {
+  pthId: "",
+  venBillNo: "",
+  dateFrom: "",
+  dateTo: "",
 };
 
 export function SearchDialog({
@@ -36,16 +54,62 @@ export function SearchDialog({
   onOpenChange,
   onSearch,
   onSelect,
+  movement,
+  onMovementChange,
+  movementParentId,
+  token,
+  movementDisabled = false,
+  catalogItems,
 }: SearchDialogProps) {
-  const [filters, setFilters] = useState<PurchaseSearchFilters>({});
+  const [filters, setFilters] = useState<PurchaseSearchFilters>(emptyFilters);
   const [results, setResults] = useState<PurchaseSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [itmNameEn, setItmNameEn] = useState("");
+  const [selectedItemCode, setSelectedItemCode] = useState<string | null>(null);
+  const selectedItemCodeRef = useRef<string | null>(null);
+
+  const setItemFilter = useCallback((name: string, code: string | null) => {
+    setItmNameEn(name);
+    setSelectedItemCode(code);
+    selectedItemCodeRef.current = code;
+  }, []);
+
+  const resetItemFilter = useCallback(() => {
+    setItemFilter("", null);
+  }, [setItemFilter]);
+
+  const applySelectedCatalogItem = useCallback(
+    (item: ItemCatalogItem) => {
+      setItemFilter(item.itmNameEn?.trim() ?? "", item.itmCode?.trim() || null);
+    },
+    [setItemFilter]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setResults([]);
+    setSelectedIndex(0);
+    setLoading(false);
+    setFilters(emptyFilters);
+    resetItemFilter();
+  }, [open, resetItemFilter]);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await onSearch(filters);
+      const itemCode =
+        selectedItemCodeRef.current?.trim() ||
+        selectedItemCode?.trim() ||
+        undefined;
+      const selectedMovementId =
+        movement?.movChiledId != null ? String(movement.movChiledId) : undefined;
+      const data = await onSearch({
+        ...filters,
+        vendor: movement?.movAccountEntry1?.trim() || undefined,
+        itmId: itemCode,
+        movId: selectedMovementId,
+      });
       setResults(data);
       setSelectedIndex(0);
       if (!data.length) {
@@ -56,7 +120,7 @@ export function SearchDialog({
     } finally {
       setLoading(false);
     }
-  }, [filters, onSearch]);
+  }, [filters, selectedItemCode, movement, onSearch]);
 
   const loadSelected = useCallback(
     (index: number) => {
@@ -74,8 +138,9 @@ export function SearchDialog({
         <DialogHeader>
           <DialogTitle>Search purchase documents</DialogTitle>
           <DialogDescription>
-            Filter by PthId, vendor, invoice number, or date range. Double-click
-            or press Enter to load.
+            Filter by PthId, movement, item name English, invoice number, or date
+            range. Double-click or press Enter to load. Search runs only when you
+            press Search.
           </DialogDescription>
         </DialogHeader>
 
@@ -91,13 +156,43 @@ export function SearchDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="search-vendor">Vendor</Label>
-            <Input
-              id="search-vendor"
-              value={filters.vendor ?? ""}
-              onChange={(e) =>
-                setFilters((f) => ({ ...f, vendor: e.target.value }))
-              }
+            <Label htmlFor="search-vendor">Movement</Label>
+            <MovementLookup
+              parentId={movementParentId}
+              token={token}
+              value={movement}
+              onChange={onMovementChange}
+              disabled={movementDisabled}
+              placeholder="Select movement..."
+            />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="search-itm-name-en">Item Name English</Label>
+            <ItemCatalogAutocompleteCell
+              field="nameEn"
+              rowIndex={0}
+              dataCol="itmNameEn"
+              value={itmNameEn}
+              token={token}
+              catalogItems={catalogItems}
+              disabled={false}
+              inputClassName="h-9 w-full"
+              onFocusRow={() => undefined}
+              onItemApplied={applySelectedCatalogItem}
+              onChangeRow={(patch) => {
+                if (patch.itmNameEn !== undefined && patch.itmId === undefined) {
+                  setItemFilter(patch.itmNameEn, null);
+                  return;
+                }
+
+                const name =
+                  patch.itmNameEn !== undefined ? patch.itmNameEn : itmNameEn;
+                const code =
+                  patch.itmId !== undefined
+                    ? patch.itmId.trim() || null
+                    : selectedItemCodeRef.current;
+                setItemFilter(name, code);
+              }}
             />
           </div>
           <div className="space-y-2">
@@ -157,9 +252,8 @@ export function SearchDialog({
               <TableHeader>
                 <TableRow>
                   <TableHead>PthId</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Pht date</TableHead>
+                  <TableHead>MovementName</TableHead>
+                  <TableHead>InvoicePhtDate</TableHead>
                   <TableHead className="text-right">Net</TableHead>
                 </TableRow>
               </TableHeader>
@@ -178,8 +272,7 @@ export function SearchDialog({
                     tabIndex={0}
                   >
                     <TableCell>{row.pthId}</TableCell>
-                    <TableCell>{row.venId || "—"}</TableCell>
-                    <TableCell>{row.venBillNo || "—"}</TableCell>
+                    <TableCell>{displaySearchMovementName(row.movementName)}</TableCell>
                     <TableCell>{row.phtDate ?? "—"}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.pthNetBill.toFixed(2)}

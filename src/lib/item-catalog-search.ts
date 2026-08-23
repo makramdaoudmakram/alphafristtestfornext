@@ -1,6 +1,9 @@
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
-import { resolveUnitIdForItem } from "@/lib/item-unit-options";
+import {
+  getItemDefaultUnitId,
+  resolveUnitIdForItem,
+} from "@/lib/item-unit-options";
 
 export const ITEM_AUTOCOMPLETE_LIMIT = 15;
 
@@ -36,7 +39,10 @@ export function patchDetailFromCatalogItem(
     itmNameEn: item.itmNameEn?.trim() ?? "",
     itmPurPrice,
     itmSell,
-    unitId: null,
+    unitId: getItemDefaultUnitId(item),
+    baseItmPurPrice: itmPurPrice,
+    baseItmSell: itmSell,
+    priceQtyNet: 1,
   };
 }
 

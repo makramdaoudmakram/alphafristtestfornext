@@ -24,6 +24,13 @@ function normalizeUnitId(value: number | null | undefined): number | null {
  * Returns valid, deduplicated unit ids from ItemCatalog.Itm_Unit1/2/3.
  * Skips null, undefined, zero, and negative values.
  */
+/** Default purchase unit is always ItemCatalog.Itm_Unit1. */
+export function getItemDefaultUnitId(
+  item: ItemUnitFields | null | undefined
+): number | null {
+  return normalizeUnitId(item?.itmUnit1);
+}
+
 export function getItemUnitIds(
   item: ItemUnitFields | null | undefined
 ): number[] {

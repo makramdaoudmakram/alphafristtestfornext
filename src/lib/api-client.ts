@@ -100,6 +100,10 @@ import type {
   ExcelTemplateDownload,
   ExcelTemplateRequest,
 } from "@/types/excel";
+import type {
+  PurTransDExcelPreview,
+  PurTransDExcelPreviewRow,
+} from "@/types/purchase";
 import { parseUnitCode } from "@/lib/unit-code";
 import {
   excelImportJobStatusFromApiValue,
@@ -360,6 +364,7 @@ function normalizeMovmentLookupItem(
     movChiledName: readString(item, "movChiledName", "MovChiledName") || null,
     movParientId: readNullableNumber(item, "movParientId", "MovParientId"),
     movStor: readString(item, "movStor", "MovStor") || null,
+    movStor2: readString(item, "movStor2", "MovStor2") || null,
     movSingleStore: readBoolean(item, "movSingleStore", "MovSingleStore"),
     movAccountEntry1:
       readString(item, "movAccountEntry1", "MovAccountEntry1") || null,
@@ -1678,6 +1683,52 @@ export function getStockBalanceByItem(
   });
 }
 
+export type StockUnitConversionResult = {
+  itemCode: string;
+  unitId: number;
+  unitName: string;
+  quantity: number;
+  conversionValue: number | null;
+  quantityNet: number | null;
+  priceQtyNet: number | null;
+  errorMessage: string | null;
+};
+
+function normalizeStockUnitConversion(
+  raw: Record<string, unknown>
+): StockUnitConversionResult {
+  return {
+    itemCode: readString(raw, "itemCode", "ItemCode"),
+    unitId: readNumber(raw, "unitId", "UnitId"),
+    unitName: readString(raw, "unitName", "UnitName"),
+    quantity: readNumber(raw, "quantity", "Quantity"),
+    conversionValue: readNullableNumber(raw, "conversionValue", "ConversionValue"),
+    quantityNet: readNullableNumber(raw, "quantityNet", "QuantityNet"),
+    priceQtyNet: readNullableNumber(raw, "priceQtyNet", "PriceQtyNet"),
+    errorMessage:
+      readString(raw, "errorMessage", "ErrorMessage").trim() || null,
+  };
+}
+
+/** Same GetUnitConversionInfo logic Stock uses. Read-only — does not write Stock. */
+export function getUnitConversionInfo(
+  token: string,
+  itemCode: string,
+  unitId: number,
+  quantity: number
+): Promise<StockUnitConversionResult> {
+  const params = new URLSearchParams();
+  params.set("itemCode", itemCode.trim());
+  params.set("unitId", String(unitId));
+  params.set("quantity", String(quantity));
+
+  return apiFetch<Record<string, unknown>>(
+    `UnitConversion/info?${params.toString()}`,
+    {},
+    token
+  ).then((data) => normalizeStockUnitConversion(data));
+}
+
 export function getGroups(token: string) {
   return fetchAllPaged("Group", token, normalizeGroupItem);
 }
@@ -2919,6 +2970,99 @@ export async function downloadExcelTemplate(
     `${entityName}-template.xlsx`;
 
   return { blob, fileName };
+}
+
+export async function downloadPurTransDExcelTemplate(
+  token: string
+): Promise<ExcelTemplateDownload> {
+  const response = await fetch(alfaUrl("PurTransH/excel-template"), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  if (!response.ok) {
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const fileName =
+    parseDownloadFileName(response.headers.get("Content-Disposition")) ??
+    "PurTransD-template.xlsx";
+
+  return { blob, fileName };
+}
+
+function normalizePurTransDExcelPreviewRow(
+  raw: Record<string, unknown>
+): PurTransDExcelPreviewRow {
+  return {
+    excelRowNumber: readNumber(raw, "excelRowNumber", "ExcelRowNumber"),
+    itmId: readString(raw, "itmId", "ItmId"),
+    itmNameAr: readString(raw, "itmNameAr", "ItmNameAr"),
+    itmNameEn: readString(raw, "itmNameEn", "ItmNameEn"),
+    qnty: readString(raw, "qnty", "Qnty"),
+    bonus: readString(raw, "bonus", "Bonus"),
+    unitId: readString(raw, "unitId", "UnitId"),
+    itmPurPrice: readString(raw, "itmPurPrice", "ItmPurPrice"),
+    itmSell: readString(raw, "itmSell", "ItmSell"),
+    itmTaxPrice: readString(raw, "itmTaxPrice", "ItmTaxPrice"),
+    itmExtraDis: readString(raw, "itmExtraDis", "ItmExtraDis"),
+    itmDisPer: readString(raw, "itmDisPer", "ItmDisPer"),
+    itmDisMon: readString(raw, "itmDisMon", "ItmDisMon"),
+    expDate: readString(raw, "expDate", "ExpDate"),
+    stoId: readString(raw, "stoId", "StoId"),
+  };
+}
+
+export async function previewPurTransDExcel(
+  token: string,
+  file: File
+): Promise<PurTransDExcelPreview> {
+  const form = new FormData();
+  form.append("file", file);
+
+  const response = await fetch("/api/purchase/excel-preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: form,
+  });
+
+  if (response.status === 401) {
+    clearAuthToken();
+  }
+
+  if (!response.ok) {
+    if (response.status === 405) {
+      throw new ApiError(
+        response.status,
+        "Read Excel is not available on this Next.js server. Restart npm run dev so /api/purchase/excel-preview is loaded."
+      );
+    }
+    throw new ApiError(response.status, await parseError(response));
+  }
+
+  const raw = (await response.json()) as Record<string, unknown>;
+  const rowsRaw = raw.rows ?? raw.Rows;
+  const rows = Array.isArray(rowsRaw)
+    ? rowsRaw.map((item) =>
+        normalizePurTransDExcelPreviewRow(item as Record<string, unknown>)
+      )
+    : [];
+
+  return {
+    fileName: readString(raw, "fileName", "FileName"),
+    sheetName: readString(raw, "sheetName", "SheetName"),
+    rowCount: readNumber(raw, "rowCount", "RowCount") || rows.length,
+    rows,
+  };
 }
 
 function normalizeExcelImportError(

@@ -118,7 +118,9 @@ export function useGridPreferences({
   useEffect(() => {
     const stored = readGridPreferencesFromStorage(storageKey);
     if (stored) {
-      setPreferences(mergeGridPreferences(columns, stored, minWidth, maxWidth));
+      const merged = mergeGridPreferences(columns, stored, minWidth, maxWidth);
+      setPreferences(merged);
+      writeGridPreferencesToStorage(storageKey, merged);
       return;
     }
 
