@@ -141,6 +141,7 @@ export function emptyPurchaseHeader(): PurchaseHeader {
     movAccount: "",
     movAccountsec: "",
     movAccounttherd: "",
+    movAccountfourth: "",
     noOfItems: 0,
     totalQuantity: 0,
     totalBill: 0,
@@ -236,6 +237,7 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
     movAccount: readString(raw, "movAccount", "MovAccount"),
     movAccountsec: readString(raw, "movAccountsec", "MovAccountsec"),
     movAccounttherd: readString(raw, "movAccounttherd", "MovAccounttherd"),
+    movAccountfourth: readString(raw, "movAccountfourth", "MovAccountfourth"),
     noOfItems: readNumber(raw, "noOfItems", "NoOfItems"),
     totalQuantity: readNumber(raw, "totalQuantity", "TotalQuantity"),
     totalBill: readNumber(raw, "totalBill", "TotalBill"),
@@ -324,6 +326,7 @@ export function applyMovementToHeader(
     movAccountEntry1: string | null;
     movAccountEntry2: string | null;
     movAccountEntry3: string | null;
+    movAccountEntry4: string | null;
   } | null
 ): PurchaseHeaderFormValues {
   if (!movement) return header;
@@ -331,6 +334,7 @@ export function applyMovementToHeader(
   const entry1 = movement.movAccountEntry1?.trim() ?? "";
   const entry2 = movement.movAccountEntry2?.trim() ?? "";
   const entry3 = movement.movAccountEntry3?.trim() ?? "";
+  const entry4 = movement.movAccountEntry4?.trim() ?? "";
 
   return {
     ...header,
@@ -340,6 +344,7 @@ export function applyMovementToHeader(
     movAccountsec: entry1,
     movAccount: entry2,
     movAccounttherd: entry3,
+    movAccountfourth: entry4,
   };
 }
 
@@ -376,6 +381,7 @@ export function toUpsertPayload(
       movAccount: header.movAccount?.trim() ?? "",
       movAccountsec: header.movAccountsec?.trim() ?? "",
       movAccounttherd: header.movAccounttherd?.trim() ?? "",
+      movAccountfourth: header.movAccountfourth?.trim() ?? "",
       purchExtraDisCount: Number(header.purchExtraDisCount) || 0,
       totalDisPer: Number(header.totalDisPer) || 0,
       pOtherExpenses: Number(header.pOtherExpenses) || 0,

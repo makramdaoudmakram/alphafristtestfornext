@@ -372,6 +372,8 @@ function normalizeMovmentLookupItem(
       readString(item, "movAccountEntry2", "MovAccountEntry2") || null,
     movAccountEntry3:
       readString(item, "movAccountEntry3", "MovAccountEntry3") || null,
+    movAccountEntry4:
+      readString(item, "movAccountEntry4", "MovAccountEntry4") || null,
   };
 }
 
@@ -2771,6 +2773,64 @@ export function lookupItemCatalog(
   });
 }
 
+const ITEM_CATALOG_BY_CODES_BATCH = 500;
+
+/** Exact Itm_Code / Itm_Code2 lookup for many codes in a few HTTP requests. */
+export async function getItemCatalogByCodes(
+  token: string,
+  codes: readonly string[],
+  options?: {
+    onProgress?: (done: number, total: number) => void;
+  }
+): Promise<ItemCatalogItem[]> {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of codes) {
+    const code = raw.trim();
+    if (!code) continue;
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(code);
+  }
+
+  if (unique.length === 0) return [];
+
+  const items: ItemCatalogItem[] = [];
+  const total = unique.length;
+  options?.onProgress?.(0, total);
+
+  for (let offset = 0; offset < unique.length; offset += ITEM_CATALOG_BY_CODES_BATCH) {
+    const batch = unique.slice(offset, offset + ITEM_CATALOG_BY_CODES_BATCH);
+    const data = await apiFetch<unknown>(
+      "ItemCatalog/by-codes",
+      {
+        method: "POST",
+        body: JSON.stringify({ codes: batch }),
+      },
+      token
+    );
+
+    const rows = Array.isArray(data)
+      ? data
+      : data && typeof data === "object"
+        ? ((data as Record<string, unknown>).items ??
+            (data as Record<string, unknown>).Items ??
+            [])
+        : [];
+
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        items.push(normalizeItemCatalogItem(row as Record<string, unknown>));
+      }
+    }
+
+    options?.onProgress?.(Math.min(offset + batch.length, total), total);
+  }
+
+  return items;
+}
+
 /** Map lightweight lookup DTO onto ItemCatalogItem (prices needed for line apply). */
 function normalizeItemCatalogLookupItem(
   item: Record<string, unknown>
@@ -3022,34 +3082,80 @@ function normalizePurTransDExcelPreviewRow(
 
 export async function previewPurTransDExcel(
   token: string,
-  file: File
+  file: File,
+  options?: {
+    onUploadProgress?: (percent: number) => void;
+    onReading?: () => void;
+  }
 ): Promise<PurTransDExcelPreview> {
   const form = new FormData();
   form.append("file", file);
 
-  const response = await fetch("/api/purchase/excel-preview", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: form,
+  const raw = await new Promise<Record<string, unknown>>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/purchase/excel-preview");
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || event.total <= 0) return;
+      options?.onUploadProgress?.(
+        Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)))
+      );
+    };
+    xhr.upload.onload = () => {
+      options?.onUploadProgress?.(100);
+      options?.onReading?.();
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 401) {
+        clearAuthToken();
+      }
+
+      let body: Record<string, unknown> = {};
+      if (xhr.responseText) {
+        try {
+          body = JSON.parse(xhr.responseText) as Record<string, unknown>;
+        } catch {
+          reject(
+            new ApiError(
+              xhr.status,
+              xhr.responseText.slice(0, 200) || xhr.statusText
+            )
+          );
+          return;
+        }
+      }
+
+      if (xhr.status < 200 || xhr.status >= 300) {
+        if (xhr.status === 405) {
+          reject(
+            new ApiError(
+              405,
+              "Read Excel is not available on this Next.js server. Restart npm run dev so /api/purchase/excel-preview is loaded."
+            )
+          );
+          return;
+        }
+        reject(
+          new ApiError(
+            xhr.status,
+            String(body.message ?? body.Message ?? xhr.statusText)
+          )
+        );
+        return;
+      }
+
+      resolve(body);
+    };
+
+    xhr.onerror = () => {
+      reject(new ApiError(0, "The Excel file could not be read."));
+    };
+
+    xhr.send(form);
   });
 
-  if (response.status === 401) {
-    clearAuthToken();
-  }
-
-  if (!response.ok) {
-    if (response.status === 405) {
-      throw new ApiError(
-        response.status,
-        "Read Excel is not available on this Next.js server. Restart npm run dev so /api/purchase/excel-preview is loaded."
-      );
-    }
-    throw new ApiError(response.status, await parseError(response));
-  }
-
-  const raw = (await response.json()) as Record<string, unknown>;
   const rowsRaw = raw.rows ?? raw.Rows;
   const rows = Array.isArray(rowsRaw)
     ? rowsRaw.map((item) =>

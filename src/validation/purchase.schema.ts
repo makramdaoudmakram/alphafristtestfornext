@@ -19,6 +19,7 @@ export const purchaseHeaderSchema = z.object({
   movAccount: z.string().default(""),
   movAccountsec: z.string().default(""),
   movAccounttherd: z.string().default(""),
+  movAccountfourth: z.string().default(""),
   noOfItems: z.number(),
   totalQuantity: z.number(),
   totalBill: z.number(),

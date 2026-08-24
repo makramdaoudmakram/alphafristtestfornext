@@ -13,6 +13,7 @@ import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
 type HeaderFormProps = {
   form: UseFormReturn<PurchaseHeaderFormValues, unknown, PurchaseHeaderFormValues>;
   disabled: boolean;
+  totalDesMon?: number;
 };
 
 /** Half of default inline label column (9.5rem → ~4.75rem) */
@@ -55,9 +56,10 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
   };
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2">
       {/* Keep movement-mapped header fields registered so zodResolver does not wipe them */}
-      <input type="hidden" {...register("id", {
+      <div className="hidden">
+        <input type="hidden" {...register("id", {
         setValueAs: (value) => {
           if (value === "" || value == null) return null;
           const parsed = Number(value);
@@ -88,6 +90,17 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
       <input type="hidden" {...register("movAccount")} />
       <input type="hidden" {...register("movAccountsec")} />
       <input type="hidden" {...register("movAccounttherd")} />
+      <input type="hidden" {...register("movAccountfourth")} />
+      <input
+        type="hidden"
+        {...register("totalDesMon", {
+          setValueAs: (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : 0;
+          },
+        })}
+      />
+      </div>
       <div className="space-y-1">
         <FormFieldInline
           id="pthId"
@@ -164,7 +177,7 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
 }
 
 /** Totals, discounts, notice — bottom of page */
-export function HeaderTotalsFields({ form, disabled }: HeaderFormProps) {
+export function HeaderTotalsFields({ form, disabled, totalDesMon }: HeaderFormProps) {
   const { register } = form;
 
   const fieldProps = {
@@ -172,14 +185,10 @@ export function HeaderTotalsFields({ form, disabled }: HeaderFormProps) {
     labelClassName: headerLabelClass,
   };
 
+  const totalDesMonValue = totalDesMon ?? form.watch("totalDesMon") ?? 0;
+
   return (
-    <div className="flex justify-end">
-      <div className="w-full max-w-[50%] min-w-[14rem] space-y-3">
-        <ReadonlyMoney
-          id="noOfItems"
-          label="NoOfItems"
-          value={form.watch("noOfItems") ?? 0}
-        />
+    <div className="w-full min-w-0 space-y-3">
         <ReadonlyMoney
           id="totalQuantity"
           label="TotalQuantity"
@@ -211,7 +220,7 @@ export function HeaderTotalsFields({ form, disabled }: HeaderFormProps) {
         <ReadonlyMoney
           id="totalDesMon"
           label="TotalDesMon"
-          value={form.watch("totalDesMon") ?? 0}
+          value={totalDesMonValue}
         />
         <ReadonlyMoney
           id="totalTax"
@@ -246,7 +255,6 @@ export function HeaderTotalsFields({ form, disabled }: HeaderFormProps) {
             {...register("pthNotice")}
           />
         </FormFieldInlineWrap>
-      </div>
     </div>
   );
 }

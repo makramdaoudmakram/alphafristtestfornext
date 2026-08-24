@@ -1,30 +1,41 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, previewPurTransDExcel } from "@/lib/api-client";
+import { ApiError, getStors, previewPurTransDExcel } from "@/lib/api-client";
 import { enrichPurTransDExcelPreview } from "@/lib/purtransd-excel-enrich";
 import {
   flattenPurTransDExcelValidationErrors,
   formatPurTransDExcelFieldError,
   formatPurTransDExcelRowErrorBlock,
   validatePurTransDExcelPreview,
+  validatePurTransDExcelPreviewRow,
 } from "@/lib/purtransd-excel-validate";
 import {
   formatPurchaseExcelImportFailureMessage,
   importPurTransDExcelPurchase,
   previewToImportBase,
 } from "@/lib/purtransd-excel-import";
-import { getDefaultMovementStoreId } from "@/lib/purchase-stores";
+import {
+  formatStorDisplayName,
+  getDefaultMovementStoreId,
+} from "@/lib/purchase-stores";
 import { cn } from "@/lib/utils";
+import { createUnitService } from "@/services/unit.service";
 import { MovementLookup } from "@/components/movement/MovementLookup";
-import { PurchaseExcelImportWorkflowChecklist } from "@/components/purchase/PurchaseExcelImportWorkflowChecklist";
+import {
+  isExcelImportEditableField,
+  PurchaseExcelImportEditableCell,
+  type ExcelImportEditableField,
+} from "@/components/purchase/PurchaseExcelImportEditableCell";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FormFieldInline,
   FormFieldInlineWrap,
@@ -32,6 +43,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -41,6 +58,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { MovmentLookupItem } from "@/types/movment";
+import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { StorItem } from "@/types/stor";
+import type { UnitItem } from "@/types/unit";
 import {
   PURTRANS_D_EXCEL_VALIDATION_SUMMARY,
   type PurTransDExcelPreviewRowValidated,
@@ -48,6 +68,8 @@ import {
 } from "@/types/purchase";
 
 const PURCHASE_MOV_PARENT_ID = 1;
+const PREVIEW_PAGE_SIZE = 100;
+const ERROR_BANNER_LIMIT = 40;
 
 const PREVIEW_COLUMNS = [
   { key: "excelRowNumber", title: "Row" },
@@ -74,6 +96,43 @@ function cellText(value: string | number | null | undefined): string {
 
 function rowErrorFields(row: PurTransDExcelPreviewRowValidated): Set<string> {
   return new Set(row.errors.map((error) => error.field));
+}
+
+function selectedRowNumberSet(
+  rows: ReadonlyArray<{ excelRowNumber: number }>
+): Set<number> {
+  const next = new Set<number>();
+  for (const row of rows) next.add(row.excelRowNumber);
+  return next;
+}
+
+function countSelectedRows(
+  rows: ReadonlyArray<{ excelRowNumber: number }>,
+  selected: ReadonlySet<number>
+): number {
+  let count = 0;
+  for (const row of rows) {
+    if (selected.has(row.excelRowNumber)) count += 1;
+  }
+  return count;
+}
+
+function mergeValidatedPreviewRows(
+  current: PurTransDExcelPreviewValidated,
+  updatedRows: PurTransDExcelPreviewRowValidated[]
+): PurTransDExcelPreviewValidated {
+  const byNumber = new Map(
+    updatedRows.map((row) => [row.excelRowNumber, row])
+  );
+  const rows = current.rows.map(
+    (row) => byNumber.get(row.excelRowNumber) ?? row
+  );
+  return {
+    ...current,
+    rows,
+    rowCount: rows.length,
+    isValid: rows.length > 0 && rows.every((row) => row.isValid),
+  };
 }
 
 function PreviewRowErrors({
@@ -112,9 +171,27 @@ export function PurchaseExcelImportPage() {
     null
   );
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<{
+    percent: number;
+    label: string;
+  } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [itemByCode, setItemByCode] = useState<Map<string, ItemCatalogItem>>(
+    () => new Map()
+  );
+  const [previewPage, setPreviewPage] = useState(1);
+  const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const [selectedRowNumbers, setSelectedRowNumbers] = useState<Set<number>>(
+    () => new Set()
+  );
+  const [units, setUnits] = useState<UnitItem[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [stores, setStores] = useState<StorItem[]>([]);
+  const [storesLoading, setStoresLoading] = useState(false);
   const previewRef = useRef<PurTransDExcelPreviewValidated | null>(null);
+  const itemByCodeRef = useRef(itemByCode);
   previewRef.current = preview;
+  itemByCodeRef.current = itemByCode;
 
   async function handleLoadExcel() {
     if (!token) {
@@ -127,17 +204,58 @@ export function PurchaseExcelImportPage() {
     }
 
     setLoadingPreview(true);
+    setLoadProgress({ percent: 4, label: "Starting…" });
     try {
-      const parsed = await previewPurTransDExcel(token, file);
+      const parsed = await previewPurTransDExcel(token, file, {
+        onUploadProgress: (percent) => {
+          setLoadProgress({
+            percent: Math.round(percent * 0.4),
+            label: "Uploading file…",
+          });
+        },
+        onReading: () => {
+          setLoadProgress({ percent: 42, label: "Reading Excel…" });
+        },
+      });
+      setLoadProgress({ percent: 45, label: "Loading item data…" });
+
       const { preview: enriched, itemByCode } = await enrichPurTransDExcelPreview(
         parsed,
-        token
+        token,
+        {
+          onProgress: (done, total, phase) => {
+            const fraction = total <= 0 ? 1 : done / total;
+            if (phase === "catalog") {
+              setLoadProgress({
+                percent: Math.round(45 + fraction * 20),
+                label:
+                  total <= 0
+                    ? "Loading item data…"
+                    : `Loading items… ${done} of ${total}`,
+              });
+              return;
+            }
+            setLoadProgress({
+              percent: Math.round(65 + fraction * 23),
+              label:
+                total <= 0
+                  ? "Loading item data…"
+                  : `Loading item data… ${done} of ${total}`,
+            });
+          },
+        }
       );
+      setLoadProgress({ percent: 90, label: "Validating rows…" });
       const validated = await validatePurTransDExcelPreview(enriched, token, {
         itemByCode,
         movementStoId: getDefaultMovementStoreId(movement),
       });
+      setLoadProgress({ percent: 100, label: "Done" });
+      setItemByCode(itemByCode);
       setPreview(validated);
+      setSelectedRowNumbers(selectedRowNumberSet(validated.rows));
+      setPreviewPage(1);
+      setShowInvalidOnly(false);
 
       if (validated.isValid) {
         toast.success(
@@ -155,6 +273,8 @@ export function PurchaseExcelImportPage() {
       }
     } catch (error) {
       setPreview(null);
+      setItemByCode(new Map());
+      setSelectedRowNumbers(new Set());
       toast.error(
         error instanceof ApiError
           ? error.message
@@ -164,7 +284,77 @@ export function PurchaseExcelImportPage() {
       );
     } finally {
       setLoadingPreview(false);
+      setLoadProgress(null);
     }
+  }
+
+  function handleDeletePreviewRow(excelRowNumber: number) {
+    setPreview((current) => {
+      if (!current) return current;
+      const rows = current.rows.filter(
+        (row) => row.excelRowNumber !== excelRowNumber
+      );
+      if (rows.length === current.rows.length) return current;
+      return {
+        ...current,
+        rows,
+        rowCount: rows.length,
+        isValid: rows.length > 0 && rows.every((row) => row.isValid),
+      };
+    });
+    setSelectedRowNumbers((current) => {
+      if (!current.has(excelRowNumber)) return current;
+      const next = new Set(current);
+      next.delete(excelRowNumber);
+      return next;
+    });
+  }
+
+  function handleToggleRowSelected(excelRowNumber: number, selected: boolean) {
+    setSelectedRowNumbers((current) => {
+      const isSelected = current.has(excelRowNumber);
+      if (selected === isSelected) return current;
+      const next = new Set(current);
+      if (selected) next.add(excelRowNumber);
+      else next.delete(excelRowNumber);
+      return next;
+    });
+  }
+
+  function handleSelectAll(selected: boolean) {
+    if (!preview) return;
+    setSelectedRowNumbers(
+      selected ? selectedRowNumberSet(preview.rows) : new Set()
+    );
+  }
+
+  function handleChangePreviewField(
+    excelRowNumber: number,
+    field: ExcelImportEditableField,
+    value: string
+  ) {
+    const catalog = itemByCodeRef.current;
+    const movementStoId = getDefaultMovementStoreId(movement);
+    setPreview((current) => {
+      if (!current) return current;
+      let changed = false;
+      const rows = current.rows.map((row) => {
+        if (row.excelRowNumber !== excelRowNumber) return row;
+        if (row[field] === value) return row;
+        changed = true;
+        return validatePurTransDExcelPreviewRow(
+          { ...row, [field]: value },
+          catalog,
+          movementStoId
+        );
+      });
+      if (!changed) return current;
+      return {
+        ...current,
+        rows,
+        isValid: rows.length > 0 && rows.every((row) => row.isValid),
+      };
+    });
   }
 
   async function handleImportSave() {
@@ -172,7 +362,7 @@ export function PurchaseExcelImportPage() {
       toast.error("Sign in to import.");
       return;
     }
-    if (!preview?.isValid || !movement) {
+    if (!preview || !movement) {
       return;
     }
     if (!invoiceId.trim()) {
@@ -184,14 +374,38 @@ export function PurchaseExcelImportPage() {
       return;
     }
 
+    const selectedRows = preview.rows.filter((row) =>
+      selectedRowNumbers.has(row.excelRowNumber)
+    );
+    if (selectedRows.length === 0) {
+      toast.error("Please select at least one row to import.");
+      return;
+    }
+
+    const selectedPreview: PurTransDExcelPreviewValidated = {
+      ...preview,
+      rows: selectedRows,
+      rowCount: selectedRows.length,
+      isValid: selectedRows.every((row) => row.isValid),
+    };
+    if (!selectedPreview.isValid) {
+      toast.error(PURTRANS_D_EXCEL_VALIDATION_SUMMARY);
+      return;
+    }
+
     setImporting(true);
     try {
       const revalidated = await validatePurTransDExcelPreview(
-        previewToImportBase(preview),
+        previewToImportBase(selectedPreview),
         token,
-        { movementStoId: getDefaultMovementStoreId(movement) }
+        {
+          itemByCode: itemByCodeRef.current,
+          movementStoId: getDefaultMovementStoreId(movement),
+        }
       );
-      setPreview(revalidated);
+      setPreview((current) =>
+        current ? mergeValidatedPreviewRows(current, revalidated.rows) : current
+      );
       if (!revalidated.isValid) {
         toast.error(PURTRANS_D_EXCEL_VALIDATION_SUMMARY);
         return;
@@ -202,6 +416,7 @@ export function PurchaseExcelImportPage() {
         invoiceId,
         invoiceDate,
         preview: revalidated,
+        itemByCode: itemByCodeRef.current,
       });
 
       const label =
@@ -231,12 +446,101 @@ export function PurchaseExcelImportPage() {
   const validationErrors = preview
     ? flattenPurTransDExcelValidationErrors(preview)
     : [];
+  const invalidRowCount = preview
+    ? preview.rows.filter((row) => !row.isValid).length
+    : 0;
+  const validRowCount = preview ? preview.rowCount - invalidRowCount : 0;
+  const selectedCount = preview
+    ? countSelectedRows(preview.rows, selectedRowNumbers)
+    : 0;
+  const allRowsSelected =
+    preview != null && preview.rowCount > 0 && selectedCount === preview.rowCount;
+  const someRowsSelected = selectedCount > 0 && !allRowsSelected;
+  const selectedRowsValid =
+    preview != null &&
+    selectedCount > 0 &&
+    preview.rows.every(
+      (row) => !selectedRowNumbers.has(row.excelRowNumber) || row.isValid
+    );
   const canImport =
-    preview?.isValid === true &&
+    selectedRowsValid &&
     movement != null &&
     movement.movChiledId != null &&
     invoiceId.trim().length > 0 &&
     invoiceDate.trim().length > 0;
+  const visibleRows = preview
+    ? showInvalidOnly
+      ? preview.rows.filter((row) => !row.isValid)
+      : preview.rows
+    : [];
+  const previewPageCount = Math.max(
+    1,
+    Math.ceil(visibleRows.length / PREVIEW_PAGE_SIZE)
+  );
+  const currentPreviewPage = Math.min(previewPage, previewPageCount);
+  const pagedRows = visibleRows.slice(
+    (currentPreviewPage - 1) * PREVIEW_PAGE_SIZE,
+    currentPreviewPage * PREVIEW_PAGE_SIZE
+  );
+  const storeOptions = useMemo(
+    () =>
+      stores
+        .map((store) => ({
+          value: String(store.id),
+          label: formatStorDisplayName(store),
+        }))
+        .filter((option) => option.label.length > 0),
+    [stores]
+  );
+
+  useEffect(() => {
+    if (!token) {
+      setUnits([]);
+      setStores([]);
+      return;
+    }
+
+    let cancelled = false;
+    setUnitsLoading(true);
+    setStoresLoading(true);
+
+    void createUnitService(token)
+      .listUnits()
+      .then(({ units: loaded }) => {
+        if (!cancelled) setUnits(loaded);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setUnits([]);
+          toast.error(
+            error instanceof Error ? error.message : "Could not load units."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setUnitsLoading(false);
+      });
+
+    void getStors(token)
+      .then((loaded) => {
+        if (!cancelled) setStores(loaded);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setStores([]);
+          toast.error(
+            error instanceof Error ? error.message : "Could not load stores."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStoresLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     const current = previewRef.current;
@@ -244,6 +548,7 @@ export function PurchaseExcelImportPage() {
 
     let cancelled = false;
     void validatePurTransDExcelPreview(previewToImportBase(current), token, {
+      itemByCode: itemByCodeRef.current,
       movementStoId: getDefaultMovementStoreId(movement),
     }).then((validated) => {
       if (!cancelled) setPreview(validated);
@@ -253,6 +558,10 @@ export function PurchaseExcelImportPage() {
       cancelled = true;
     };
   }, [movement, token, loadingPreview, importing]);
+
+  useEffect(() => {
+    if (previewPage > previewPageCount) setPreviewPage(previewPageCount);
+  }, [previewPage, previewPageCount]);
 
   if (!sessionReady) {
     return (
@@ -265,22 +574,15 @@ export function PurchaseExcelImportPage() {
 
   return (
     <PageGuard permission={null}>
-      <div className="space-y-4">
+      <div className="min-w-0 max-w-full space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Import Purchase Excel</h2>
-            <p className="text-muted-foreground text-sm">
-              Import creates one purchase in a single server transaction: header,
-              detail lines, and stock updates use the same PurTransH save path as
-              the Purchase page.
-            </p>
           </div>
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard/transactions/purchase">Back to Purchase</Link>
           </Button>
         </div>
-
-        <PurchaseExcelImportWorkflowChecklist />
 
         <Card>
           <CardContent className="space-y-4 pt-6">
@@ -335,6 +637,10 @@ export function PurchaseExcelImportPage() {
                   onChange={(event) => {
                     setFile(event.target.files?.[0] ?? null);
                     setPreview(null);
+                    setItemByCode(new Map());
+                    setSelectedRowNumbers(new Set());
+                    setLoadProgress(null);
+                    setPreviewPage(1);
                   }}
                 />
                 <Button
@@ -351,11 +657,32 @@ export function PurchaseExcelImportPage() {
                 Selected: {file.name}
               </p>
             ) : null}
+            {loadingPreview || loadProgress ? (
+              <div className="space-y-1 sm:pl-[calc(7rem+1rem)]">
+                <div
+                  className="bg-muted h-2 w-full overflow-hidden rounded-full"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={loadProgress?.percent ?? 0}
+                  aria-label="Read Excel progress"
+                >
+                  <div
+                    className="bg-primary h-full rounded-full transition-[width] duration-200"
+                    style={{ width: `${loadProgress?.percent ?? 8}%` }}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {loadProgress?.label ?? "Reading…"}
+                  {loadProgress != null ? ` — ${loadProgress.percent}%` : ""}
+                </p>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
+        <Card className="min-w-0 overflow-hidden">
+          <CardContent className="min-w-0 overflow-hidden pt-6">
             {!preview ? (
               <p className="text-muted-foreground text-sm">
                 Choose a PurTransD template file and click Read Excel. Select a
@@ -363,86 +690,290 @@ export function PurchaseExcelImportPage() {
               </p>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm">
-                  {preview.fileName} — {preview.rowCount} row
-                  {preview.rowCount === 1 ? "" : "s"}
-                  {preview.isValid ? " — all valid" : " — validation errors found"}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm">
+                    {preview.fileName} — {preview.rowCount} row
+                    {preview.rowCount === 1 ? "" : "s"}
+                    {preview.rowCount === 0
+                      ? ""
+                      : preview.isValid
+                        ? " — all valid"
+                        : ` — ${validRowCount} valid, ${invalidRowCount} failed`}
+                    {preview.rowCount > 0
+                      ? ` — ${selectedCount} selected`
+                      : ""}
+                  </p>
+                  {invalidRowCount > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={showInvalidOnly ? "default" : "outline"}
+                      onClick={() => {
+                        setShowInvalidOnly((current) => !current);
+                        setPreviewPage(1);
+                      }}
+                    >
+                      {showInvalidOnly ? "Show all rows" : "Show failed rows"}
+                    </Button>
+                  ) : null}
+                </div>
 
                 {!preview.isValid ? (
                   <div className="space-y-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
                     <p className="font-medium">{PURTRANS_D_EXCEL_VALIDATION_SUMMARY}</p>
                     <ul className="space-y-2">
                       {preview.rows.flatMap((row) =>
-                        row.errors.map((error) => (
+                        row.errors.map((error) => ({ row, error }))
+                      )
+                        .slice(0, ERROR_BANNER_LIMIT)
+                        .map(({ row, error }) => (
                           <li
                             key={`${row.excelRowNumber}-${error.field}-${error.message}`}
                             className="whitespace-pre-wrap"
                           >
                             {formatPurTransDExcelFieldError(row, error)}
                           </li>
-                        ))
-                      )}
+                        ))}
                     </ul>
+                    {validationErrors.length > ERROR_BANNER_LIMIT ? (
+                      <p>
+                        Showing {ERROR_BANNER_LIMIT} of {validationErrors.length}{" "}
+                        errors. Use Show failed rows to review the rest.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {PREVIEW_COLUMNS.map((column) => (
-                        <TableHead key={column.key}>{column.title}</TableHead>
-                      ))}
-                      <TableHead>Errors</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {preview.rows.map((row) => {
-                      const errorFields = rowErrorFields(row);
+                {preview.rows.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    All rows were removed. Choose a file and click Read Excel
+                    again to reload the sheet.
+                  </p>
+                ) : (
+                  <>
+                    <TooltipProvider>
+                      <Table containerClassName="max-h-[min(70vh,40rem)] overflow-auto rounded-md border">
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="bg-background sticky top-0 left-0 z-30 w-28">
+                              <label className="flex items-center gap-2 font-medium">
+                                <Checkbox
+                                  checked={allRowsSelected}
+                                  disabled={importing || loadingPreview}
+                                  aria-label="Select all"
+                                  ref={(element) => {
+                                    if (element) {
+                                      element.indeterminate = someRowsSelected;
+                                    }
+                                  }}
+                                  onChange={(event) =>
+                                    handleSelectAll(event.target.checked)
+                                  }
+                                />
+                                <span>Select All</span>
+                              </label>
+                            </TableHead>
+                            {PREVIEW_COLUMNS.map((column) => (
+                              <TableHead
+                                key={column.key}
+                                className="bg-background sticky top-0 z-20"
+                              >
+                                {column.title}
+                              </TableHead>
+                            ))}
+                            <TableHead className="bg-background sticky top-0 z-20">
+                              Errors
+                            </TableHead>
+                            <TableHead className="bg-background sticky top-0 right-0 z-30 w-12 text-right shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.18)]">
+                              <span className="sr-only">Delete</span>
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pagedRows.map((row) => {
+                            const errorFields = rowErrorFields(row);
+                            const isSelected = selectedRowNumbers.has(
+                              row.excelRowNumber
+                            );
 
-                      return (
-                        <TableRow
-                          key={row.excelRowNumber}
-                          className={cn(
-                            !row.isValid &&
-                              "border-red-300 bg-red-50 hover:bg-red-50 data-[state=selected]:bg-red-50"
-                          )}
-                        >
-                          {PREVIEW_COLUMNS.map((column) => (
-                            <TableCell
-                              key={column.key}
-                              className={cn(
-                                errorFields.has(column.key) &&
-                                  "text-destructive font-semibold"
-                              )}
-                            >
-                              {cellText(row[column.key])}
-                            </TableCell>
-                          ))}
-                          <TableCell className="min-w-[14rem] align-top whitespace-normal">
-                            <PreviewRowErrors row={row} />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                            return (
+                              <TableRow
+                                key={row.excelRowNumber}
+                                className={cn(
+                                  !row.isValid &&
+                                    "border-red-300 bg-red-50 hover:bg-red-50 data-[state=selected]:bg-red-50"
+                                )}
+                              >
+                                <TableCell
+                                  className={cn(
+                                    "sticky left-0 z-10",
+                                    row.isValid ? "bg-background" : "bg-red-50"
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    disabled={importing || loadingPreview}
+                                    aria-label={`Select row ${row.excelRowNumber}`}
+                                    onChange={(event) =>
+                                      handleToggleRowSelected(
+                                        row.excelRowNumber,
+                                        event.target.checked
+                                      )
+                                    }
+                                  />
+                                </TableCell>
+                                {PREVIEW_COLUMNS.map((column) => (
+                                  <TableCell
+                                    key={column.key}
+                                    className={cn(
+                                      errorFields.has(column.key) &&
+                                        "text-destructive font-semibold",
+                                      isExcelImportEditableField(column.key) &&
+                                        "min-w-[6.5rem] align-top"
+                                    )}
+                                  >
+                                    {isExcelImportEditableField(column.key) ? (
+                                      <PurchaseExcelImportEditableCell
+                                        row={row}
+                                        field={column.key}
+                                        disabled={importing || loadingPreview}
+                                        itemByCode={itemByCode}
+                                        units={units}
+                                        unitsLoading={unitsLoading}
+                                        storeOptions={storeOptions}
+                                        storesLoading={storesLoading}
+                                        invalid={errorFields.has(column.key)}
+                                        onChange={(field, value) =>
+                                          handleChangePreviewField(
+                                            row.excelRowNumber,
+                                            field,
+                                            value
+                                          )
+                                        }
+                                      />
+                                    ) : (
+                                      cellText(row[column.key])
+                                    )}
+                                  </TableCell>
+                                ))}
+                                <TableCell className="min-w-[14rem] align-top whitespace-normal">
+                                  <PreviewRowErrors row={row} />
+                                </TableCell>
+                                <TableCell
+                                  className={cn(
+                                    "sticky right-0 z-10 text-right shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.18)]",
+                                    row.isValid ? "bg-background" : "bg-red-50"
+                                  )}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        disabled={importing || loadingPreview}
+                                        aria-label={`Delete row ${row.excelRowNumber}`}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          handleDeletePreviewRow(
+                                            row.excelRowNumber
+                                          );
+                                        }}
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Delete</TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TooltipProvider>
+                    {visibleRows.length > PREVIEW_PAGE_SIZE ? (
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-muted-foreground text-xs">
+                          Showing{" "}
+                          {(currentPreviewPage - 1) * PREVIEW_PAGE_SIZE + 1}–
+                          {Math.min(
+                            currentPreviewPage * PREVIEW_PAGE_SIZE,
+                            visibleRows.length
+                          )}{" "}
+                          of {visibleRows.length}
+                          {showInvalidOnly ? " failed" : ""} rows
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={currentPreviewPage <= 1}
+                            onClick={() =>
+                              setPreviewPage((page) => Math.max(1, page - 1))
+                            }
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-xs">
+                            Page {currentPreviewPage} of {previewPageCount}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={currentPreviewPage >= previewPageCount}
+                            onClick={() =>
+                              setPreviewPage((page) =>
+                                Math.min(previewPageCount, page + 1)
+                              )
+                            }
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                  {!preview.isValid ? (
+                  {preview.rowCount === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      No rows left to import.
+                    </p>
+                  ) : selectedCount === 0 ? (
                     <p className="text-destructive text-sm">
-                      Import / Save is blocked until all rows are valid.
+                      Please select at least one row to import.
+                    </p>
+                  ) : !selectedRowsValid ? (
+                    <p className="text-destructive text-sm">
+                      Import / Save is blocked until all selected rows are valid.
+                      Uncheck or delete invalid rows to continue.
                     </p>
                   ) : (
                     <p className="text-muted-foreground text-sm">
                       {canImport
-                        ? "All rows passed validation. Ready to import."
+                        ? `${selectedCount} selected row${
+                            selectedCount === 1 ? "" : "s"
+                          } ready to import.`
                         : "Complete Movement, Invoice ID, and Invoice Date to enable import."}
                     </p>
                   )}
                   <Button
                     type="button"
-                    disabled={!canImport || importing || loadingPreview}
+                    disabled={
+                      importing ||
+                      loadingPreview ||
+                      preview.rowCount === 0 ||
+                      movement == null ||
+                      movement.movChiledId == null ||
+                      !invoiceId.trim() ||
+                      !invoiceDate.trim() ||
+                      (selectedCount > 0 && !selectedRowsValid)
+                    }
                     onClick={() => void handleImportSave()}
                   >
                     {importing ? "Importing…" : "Import / Save"}

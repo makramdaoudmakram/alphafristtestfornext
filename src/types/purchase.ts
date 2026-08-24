@@ -18,6 +18,8 @@ export type PurchaseHeader = {
   movAccountsec: string;
   /** From movement MovAccountEntry3 */
   movAccounttherd: string;
+  /** From movement MovAccountEntry4 */
+  movAccountfourth: string;
   noOfItems: number;
   totalQuantity: number;
   totalBill: number;

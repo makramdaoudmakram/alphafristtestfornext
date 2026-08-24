@@ -195,6 +195,7 @@ export class PurchaseRepository {
         MovAccount: h.movAccount || null,
         MovAccountsec: h.movAccountsec || null,
         MovAccounttherd: h.movAccounttherd || null,
+        MovAccountfourth: h.movAccountfourth || null,
         PurchExtraDisCount: h.purchExtraDisCount,
         TotalDisPer: h.totalDisPer,
         POtherExpenses: h.pOtherExpenses,

@@ -33,6 +33,7 @@ export interface MovmentLookupItem {
   movAccountEntry1: string | null;
   movAccountEntry2: string | null;
   movAccountEntry3: string | null;
+  movAccountEntry4: string | null;
 }
 
 export type MovmentUpsertRequest = Omit<MovmentItem, "id">;

@@ -269,6 +269,15 @@ export function formatPurTransDExcelRowErrorBlock(
   return lines.join("\n");
 }
 
+/** Phase 6: validate one Excel preview row against PurTransD rules. */
+export function validatePurTransDExcelPreviewRow(
+  row: PurTransDExcelPreviewRow,
+  itemByCode: Map<string, ItemCatalogItem>,
+  movementStoId?: string | null
+): PurTransDExcelPreviewRowValidated {
+  return validatePreviewRow(row, itemByCode, movementStoId);
+}
+
 /** Phase 6: validate enriched Excel preview rows against PurTransD rules. */
 export async function validatePurTransDExcelPreview(
   preview: PurTransDExcelPreview,

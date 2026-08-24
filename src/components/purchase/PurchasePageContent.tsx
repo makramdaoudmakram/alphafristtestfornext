@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -29,13 +28,11 @@ import {
 } from "@/components/purchase/HeaderForm";
 import { SearchDialog } from "@/components/purchase/SearchDialog";
 import { Toolbar } from "@/components/purchase/Toolbar";
-import { TotalsCard } from "@/components/purchase/TotalsCard";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { PageGuard } from "@/components/permissions/page-guard";
 import {
   FormFieldInlineWrap,
 } from "@/components/ui/form-field-inline";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveMovementForPurchaseHeader } from "@/lib/purchase-movement";
@@ -318,6 +315,7 @@ export function PurchasePageContent() {
           movAccountEntry1: form.getValues("movAccountsec") || null,
           movAccountEntry2: form.getValues("movAccount") || null,
           movAccountEntry3: form.getValues("movAccounttherd") || null,
+          movAccountEntry4: form.getValues("movAccountfourth") || null,
         });
       } else {
         setSelectedMovement(null);
@@ -335,6 +333,7 @@ export function PurchasePageContent() {
           movAccountEntry1: form.getValues("movAccountsec") || null,
           movAccountEntry2: form.getValues("movAccount") || null,
           movAccountEntry3: form.getValues("movAccounttherd") || null,
+          movAccountEntry4: form.getValues("movAccountfourth") || null,
         });
       }
     }
@@ -368,6 +367,7 @@ export function PurchasePageContent() {
       const entry1 = mapped.movAccountEntry1?.trim() ?? "";
       const entry2 = mapped.movAccountEntry2?.trim() ?? "";
       const entry3 = mapped.movAccountEntry3?.trim() ?? "";
+      const entry4 = mapped.movAccountEntry4?.trim() ?? "";
       const defaultStoreId = getDefaultMovementStoreId(mapped);
 
       form.setValue("movmentRowId", mapped.id, {
@@ -379,6 +379,10 @@ export function PurchasePageContent() {
       form.setValue("movAccountsec", entry1, { shouldDirty: true, shouldValidate: false });
       form.setValue("movAccount", entry2, { shouldDirty: true, shouldValidate: false });
       form.setValue("movAccounttherd", entry3, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+      form.setValue("movAccountfourth", entry4, {
         shouldDirty: true,
         shouldValidate: false,
       });
@@ -398,6 +402,7 @@ export function PurchasePageContent() {
         form.setValue("movAccountsec", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccount", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccounttherd", "", { shouldDirty: true, shouldValidate: false });
+        form.setValue("movAccountfourth", "", { shouldDirty: true, shouldValidate: false });
         setDetails((rows) => applyDefaultStoreToNewDetailRows(rows, ""));
         return;
       }
@@ -434,6 +439,7 @@ export function PurchasePageContent() {
           movAccountEntry1: full.movAccountEntry1,
           movAccountEntry2: full.movAccountEntry2,
           movAccountEntry3: full.movAccountEntry3,
+          movAccountEntry4: full.movAccountEntry4,
         };
         applyMovementFields(mapped);
         if (!getDefaultMovementStoreId(mapped)) {
@@ -544,33 +550,12 @@ export function PurchasePageContent() {
           },
         })}
       />
-      <div className="space-y-4 print:space-y-2 lg:flex lg:min-h-[calc(100vh-6rem)] lg:flex-col">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Purchase transaction</h2>
-            <p className="text-muted-foreground text-sm">
-              PurTransH / PurTransD — vendor purchase invoice entry
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!token || templateDownloading}
-              onClick={() => void handleCreateExcelTemplate()}
-            >
-              {templateDownloading ? "Downloading…" : "Create Excel Template"}
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/dashboard/transactions/purchase/import">
-                Import Excel
-              </Link>
-            </Button>
-            <span className="text-muted-foreground text-xs uppercase tracking-wide">
-              Mode: {mode}
-            </span>
-          </div>
+      <div className="space-y-3 print:space-y-2 lg:flex lg:min-h-[calc(100vh-6rem)] lg:flex-col">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold">Purchase transaction</h2>
+          <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs font-medium uppercase tracking-wide">
+            Mode: {mode}
+          </span>
         </div>
 
         <Toolbar
@@ -600,28 +585,41 @@ export function PurchasePageContent() {
           onNext={() => void navigate("next", itemByCode, catalogItems)}
           onLast={() => void navigate("last", itemByCode, catalogItems)}
           onSearch={() => setSearchOpen(true)}
+          onCreateExcelTemplate={() => void handleCreateExcelTemplate()}
+          excelTemplateDisabled={!token || templateDownloading}
+          excelTemplateLoading={templateDownloading}
+          excelImportHref="/dashboard/transactions/purchase/import"
         />
 
-        <TotalsCard {...computedTotals} />
-
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="pt-3">
             {loading ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <Skeleton className="h-9 w-full" />
-                <Skeleton className="h-9 w-full" />
-                <Skeleton className="h-9 w-full" />
-                <Skeleton className="h-9 w-full" />
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)]">
+                <div className="space-y-3">
+                  <Skeleton className="h-9 w-full" />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <Skeleton className="h-9 w-full" />
+                  <Skeleton className="h-9 w-full" />
+                  <Skeleton className="h-9 w-full" />
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <FormFieldInlineWrap
                   id="purchase-movement"
                   label="Movement"
-                  className="sm:grid-cols-[4.75rem_minmax(0,1fr)] w-full max-w-full sm:max-w-[50%]"
+                  className="sm:grid-cols-[4.75rem_minmax(0,1fr)] w-full"
                   labelClassName="text-neutral-950 shrink-0 text-sm font-semibold sm:text-end"
                 >
                   <MovementLookup
+                    id="purchase-movement"
                     parentId={PURCHASE_MOV_PARENT_ID}
                     token={token}
                     value={selectedMovement}
@@ -634,11 +632,18 @@ export function PurchasePageContent() {
                     Loading next PthId…
                   </p>
                 ) : null}
-                <HeaderPrimaryFields
-                  key={recordId ?? "new"}
-                  form={form}
-                  disabled={!isEditable}
-                />
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)] lg:items-start">
+                  <HeaderPrimaryFields
+                    key={recordId ?? "new"}
+                    form={form}
+                    disabled={!isEditable}
+                  />
+                  <HeaderTotalsFields
+                    form={form}
+                    disabled={!isEditable}
+                    totalDesMon={computedTotals.totalDesMon}
+                  />
+                </div>
               </div>
             )}
           </CardContent>
@@ -667,20 +672,6 @@ export function PurchasePageContent() {
               }
               onRemoveRow={removeDetailRow}
             />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            {loading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-9 w-full max-w-md ml-auto" />
-                <Skeleton className="h-9 w-full max-w-md ml-auto" />
-                <Skeleton className="h-9 w-full max-w-md ml-auto" />
-              </div>
-            ) : (
-              <HeaderTotalsFields form={form} disabled={!isEditable} />
-            )}
           </CardContent>
         </Card>
 

@@ -2,7 +2,9 @@ import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
 import type { ComboboxOption } from "@/components/ui/searchable-combobox";
 import {
+  fetchAllItemCatalogItems,
   getItemCatalog,
+  getItemCatalogByCodes,
   getItemCatalogPage,
   lookupItemCatalog,
 } from "@/lib/api-client";
@@ -137,9 +139,23 @@ export function findCatalogItemByCode(
 
   return (
     catalogItems?.find(
-      (item) => item.itmCode?.trim().toLowerCase() === key
+      (item) =>
+        item.itmCode?.trim().toLowerCase() === key ||
+        item.itmCode2?.trim().toLowerCase() === key
     ) ?? null
   );
+}
+
+function indexCatalogItem(
+  map: Map<string, ItemCatalogItem>,
+  item: ItemCatalogItem,
+  catalogItems?: readonly ItemCatalogItem[]
+): void {
+  const merged = mergeCatalogItemWithCache(item, map, catalogItems);
+  const code = merged.itmCode?.trim().toLowerCase();
+  if (code) map.set(code, merged);
+  const code2 = merged.itmCode2?.trim().toLowerCase();
+  if (code2) map.set(code2, merged);
 }
 
 export function formatUnitOptionLabel(
@@ -259,10 +275,7 @@ export async function ensureCatalogItemsForDetails(
       catalogItems
     );
     if (!resolved) continue;
-
-    const merged = mergeCatalogItemWithCache(resolved, map, catalogItems);
-    const mergedCode = merged.itmCode?.trim().toLowerCase();
-    if (mergedCode) map.set(mergedCode, merged);
+    indexCatalogItem(map, resolved, catalogItems);
   }
 
   return map;
@@ -273,28 +286,63 @@ export async function ensureCatalogItemsForItmCodes(
   details: ReadonlyArray<{ itmId: string }>,
   itemByCode: Map<string, ItemCatalogItem>,
   catalogItems: readonly ItemCatalogItem[] | undefined,
-  token: string
+  token: string,
+  onProgress?: (done: number, total: number) => void
 ): Promise<Map<string, ItemCatalogItem>> {
   const map = new Map(itemByCode);
+  const uniqueCodes: string[] = [];
+  const seen = new Set<string>();
 
   for (const row of details) {
     const code = row.itmId?.trim();
     if (!code) continue;
-    if (findCatalogItemByCode(code, map, catalogItems)) continue;
-
-    const resolved = await resolveCatalogItemByCode(
-      token,
-      code,
-      map,
-      catalogItems
-    );
-    if (!resolved) continue;
-
-    const merged = mergeCatalogItemWithCache(resolved, map, catalogItems);
-    const mergedCode = merged.itmCode?.trim().toLowerCase();
-    if (mergedCode) map.set(mergedCode, merged);
+    const key = code.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueCodes.push(code);
   }
 
+  const total = uniqueCodes.length;
+  onProgress?.(0, total);
+
+  const missing = uniqueCodes.filter(
+    (code) => !findCatalogItemByCode(code, map, catalogItems)
+  );
+
+  if (missing.length > 0) {
+    try {
+      const items = await getItemCatalogByCodes(token, missing, {
+        onProgress: (done, _batchTotal) => {
+          onProgress?.(Math.min(done, total), total);
+        },
+      });
+      for (const item of items) {
+        indexCatalogItem(map, item, catalogItems);
+      }
+    } catch {
+      try {
+        const all = await fetchAllItemCatalogItems(token);
+        for (const item of all) {
+          indexCatalogItem(map, item, catalogItems);
+        }
+      } catch {
+        for (let index = 0; index < missing.length; index += 1) {
+          const code = missing[index];
+          if (!code) continue;
+          const resolved = await resolveCatalogItemByCode(
+            token,
+            code,
+            map,
+            catalogItems
+          );
+          if (resolved) indexCatalogItem(map, resolved, catalogItems);
+          onProgress?.(index + 1, total);
+        }
+      }
+    }
+  }
+
+  onProgress?.(total, total);
   return map;
 }
 

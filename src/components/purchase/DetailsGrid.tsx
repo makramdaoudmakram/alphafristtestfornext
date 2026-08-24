@@ -563,31 +563,33 @@ export function DetailsGrid({
         </Button>
       }
       hint={
-        <>
-          Drag column borders to resize. Use ⋮ to show or hide columns (saved automatically).
-          Keyboard: type in Arabic / English name for autocomplete (max 15). ↑↓ to highlight a
-          suggestion, Enter to apply and jump to Qty.
-          {catalogLoading ? (
-            <span className="text-muted-foreground block pt-1">
-              Loading item catalog…
-            </span>
-          ) : null}
-          {unitsLoading ? (
-            <span className="text-muted-foreground block pt-1">
-              Loading unit names…
-            </span>
-          ) : null}
-          {storesLoading ? (
-            <span className="text-muted-foreground block pt-1">
-              Loading stores…
-            </span>
-          ) : null}
-          {catalogLoaded && catalogItems.length === 0 ? (
-            <span className="text-destructive block pt-1">
-              Item catalog not loaded — stay signed in and confirm the API is running.
-            </span>
-          ) : null}
-        </>
+        catalogLoading ||
+        unitsLoading ||
+        storesLoading ||
+        (catalogLoaded && catalogItems.length === 0) ? (
+          <>
+            {catalogLoading ? (
+              <span className="text-muted-foreground block">
+                Loading item catalog…
+              </span>
+            ) : null}
+            {unitsLoading ? (
+              <span className="text-muted-foreground block">
+                Loading unit names…
+              </span>
+            ) : null}
+            {storesLoading ? (
+              <span className="text-muted-foreground block">
+                Loading stores…
+              </span>
+            ) : null}
+            {catalogLoaded && catalogItems.length === 0 ? (
+              <span className="text-destructive block">
+                Item catalog not loaded — stay signed in and confirm the API is running.
+              </span>
+            ) : null}
+          </>
+        ) : undefined
       }
     />
   );

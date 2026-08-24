@@ -1,11 +1,13 @@
-import { getUnitConversionInfo } from "@/lib/api-client";
 import { catalogDefaultPrices } from "@/lib/item-catalog-search";
 import {
   ensureCatalogItemsForItmCodes,
   findCatalogItemByCode,
   getItemDefaultUnitId,
 } from "@/lib/item-unit-options";
-import { applyPriceQtyNetToBasePrices } from "@/lib/purchase-unit-conversion";
+import {
+  applyPriceQtyNetToBasePrices,
+  priceQtyNetFromCatalogItem,
+} from "@/lib/purchase-unit-conversion";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type {
   PurTransDExcelPreview,
@@ -26,17 +28,13 @@ function isPriceEmpty(value: string | null | undefined): boolean {
   return !Number.isFinite(parsed) || parsed === 0;
 }
 
-function excelConversionQuantity(row: PurTransDExcelPreviewRow): number {
-  return (Number(row.qnty) || 0) + (Number(row.bonus) || 0);
-}
-
 function formatPreviewNumber(value: number): string {
   if (!Number.isFinite(value)) return "";
   const rounded = Number(value.toFixed(4));
   return String(rounded);
 }
 
-function enrichCatalogFields(
+function enrichPreviewRow(
   row: PurTransDExcelPreviewRow,
   itemByCode: Map<string, ItemCatalogItem>
 ): PurTransDExcelPreviewRow {
@@ -47,80 +45,59 @@ function enrichCatalogFields(
   if (!item) return row;
 
   const defaultUnitId = getItemDefaultUnitId(item);
+  const unitId =
+    isUnitEmpty(row.unitId) && defaultUnitId != null
+      ? String(defaultUnitId)
+      : row.unitId;
 
-  return {
+  const fillPurFromCatalog = isPriceEmpty(row.itmPurPrice);
+  const fillSellFromCatalog = isPriceEmpty(row.itmSell);
+
+  const next: PurTransDExcelPreviewRow = {
     ...row,
     itmNameAr: item.itmNameAr?.trim() || row.itmNameAr,
     itmNameEn: item.itmNameEn?.trim() || row.itmNameEn,
-    unitId:
-      isUnitEmpty(row.unitId) && defaultUnitId != null
-        ? String(defaultUnitId)
-        : row.unitId,
+    unitId,
   };
-}
 
-async function enrichPricesAndUnitConversion(
-  row: PurTransDExcelPreviewRow,
-  itemByCode: Map<string, ItemCatalogItem>,
-  token: string
-): Promise<PurTransDExcelPreviewRow> {
-  const enriched = enrichCatalogFields(row, itemByCode);
+  if (!fillPurFromCatalog && !fillSellFromCatalog) return next;
 
-  const code = enriched.itmId?.trim();
-  if (!code) return enriched;
-
-  const item = findCatalogItemByCode(code, itemByCode);
-  if (!item) return enriched;
-
-  const unitId = Number(enriched.unitId);
-  if (!Number.isFinite(unitId) || unitId <= 0) return enriched;
-
-  const fillPurFromCatalog = isPriceEmpty(enriched.itmPurPrice);
-  const fillSellFromCatalog = isPriceEmpty(enriched.itmSell);
-  if (!fillPurFromCatalog && !fillSellFromCatalog) return enriched;
+  const parsedUnitId = Number(unitId);
+  if (!Number.isFinite(parsedUnitId) || parsedUnitId <= 0) return next;
 
   const { itmPurPrice: catalogPur, itmSell: catalogSell } =
     catalogDefaultPrices(item);
-
-  let priceQtyNet: number | null = 1;
-  try {
-    const info = await getUnitConversionInfo(
-      token,
-      code,
-      unitId,
-      excelConversionQuantity(enriched)
-    );
-    if (!info.errorMessage) {
-      priceQtyNet = info.priceQtyNet;
-    }
-  } catch {
-    priceQtyNet = 1;
-  }
-
   const converted = applyPriceQtyNetToBasePrices(
     catalogPur,
     catalogSell,
-    priceQtyNet
+    priceQtyNetFromCatalogItem(item, parsedUnitId)
   );
 
   return {
-    ...enriched,
+    ...next,
     itmPurPrice: fillPurFromCatalog
       ? formatPreviewNumber(converted.itmPurPrice)
-      : enriched.itmPurPrice,
+      : next.itmPurPrice,
     itmSell: fillSellFromCatalog
       ? formatPreviewNumber(converted.itmSell)
-      : enriched.itmSell,
+      : next.itmSell,
   };
 }
 
 /**
  * Phase 4: ItemCatalog names + default Unit (Itm_Unit1).
- * Phase 5: catalog prices when empty/zero + GetUnitConversionInfo PriceQtyNet.
+ * Phase 5: catalog prices when empty/zero + PriceQtyNet from catalog unit factors.
  */
 export async function enrichPurTransDExcelPreview(
   preview: PurTransDExcelPreview,
-  token: string
+  token: string,
+  options?: {
+    onProgress?: (
+      done: number,
+      total: number,
+      phase: "catalog" | "rows"
+    ) => void;
+  }
 ): Promise<{
   preview: PurTransDExcelPreview;
   itemByCode: Map<string, ItemCatalogItem>;
@@ -129,14 +106,27 @@ export async function enrichPurTransDExcelPreview(
     preview.rows.map((row) => ({ itmId: row.itmId })),
     new Map<string, ItemCatalogItem>(),
     undefined,
-    token
+    token,
+    (done, total) => options?.onProgress?.(done, total, "catalog")
   );
 
-  const rows = await Promise.all(
-    preview.rows.map((row) =>
-      enrichPricesAndUnitConversion(row, itemByCode, token)
-    )
-  );
+  const total = preview.rows.length;
+  const rows: PurTransDExcelPreviewRow[] = [];
+  const chunkSize = 250;
+  options?.onProgress?.(0, total, "rows");
+
+  for (let index = 0; index < total; index += chunkSize) {
+    const end = Math.min(index + chunkSize, total);
+    for (let rowIndex = index; rowIndex < end; rowIndex += 1) {
+      const row = preview.rows[rowIndex];
+      if (!row) continue;
+      rows.push(enrichPreviewRow(row, itemByCode));
+    }
+    options?.onProgress?.(end, total, "rows");
+    if (end < total) {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    }
+  }
 
   return {
     preview: {

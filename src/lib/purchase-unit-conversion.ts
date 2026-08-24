@@ -1,4 +1,34 @@
+import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail } from "@/types/purchase";
+
+/** Same PriceQtyNet factor as UnitConversionService.ConvertToBaseUnitCore. */
+export function priceQtyNetFromCatalogItem(
+  item: Pick<
+    ItemCatalogItem,
+    "itmUnit1" | "itmUnit2" | "itmUnit3" | "itmUnit1Unit2" | "itmUnit1Unit3"
+  >,
+  unitId: number
+): number {
+  if (!Number.isFinite(unitId) || unitId <= 0) return 1;
+
+  if (item.itmUnit3 != null && unitId === item.itmUnit3) {
+    const factor = item.itmUnit1Unit3;
+    if (factor == null || !Number.isFinite(factor) || factor <= 0) return 1;
+    return 1 / factor;
+  }
+
+  if (item.itmUnit1 != null && unitId === item.itmUnit1) {
+    return 1;
+  }
+
+  if (item.itmUnit2 != null && unitId === item.itmUnit2) {
+    const factor = item.itmUnit1Unit2;
+    if (factor == null || !Number.isFinite(factor) || factor <= 0) return 1;
+    return 1 / factor;
+  }
+
+  return 1;
+}
 
 /** Apply API PriceQtyNet to original Unit 1 prices. Does not compute the factor. */
 export function applyPriceQtyNetToBasePrices(

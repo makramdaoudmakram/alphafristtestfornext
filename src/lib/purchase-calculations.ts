@@ -262,7 +262,7 @@ export function computeTotalQuantity(details: PurchaseDetail[]): number {
 
 /** ERP totals for PurTransH readonly fields */
 export function computeHeaderTotals(
-  header: Pick<
+  _header: Pick<
     PurchaseHeader,
     "purchExtraDisCount" | "totalDisPer" | "pOtherExpenses"
   >,
@@ -276,24 +276,15 @@ export function computeHeaderTotals(
   const totalQuantity = computeTotalQuantity(lines);
   const totalBill = lines.reduce((sum, row) => sum + row.lineTotal, 0);
   const totalTax = lines.reduce((sum, row) => sum + (row.itmTaxTotal ?? 0), 0);
-  const totalDesMon =
-    Math.round(((totalBill * (header.totalDisPer ?? 0)) / 100) * 100) / 100;
-  const pthNetBill =
-    Math.round(
-      (totalBill -
-        totalDesMon -
-        (header.purchExtraDisCount ?? 0) +
-        totalTax +
-        (header.pOtherExpenses ?? 0)) *
-        100
-    ) / 100;
+  const totalDesMon = lines.reduce((sum, row) => sum + (row.itmDisMon ?? 0), 0);
+  const pthNetBill = lines.reduce((sum, row) => sum + (row.itmNet ?? 0), 0);
 
   return {
     noOfItems,
     totalQuantity,
-    totalBill: Math.round(totalBill * 100) / 100,
-    totalDesMon,
-    totalTax: Math.round(totalTax * 100) / 100,
-    pthNetBill,
+    totalBill: roundMoney(totalBill),
+    totalDesMon: roundMoney(totalDesMon),
+    totalTax: roundMoney(totalTax),
+    pthNetBill: roundMoney(pthNetBill),
   };
 }

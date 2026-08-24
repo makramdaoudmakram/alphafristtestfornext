@@ -16,6 +16,7 @@ export function toMovmentLookupItem(
     movAccountEntry1: item.movAccountEntry1,
     movAccountEntry2: item.movAccountEntry2,
     movAccountEntry3: item.movAccountEntry3,
+    movAccountEntry4: item.movAccountEntry4 ?? null,
   };
 }
 

@@ -20,6 +20,7 @@ export type MovementLookupProps = {
   emptyMessage?: string;
   disabled?: boolean;
   className?: string;
+  id?: string;
 };
 
 function optionLabel(item: MovmentLookupItem): string {
@@ -43,6 +44,7 @@ export function MovementLookup({
   emptyMessage = "No movements found.",
   disabled = false,
   className,
+  id,
 }: MovementLookupProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -124,12 +126,13 @@ export function MovementLookup({
   return (
     <div ref={containerRef} className={cn("relative w-full", className)}>
       <Button
+        id={id}
         type="button"
         variant="outline"
         disabled={disabled}
         aria-expanded={open}
         className={cn(
-          "w-full justify-between font-normal",
+          "h-9 w-full justify-between px-3 font-normal shadow-xs",
           formControlFocusClass
         )}
         onClick={() => {

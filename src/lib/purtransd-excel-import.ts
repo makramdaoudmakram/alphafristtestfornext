@@ -17,6 +17,7 @@ import {
 import { getDefaultMovementStoreId } from "@/lib/purchase-stores";
 import { ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import { createPurchaseService } from "@/services/purchase.service";
+import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { MovmentLookupItem } from "@/types/movment";
 import type {
   PurchaseDetail,
@@ -31,6 +32,7 @@ export type PurchaseExcelImportInput = {
   invoiceId: string;
   invoiceDate: string;
   preview: PurTransDExcelPreviewValidated;
+  itemByCode?: Map<string, ItemCatalogItem>;
 };
 
 function parseOptionalNumber(raw: string | null | undefined): number | null {
@@ -183,12 +185,15 @@ export async function importPurTransDExcelPurchase(
     movement
   );
 
-  const itemByCode = await ensureCatalogItemsForItmCodes(
-    details.map((row) => ({ itmId: row.itmId })),
-    new Map(),
-    undefined,
-    token
-  );
+  const itemByCode =
+    input.itemByCode && input.itemByCode.size > 0
+      ? input.itemByCode
+      : await ensureCatalogItemsForItmCodes(
+          details.map((row) => ({ itmId: row.itmId })),
+          new Map(),
+          undefined,
+          token
+        );
 
   const service = createPurchaseService(token);
   const validation = service.validateDocument(
