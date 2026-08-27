@@ -1,5 +1,5 @@
 import type { ItemCatalogItem } from "@/types/item-catalog";
-import type { PurchaseDetail } from "@/types/purchase";
+import type { PurchaseDetail, PurchaseDetailPatch } from "@/types/purchase";
 import {
   getItemDefaultUnitId,
   resolveUnitIdForItem,
@@ -31,7 +31,7 @@ export function catalogDefaultPrices(item: ItemCatalogItem): {
 
 export function patchDetailFromCatalogItem(
   item: ItemCatalogItem
-): Partial<PurchaseDetail> {
+): PurchaseDetailPatch {
   const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
   return {
     itmId: item.itmCode?.trim() ?? "",
@@ -43,6 +43,8 @@ export function patchDetailFromCatalogItem(
     baseItmPurPrice: itmPurPrice,
     baseItmSell: itmSell,
     priceQtyNet: 1,
+    skipDiscPercent: true,
+    skipTax: true,
   };
 }
 

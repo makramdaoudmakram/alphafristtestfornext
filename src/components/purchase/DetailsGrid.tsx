@@ -27,7 +27,6 @@ import {
   findCatalogItemByCode,
   getItemDefaultUnitId,
 } from "@/lib/item-unit-options";
-import { toastStockUnitConversion } from "@/lib/purchase-stock-conversion-toast";
 import { formatStorDisplayName } from "@/lib/purchase-stores";
 import {
   applyPriceQtyNetToBasePrices,
@@ -36,7 +35,7 @@ import {
 } from "@/lib/purchase-unit-conversion";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
-import type { PurchaseDetail } from "@/types/purchase";
+import type { PurchaseDetail, PurchaseDetailPatch } from "@/types/purchase";
 import type { StorItem } from "@/types/stor";
 import type { UnitItem } from "@/types/unit";
 
@@ -56,8 +55,8 @@ function parseOptionalNumber(raw: string): number | null {
 /** Keep Qty + Bonus from the same visible detail row when recalculating tax. */
 function withSameRowQtyBonus(
   row: PurchaseDetail,
-  patch: Partial<PurchaseDetail>
-): Partial<PurchaseDetail> {
+  patch: PurchaseDetailPatch
+): PurchaseDetailPatch {
   return {
     qnty: row.qnty,
     bonus: row.bonus,
@@ -94,7 +93,7 @@ type DetailsGridProps = {
   disabled: boolean;
   selectedRowIndex: number;
   onSelectRow: (index: number) => void;
-  onChangeRow: (index: number, patch: Partial<PurchaseDetail>) => void;
+  onChangeRow: (index: number, patch: PurchaseDetailPatch) => void;
   onCatalogItemApplied?: (item: ItemCatalogItem) => void;
   onAddRow: () => void;
   onRemoveRow: (index: number) => void;
@@ -140,7 +139,8 @@ export function DetailsGrid({
     row: PurchaseDetail,
     itemCode: string,
     unitId: number | null,
-    basePrices?: { baseItmPurPrice: number; baseItmSell: number }
+    basePrices?: { baseItmPurPrice: number; baseItmSell: number },
+    options?: { skipDiscPercent?: boolean; skipTax?: boolean }
   ) => {
     const code = itemCode.trim();
     if (!token || !code || unitId == null || unitId <= 0) return;
@@ -191,19 +191,9 @@ export function DetailsGrid({
           baseItmPurPrice: base.baseItmPurPrice,
           baseItmSell: base.baseItmSell,
           priceQtyNet: nextPrices.priceQtyNet,
+          skipDiscPercent: options?.skipDiscPercent === true ? true : undefined,
+          skipTax: options?.skipTax === true ? true : undefined,
         })
-      );
-
-      void toastStockUnitConversion(
-        token,
-        code,
-        unitId,
-        stockConversionQuantity(row),
-        {
-          purchasePrice: nextPrices.itmPurPrice,
-          salesPrice: nextPrices.itmSell,
-        },
-        info
       );
     })();
   }, [onChangeRow, token]);
@@ -320,7 +310,7 @@ export function DetailsGrid({
               applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
                 baseItmPurPrice: itmPurPrice,
                 baseItmSell: itmSell,
-              });
+              }, { skipDiscPercent: true, skipTax: true });
             }}
             onAfterApply={() =>
               keyboardRef.current?.focusColumnAfter(row.index, "itmNameAr")
@@ -351,7 +341,7 @@ export function DetailsGrid({
               applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
                 baseItmPurPrice: itmPurPrice,
                 baseItmSell: itmSell,
-              });
+              }, { skipDiscPercent: true, skipTax: true });
             }}
             onAfterApply={() =>
               keyboardRef.current?.focusColumnAfter(row.index, "itmNameEn")

@@ -27,9 +27,10 @@ export const purchaseHeaderSchema = z.object({
   totalDisPer: z.coerce.number().min(0).max(100).default(0),
   totalDesMon: z.number(),
   totalTax: z.number(),
-  pOtherExpenses: z.coerce.number().min(0).default(0),
+  pOtherExpenses: z.coerce.number().min(0).max(100).default(0),
   pthNetBill: z.number(),
   pthNotice: z.string().default(""),
+  movStat: z.number().nullable().default(null),
 });
 
 export type PurchaseHeaderFormValues = z.output<typeof purchaseHeaderSchema>;
@@ -40,7 +41,6 @@ export const purchaseDetailRowSchema = z.object({
   itmId: z.string().trim().min(1, "Item is required"),
   itmNameAr: z.string().default(""),
   itmNameEn: z.string().default(""),
-  cId: z.coerce.number().int().min(0),
   expDate: z.string().optional().default(""),
   qnty: z.coerce.number().positive("Quantity must be greater than zero"),
   bonus: z.coerce.number().min(0).default(0),

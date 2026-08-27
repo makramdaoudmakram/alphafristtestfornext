@@ -28,7 +28,9 @@ import {
   createPurchaseService,
   PurchaseRepositoryError,
 } from "@/services/purchase.service";
-import type { PurchaseDetail, PurchaseHeader, PurchaseSearchFilters } from "@/types/purchase";
+import { ApiError } from "@/lib/api-client";
+import type { StockBarcodeLabel } from "@/types/stock";
+import type { PurchaseDetail, PurchaseDetailPatch, PurchaseHeader, PurchaseSearchFilters, PurchaseStockBatch } from "@/types/purchase";
 import type { MovmentLookupItem } from "@/types/movment";
 import {
   purchaseHeaderSchema,
@@ -37,14 +39,47 @@ import {
 
 export type PurchaseFormMode = "view" | "new" | "edit";
 
+/**
+ * Single place that decides Post button visibility from the current purchase record.
+ * Call this whenever page/record state changes instead of setting Visible = true after save.
+ *
+ * Hidden: new page / no purchase record, or MovStat = 5 (already posted).
+ * Visible: saved/updated unposted purchase. Stays visible if posting fails.
+ */
+export function updatePostButtonVisibility(options: {
+  recordId: number | null | undefined;
+  movStat: number | null | undefined;
+}): boolean {
+  const hasPurchRecord = options.recordId != null && options.recordId > 0;
+  if (!hasPurchRecord) return false;
+  if (options.movStat === 5) return false;
+  return true;
+}
+
+/** Transfer: hidden on new page; visible when saved/posted (MovStat 0–5). API uses 0 for saved, 5 for posted. */
+export function updateTransferButtonVisibility(options: {
+  recordId: number | null | undefined;
+  movStat: number | null | undefined;
+}): boolean {
+  const hasPurchRecord = options.recordId != null && options.recordId > 0;
+  if (!hasPurchRecord) return false;
+  const stat = options.movStat;
+  if (stat == null) return false;
+  return stat >= 0 && stat <= 5;
+}
+
 export function usePurchase(token: string | undefined) {
   const [mode, setMode] = useState<PurchaseFormMode>("new");
   const [details, setDetails] = useState<PurchaseDetail[]>([createEmptyDetailRow()]);
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [navIds, setNavIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [stockBarcodePrintOpen, setStockBarcodePrintOpen] = useState(false);
+  const [stockBarcodeLabels, setStockBarcodeLabels] = useState<StockBarcodeLabel[]>([]);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   /** Synchronous mirrors — React state can lag one frame behind Save. */
   const loadedRecordIdRef = useRef<number | null>(null);
   const initialDetailIdsRef = useRef<number[]>([]);
@@ -95,8 +130,51 @@ export function usePurchase(token: string | undefined) {
     [token]
   );
 
-  const isEditable = mode === "new" || mode === "edit";
+  const openInsertedStockBarcodePrint = useCallback(
+    async (
+      recordId: number | null | undefined,
+      batches: PurchaseStockBatch[] | undefined
+    ) => {
+      if (!service || recordId == null || recordId <= 0) return;
+
+      const inserted = (batches ?? []).filter((batch) => batch.inserted);
+      if (inserted.length === 0) return;
+
+      try {
+        const labels = await service.getStockBarcodeLabels(recordId);
+        const insertedBatchNos = new Set(inserted.map((batch) => batch.batchNo.trim()));
+        const toPrint = labels.filter((label) =>
+          insertedBatchNos.has(label.batchNo.trim())
+        );
+        if (toPrint.length === 0) return;
+
+        setStockBarcodeLabels(toPrint);
+        setStockBarcodePrintOpen(true);
+      } catch {
+        // User can retry from the toolbar Print Barcode button.
+      }
+    },
+    [service]
+  );
+
+  const isEditable =
+    (mode === "new" || mode === "edit") && form.watch("movStat") !== 5;
   const currentId = form.watch("id");
+  const movStat = form.watch("movStat");
+  const isPostButtonVisible = updatePostButtonVisibility({
+    recordId: currentId,
+    movStat,
+  });
+
+  const isTransferButtonVisible = useMemo(() => {
+    const recordId = currentId ?? loadedRecordIdRef.current;
+    return updateTransferButtonVisibility({ recordId, movStat });
+  }, [currentId, movStat]);
+
+  const isBarcodeButtonVisible = useMemo(() => {
+    const recordId = currentId ?? loadedRecordIdRef.current;
+    return recordId != null && recordId > 0;
+  }, [currentId]);
 
   const refreshNavIds = useCallback(async () => {
     if (!service) return;
@@ -119,6 +197,9 @@ export function usePurchase(token: string | undefined) {
         .map((line) => line.id)
         .filter((id): id is number => id != null && id > 0);
       deletedDetailIdsRef.current = [];
+      if (header.movStat === 5) {
+        setMode("view");
+      }
     },
     [form]
   );
@@ -179,12 +260,16 @@ export function usePurchase(token: string | undefined) {
   }, [form]);
 
   const handleEdit = useCallback(() => {
+    if (form.getValues("movStat") === 5) {
+      toast.message("This invoice is posted and cannot be edited.");
+      return;
+    }
     if (!currentId) {
       toast.message("Save the document first, or load an existing purchase.");
       return;
     }
     setMode("edit");
-  }, [currentId]);
+  }, [currentId, form]);
 
   const handleSave = useCallback(
     async (
@@ -193,6 +278,11 @@ export function usePurchase(token: string | undefined) {
       catalogItems?: ItemCatalogItem[]
     ) => {
       if (!service) return;
+
+      if (form.getValues("movStat") === 5) {
+        toast.message("This invoice is posted and cannot be saved.");
+        return;
+      }
 
       // Re-apply movement mapping at save time so values cannot be lost
       // between selection and submit (zodResolver / unregistered fields).
@@ -297,6 +387,7 @@ export function usePurchase(token: string | undefined) {
               ? `ID ${saved.header.id}`
               : "";
         toast.success(label ? `Purchase saved ${label}` : "Purchase saved");
+        await openInsertedStockBarcodePrint(saved.header.id, saved.stockBatches);
         if (removedCount > 0) {
           toast.message(`Removed ${removedCount} empty line(s) without item code`);
         }
@@ -306,10 +397,56 @@ export function usePurchase(token: string | undefined) {
         setSaving(false);
       }
     },
-    [applyDocument, currentId, detailsWithTotals, form, refreshNavIds, service, token]
+    [applyDocument, currentId, detailsWithTotals, form, openInsertedStockBarcodePrint, refreshNavIds, service, token]
   );
 
+  const handlePrintBarcode = useCallback(async () => {
+    if (!service) return;
+
+    const recordId =
+      (form.getValues("id") != null && form.getValues("id")! > 0
+        ? form.getValues("id")
+        : null) ??
+      (currentId != null && currentId > 0 ? currentId : null) ??
+      (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+        ? loadedRecordIdRef.current
+        : null);
+
+    if (recordId == null) {
+      toast.error("Save the document first.");
+      return;
+    }
+
+    setBarcodeLoading(true);
+    try {
+      const labels = await service.getStockBarcodeLabels(recordId);
+      const valid = labels.filter(
+        (label) => label.batchNo.trim().length > 0 && label.barcodeValue.trim().length > 0
+      );
+
+      if (valid.length === 0) {
+        toast.error("Barcode data not found for this purchase.");
+        return;
+      }
+
+      setStockBarcodeLabels(valid);
+      setStockBarcodePrintOpen(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        toast.error("Barcode API not available. Restart the Alfa API and try again.");
+      } else {
+        toast.error("Barcode data not found for this purchase.");
+      }
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [currentId, form, service]);
+
   const handleDelete = useCallback(async () => {
+    if (form.getValues("movStat") === 5) {
+      toast.message("This invoice is posted and cannot be deleted.");
+      return;
+    }
     if (!service || !currentId) {
       toast.error("Nothing to delete");
       return;
@@ -325,15 +462,77 @@ export function usePurchase(token: string | undefined) {
     } finally {
       setSaving(false);
     }
-  }, [currentId, handleNew, refreshNavIds, service]);
+  }, [currentId, form, handleNew, refreshNavIds, service]);
+
+  const handleTransfer = useCallback(() => {
+    toast.message("Under construction");
+  }, []);
+
+  const handlePost = useCallback(
+    async (
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
+    ) => {
+      if (!service) return;
+
+      const recordId =
+        (form.getValues("id") != null && form.getValues("id")! > 0
+          ? form.getValues("id")
+          : null) ??
+        (currentId != null && currentId > 0 ? currentId : null) ??
+        (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+          ? loadedRecordIdRef.current
+          : null);
+
+      if (recordId == null) {
+        toast.error("Save the document first, or load an existing purchase.");
+        return;
+      }
+
+      if (form.getValues("movStat") === 5) {
+        toast.message("Invoice is already posted.");
+        return;
+      }
+
+      setPosting(true);
+      try {
+        const saved = await service.post(recordId);
+
+        let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+        if (token) {
+          catalogMap = await ensureCatalogItemsForItmCodes(
+            saved.details,
+            catalogMap,
+            catalogItems,
+            token
+          );
+        }
+
+        const details = saved.details.map((line) =>
+          enrichDetailFromCatalog(line, catalogMap)
+        );
+        applyDocument(saved.header, details);
+        setMode("view");
+        toast.success("Invoice posted successfully.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Post failed");
+      } finally {
+        setPosting(false);
+      }
+    },
+    [applyDocument, currentId, form, service, token]
+  );
 
   const handleRefresh = useCallback(
     async (
       itemByCode?: Map<string, ItemCatalogItem>,
       catalogItems?: ItemCatalogItem[]
     ) => {
-      if (currentId) await loadRecord(currentId, itemByCode, catalogItems);
-      else await refreshNavIds();
+      if (currentId) {
+        await loadRecord(currentId, itemByCode, catalogItems);
+      } else {
+        await refreshNavIds();
+      }
     },
     [currentId, loadRecord, refreshNavIds]
   );
@@ -407,7 +606,7 @@ export function usePurchase(token: string | undefined) {
   }, []);
 
   const updateDetailRow = useCallback(
-    (index: number, patch: Partial<PurchaseDetail>) => {
+    (index: number, patch: PurchaseDetailPatch) => {
       setDetails((rows) =>
         rows.map((row, i) =>
           i === index ? applyPurchaseDetailPatch(row, patch) : row
@@ -439,12 +638,23 @@ export function usePurchase(token: string | undefined) {
     setSelectedRowIndex,
     loading,
     saving,
+    posting,
+    isPostButtonVisible,
+    isTransferButtonVisible,
+    isBarcodeButtonVisible,
     isEditable,
     searchOpen,
     setSearchOpen,
+    stockBarcodePrintOpen,
+    setStockBarcodePrintOpen,
+    stockBarcodeLabels,
+    barcodeLoading,
     handleNew,
     handleEdit,
     handleSave,
+    handlePrintBarcode,
+    handleTransfer,
+    handlePost,
     handleDelete,
     handleRefresh,
     navigate,

@@ -23,7 +23,7 @@ import {
 } from "@/lib/item-catalog-search";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
-import type { PurchaseDetail } from "@/types/purchase";
+import type { PurchaseDetail, PurchaseDetailPatch } from "@/types/purchase";
 
 const LOOKUP_DEBOUNCE_MS = 250;
 
@@ -39,7 +39,7 @@ type ItemCatalogAutocompleteCellProps = {
   disabled: boolean;
   inputClassName?: string;
   onFocusRow: () => void;
-  onChangeRow: (patch: Partial<PurchaseDetail>) => void;
+  onChangeRow: (patch: PurchaseDetailPatch) => void;
   onAfterApply?: () => void;
   onItemApplied?: (item: ItemCatalogItem) => void;
 };

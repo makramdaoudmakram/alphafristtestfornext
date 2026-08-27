@@ -1,14 +1,17 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
 import {
   mapDocumentFromApi,
+  mapSaveResponseFromApi,
   mapSearchResultFromApi,
 } from "@/lib/purchase.mapper";
+import { getPurchaseStockBarcodeLabels } from "@/lib/api-client";
 import type {
   PurchaseDocument,
   PurchaseSearchFilters,
   PurchaseSearchResult,
   PurchaseUpsertPayload,
 } from "@/types/purchase";
+import type { StockBarcodeLabel } from "@/types/stock";
 
 type PurchaseApiValidationError = {
   detailIndex?: number;
@@ -127,13 +130,14 @@ export class PurchaseRepository {
     const response = await fetch(
       this.url("PurTransH/search", {
         pthId: filters.pthId,
-        vendor: filters.vendor,
         venBillNo: filters.venBillNo,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         itmId: filters.itmId,
         itemCode: filters.itmId,
+        itmName: filters.itmName,
         movId: filters.movId,
+        pageSize: "100",
       }),
       { headers: this.authHeaders(), cache: "no-store" }
     );
@@ -199,12 +203,15 @@ export class PurchaseRepository {
         PurchExtraDisCount: h.purchExtraDisCount,
         TotalDisPer: h.totalDisPer,
         POtherExpenses: h.pOtherExpenses,
+        TotalBill: h.totalBill,
+        PthNetBill: h.pthNetBill,
+        TotalTax: h.totalTax,
+        TotalDesMon: h.totalDesMon,
         PthNotice: h.pthNotice,
       },
       Details: payload.details.map((d) => ({
         Id: d.id && d.id > 0 ? d.id : null,
         ItmId: d.itmId,
-        CId: d.cId,
         ExpDate: d.expDate || null,
         Qnty: d.qnty,
         Bonus: d.bonus,
@@ -237,7 +244,7 @@ export class PurchaseRepository {
       body: JSON.stringify(this.toApiBody(payload)),
     });
     const raw = await this.handle<Record<string, unknown>>(response);
-    return mapDocumentFromApi(raw);
+    return mapSaveResponseFromApi(raw);
   }
 
   async update(id: number, payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
@@ -247,7 +254,7 @@ export class PurchaseRepository {
       body: JSON.stringify(this.toApiBody(payload)),
     });
     const raw = await this.handle<Record<string, unknown>>(response);
-    return mapDocumentFromApi(raw);
+    return mapSaveResponseFromApi(raw);
   }
 
   async delete(id: number): Promise<void> {
@@ -265,6 +272,19 @@ export class PurchaseRepository {
         `Request failed (${response.status}).`;
       throw new PurchaseRepositoryError(message, response.status);
     }
+  }
+
+  async post(id: number): Promise<PurchaseDocument> {
+    const response = await fetch(this.url(`PurTransH/${id}/post`), {
+      method: "POST",
+      headers: this.authHeaders(),
+    });
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return mapDocumentFromApi(raw);
+  }
+
+  async getStockBarcodeLabels(purchaseId: number): Promise<StockBarcodeLabel[]> {
+    return getPurchaseStockBarcodeLabels(this.token, purchaseId);
   }
 }
 

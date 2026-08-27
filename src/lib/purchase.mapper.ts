@@ -7,6 +7,7 @@ import type {
   PurchaseDocument,
   PurchaseHeader,
   PurchaseSearchResult,
+  PurchaseStockBatch,
   PurchaseUpsertPayload,
 } from "@/types/purchase";
 import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
@@ -107,7 +108,6 @@ export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
     itmId: "",
     itmNameAr: "",
     itmNameEn: "",
-    cId: 0,
     expDate: "",
     qnty: 1,
     bonus: 0,
@@ -152,6 +152,7 @@ export function emptyPurchaseHeader(): PurchaseHeader {
     pOtherExpenses: 0,
     pthNetBill: 0,
     pthNotice: "",
+    movStat: null,
   };
 }
 
@@ -201,7 +202,6 @@ export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
     itmId: readString(raw, "itmId", "ItmId"),
     itmNameAr: readString(raw, "itmNameAr", "ItmNameAr"),
     itmNameEn: readString(raw, "itmNameEn", "ItmNameEn"),
-    cId: readNumber(raw, "cId", "CId"),
     expDate: formatExpDateFromApi(raw.expDate ?? raw.ExpDate),
     qnty: readNumber(raw, "qnty", "Qnty") || 1,
     bonus: readNumber(raw, "bonus", "Bonus"),
@@ -248,6 +248,7 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
     pOtherExpenses: readNumber(raw, "pOtherExpenses", "POtherExpenses"),
     pthNetBill: readNumber(raw, "pthNetBill", "PthNetBill"),
     pthNotice: readString(raw, "pthNotice", "PthNotice"),
+    movStat: readNullableNumber(raw, "movStat", "MovStat"),
   };
 }
 
@@ -274,6 +275,45 @@ export function mapDocumentFromApi(raw: Record<string, unknown>): PurchaseDocume
   };
 }
 
+function readBoolField(obj: Record<string, unknown>, ...keys: string[]): boolean {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "boolean") return value;
+  }
+  return false;
+}
+
+export function mapPurchaseStockBatch(raw: Record<string, unknown>): PurchaseStockBatch {
+  return {
+    stockId: readNumber(raw, "stockId", "StockId"),
+    batchNo: readString(raw, "batchNo", "BatchNo"),
+    itemCode: readString(raw, "itemCode", "ItemCode"),
+    storeId: readNumber(raw, "storeId", "StoreId"),
+    quantityNet: readNumber(raw, "quantityNet", "QuantityNet"),
+    inserted: readBoolField(raw, "inserted", "Inserted"),
+  };
+}
+
+/** Save/create/update response: { document, stockBatches } or legacy flat document. */
+export function mapSaveResponseFromApi(raw: Record<string, unknown>): PurchaseDocument {
+  const hasEnvelope = raw.document != null || raw.Document != null;
+  const documentRaw = hasEnvelope
+    ? ((raw.document ?? raw.Document) as Record<string, unknown>)
+    : raw;
+  const document = mapDocumentFromApi(documentRaw);
+  const batchesRaw = raw.stockBatches ?? raw.StockBatches;
+  if (!Array.isArray(batchesRaw) || batchesRaw.length === 0) {
+    return document;
+  }
+
+  return {
+    ...document,
+    stockBatches: batchesRaw.map((batch) =>
+      mapPurchaseStockBatch(batch as Record<string, unknown>)
+    ),
+  };
+}
+
 export function mapSearchResultFromApi(raw: Record<string, unknown>): PurchaseSearchResult {
   return {
     id: readNumber(raw, "id", "Id"),
@@ -287,6 +327,12 @@ export function mapSearchResultFromApi(raw: Record<string, unknown>): PurchaseSe
     ),
     phtDate: formatDateInput(raw.phtDate ?? raw.PhtDate) || null,
     pthNetBill: readNumber(raw, "pthNetBill", "PthNetBill"),
+    matchedItemCode:
+      readString(raw, "matchedItemCode", "MatchedItemCode") || null,
+    matchedItemNameEn:
+      readString(raw, "matchedItemNameEn", "MatchedItemNameEn") || null,
+    postStatus:
+      readString(raw, "postStatus", "PostStatus").trim() || "Not Post",
   };
 }
 
@@ -341,8 +387,8 @@ export function applyMovementToHeader(
     movmentRowId: movement.id,
     movId: movement.movChiledId,
     venId: entry1,
-    movAccountsec: entry1,
-    movAccount: entry2,
+    movAccount: entry1,
+    movAccountsec: entry2,
     movAccounttherd: entry3,
     movAccountfourth: entry4,
   };
@@ -385,7 +431,12 @@ export function toUpsertPayload(
       purchExtraDisCount: Number(header.purchExtraDisCount) || 0,
       totalDisPer: Number(header.totalDisPer) || 0,
       pOtherExpenses: Number(header.pOtherExpenses) || 0,
+      totalBill: Number(header.totalBill) || 0,
+      pthNetBill: Number(header.pthNetBill) || 0,
+      totalTax: Number(header.totalTax) || 0,
+      totalDesMon: Number(header.purchExtraDisCount) || 0,
       pthNotice: header.pthNotice ?? "",
+      movStat: header.movStat ?? null,
     },
     details: details.map((detail) => {
       const unitId = detail.unitId;
@@ -403,7 +454,6 @@ export function toUpsertPayload(
       > & { unitId?: number; itmTaxPrice: number } = {
         id: detail.id,
         itmId: detail.itmId.trim(),
-        cId: detail.cId,
         expDate: detail.expDate || "",
         qnty: detail.qnty,
         bonus: detail.bonus,

@@ -1,7 +1,4 @@
-import {
-  getMovmentById,
-  getNextMovValue,
-} from "@/lib/api-client";
+import { getMovmentById } from "@/lib/api-client";
 import {
   applyPurchaseDetailPatch,
   recalculatePurchaseDetailRow,
@@ -124,7 +121,7 @@ export const PURCHASE_EXCEL_IMPORT_ROLLBACK_HINT =
 /**
  * Excel import save path (Phases 8–9):
  * - Single POST /api/PurTransH (same as the Purchase page Save)
- * - PurTransHService.CreateAsync runs one DB transaction for PurTransH + PurTransD + Stock
+ * - PurTransHService.CreateAsync runs one DB transaction for MovValue (PthId) + PurTransH + PurTransD + Stock
  * - Stock uses StockService.ApplyPurchaseDetailsAsync → UnitConversionService.ConvertToBaseUnit
  *   with quantity = Qty + Bonus (no Excel-specific stock logic on the client)
  */
@@ -162,19 +159,11 @@ export async function importPurTransDExcelPurchase(
     throw new Error("Selected movement has no MovChiledId.");
   }
 
-  const nextPthId = await getNextMovValue(movement.movChiledId, token);
-  if (!nextPthId.success || nextPthId.value <= 0) {
-    throw new Error(
-      nextPthId.message?.trim() || "Could not allocate the next purchase document number."
-    );
-  }
-
   const invoiceDate = input.invoiceDate.trim();
   let header = headerToFormValues(emptyPurchaseHeader());
   header = applyMovementToHeader(header, movement);
   header = {
     ...header,
-    pthId: nextPthId.value,
     venBillNo: input.invoiceId.trim(),
     venBillDate: invoiceDate,
     phtDate: invoiceDate,

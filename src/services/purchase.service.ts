@@ -12,6 +12,7 @@ import type {
 } from "@/types/purchase";
 import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
 import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { StockBarcodeLabel } from "@/types/stock";
 import { purchaseDocumentSchema, purchaseDocumentUpdateSchema } from "@/validation/purchase.schema";
 import { validatePurchaseDetailUnits } from "@/lib/item-unit-options";
 import { z } from "zod";
@@ -147,6 +148,21 @@ export class PurchaseService {
 
   async remove(id: number): Promise<void> {
     return this.repository.delete(id);
+  }
+
+  async post(id: number): Promise<PurchaseDocument> {
+    if (id <= 0) {
+      throw new PurchaseRepositoryError(
+        "Could not determine the invoice to post. Save or reload the purchase first.",
+        400
+      );
+    }
+    return this.repository.post(id);
+  }
+
+  async getStockBarcodeLabels(purchaseId: number): Promise<StockBarcodeLabel[]> {
+    if (purchaseId <= 0) return [];
+    return this.repository.getStockBarcodeLabels(purchaseId);
   }
 }
 

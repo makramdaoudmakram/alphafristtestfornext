@@ -84,6 +84,8 @@ import type {
 import type { PharmFormValues, PharmItem } from "@/types/pharm";
 import type {
   StockBalanceItem,
+  StockBarcodeLabel,
+  StockBarcodeLookupResult,
   StockBatchItem,
   StockPagedResult,
   StockSearchFilters,
@@ -1450,7 +1452,7 @@ export type MovValueNextResult = {
   message?: string | null;
 };
 
-/** Atomically get the next sequence value for a movement id (Movdid). */
+/** Preview the next PthId for a movement (MaxValue + 1). Does not update MovValue. */
 export function getNextMovValue(
   movId: number,
   token: string,
@@ -1603,16 +1605,21 @@ export function deletePharm(parmId: number, token: string) {
 function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem {
   return {
     id: readNumber(item, "id", "Id"),
+    batchNo: readString(item, "batchNo", "BatchNo"),
     itemCode: readString(item, "itemCode", "ItemCode"),
     itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
     itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
-    storeId: readString(item, "storeId", "StoreId"),
+    storeId: readNumber(item, "storeId", "StoreId"),
     expDate: readNullableString(item, "expDate", "ExpDate"),
     qty: readNumber(item, "qty", "Qty"),
     purshPrice: readNumber(item, "purshPrice", "PurshPrice"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
     costPrice: readNumber(item, "costPrice", "CostPrice"),
-    unitId: readNullableNumber(item, "unitId", "UnitId"),
+    allowPrintBarcode: readBoolean(
+      item,
+      "allowPrintBarcode",
+      "AllowPrintBarcode"
+    ),
   };
 }
 
@@ -1621,7 +1628,7 @@ function normalizeStockBalanceItem(item: Record<string, unknown>): StockBalanceI
     itemCode: readString(item, "itemCode", "ItemCode"),
     itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
     itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
-    storeId: readNullableString(item, "storeId", "StoreId"),
+    storeId: readNullableNumber(item, "storeId", "StoreId"),
     totalQty: readNumber(item, "totalQty", "TotalQty"),
     batchCount: readNumber(item, "batchCount", "BatchCount"),
   };
@@ -1653,6 +1660,7 @@ export function searchStockBatches(token: string, filters: StockSearchFilters = 
   if (filters.itemCode?.trim()) params.set("itemCode", filters.itemCode.trim());
   if (filters.itemName?.trim()) params.set("itemName", filters.itemName.trim());
   if (filters.storeId?.trim()) params.set("storeId", filters.storeId.trim());
+  if (filters.batchNo?.trim()) params.set("batchNo", filters.batchNo.trim());
   if (filters.expFrom?.trim()) params.set("expFrom", filters.expFrom.trim());
   if (filters.expTo?.trim()) params.set("expTo", filters.expTo.trim());
   params.set("pageNumber", String(filters.pageNumber ?? 1));
@@ -1683,6 +1691,72 @@ export function getStockBalanceByItem(
     }
     return parseArrayOrPaged(data, normalizeStockBalanceItem);
   });
+}
+
+function normalizeStockBarcodeLabel(item: Record<string, unknown>): StockBarcodeLabel {
+  const batchNo = readString(item, "batchNo", "BatchNo");
+  const barcodeValue =
+    readString(item, "barcodeValue", "BarcodeValue") || batchNo.trim();
+  return {
+    stockId: readNumber(item, "stockId", "StockId"),
+    batchNo,
+    barcodeValue,
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
+    storeId: readNumber(item, "storeId", "StoreId"),
+    expDate: readNullableString(item, "expDate", "ExpDate"),
+    qty: readNumber(item, "qty", "Qty"),
+    salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+    allowPrintBarcode: readBoolean(
+      item,
+      "allowPrintBarcode",
+      "AllowPrintBarcode"
+    ),
+  };
+}
+
+function normalizeStockBarcodeLookupResult(data: Record<string, unknown>): StockBarcodeLookupResult {
+  const batchRaw = (data.batch ?? data.Batch) as Record<string, unknown>;
+  return {
+    normalizedBatchNo: readString(data, "normalizedBatchNo", "NormalizedBatchNo"),
+    batch: normalizeStockBatchItem(batchRaw),
+  };
+}
+
+export function getStockBatchByBatchNo(token: string, batchNo: string) {
+  return apiFetch<unknown>(
+    `Stock/batch/${encodeURIComponent(batchNo.trim())}`,
+    {},
+    token
+  ).then((data) => normalizeStockBatchItem((data ?? {}) as Record<string, unknown>));
+}
+
+export function getStockBarcodeLabelById(token: string, stockId: number) {
+  return apiFetch<unknown>(`Stock/${stockId}/barcode-label`, {}, token).then((data) =>
+    normalizeStockBarcodeLabel((data ?? {}) as Record<string, unknown>)
+  );
+}
+
+export function getPurchaseStockBarcodeLabels(token: string, purchaseId: number) {
+  return apiFetch<unknown>(`PurTransH/${purchaseId}/stock-batches`, {}, token).then((data) => {
+    if (!Array.isArray(data)) return [];
+    return data.map((item) =>
+      normalizeStockBarcodeLabel(item as Record<string, unknown>)
+    );
+  });
+}
+
+export function lookupStockByBarcodeScan(token: string, scan: string) {
+  return apiFetch<unknown>(
+    "Stock/barcode/lookup",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scan }),
+    },
+    token
+  ).then((data) => normalizeStockBarcodeLookupResult((data ?? {}) as Record<string, unknown>));
 }
 
 export type StockUnitConversionResult = {

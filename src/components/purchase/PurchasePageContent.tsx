@@ -27,6 +27,7 @@ import {
   HeaderTotalsFields,
 } from "@/components/purchase/HeaderForm";
 import { SearchDialog } from "@/components/purchase/SearchDialog";
+import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { Toolbar } from "@/components/purchase/Toolbar";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { PageGuard } from "@/components/permissions/page-guard";
@@ -266,12 +267,23 @@ export function PurchasePageContent() {
     setSelectedRowIndex,
     loading,
     saving,
+    posting,
+    isPostButtonVisible,
+    isTransferButtonVisible,
+    isBarcodeButtonVisible,
     isEditable,
     searchOpen,
     setSearchOpen,
+    stockBarcodePrintOpen,
+    setStockBarcodePrintOpen,
+    stockBarcodeLabels,
+    barcodeLoading,
     handleNew,
     handleEdit,
     handleSave,
+    handlePrintBarcode,
+    handleTransfer,
+    handlePost,
     handleDelete,
     handleRefresh,
     navigate,
@@ -285,6 +297,7 @@ export function PurchasePageContent() {
   } = purchase;
 
   const hasRecord = !!form.watch("id");
+  const isPosted = form.watch("movStat") === 5;
   const recordId = form.watch("id");
   const headerMovId = form.watch("movId");
 
@@ -376,8 +389,8 @@ export function PurchasePageContent() {
       });
       form.setValue("movId", movChiledId, { shouldDirty: true, shouldValidate: false });
       form.setValue("venId", entry1, { shouldDirty: true, shouldValidate: false });
-      form.setValue("movAccountsec", entry1, { shouldDirty: true, shouldValidate: false });
-      form.setValue("movAccount", entry2, { shouldDirty: true, shouldValidate: false });
+      form.setValue("movAccount", entry1, { shouldDirty: true, shouldValidate: false });
+      form.setValue("movAccountsec", entry2, { shouldDirty: true, shouldValidate: false });
       form.setValue("movAccounttherd", entry3, {
         shouldDirty: true,
         shouldValidate: false,
@@ -398,6 +411,7 @@ export function PurchasePageContent() {
         setSelectedMovement(null);
         form.setValue("movmentRowId", null, { shouldDirty: true, shouldValidate: false });
         form.setValue("movId", null, { shouldDirty: true, shouldValidate: false });
+        form.setValue("pthId", null, { shouldDirty: true, shouldValidate: false });
         form.setValue("venId", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccountsec", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccount", "", { shouldDirty: true, shouldValidate: false });
@@ -455,6 +469,7 @@ export function PurchasePageContent() {
           return;
         }
 
+        // Preview MaxValue + 1 only. MovValue is reserved when the header is saved.
         const result = await getNextMovValue(movChiledId, token, {
           signal: controller.signal,
         });
@@ -561,11 +576,20 @@ export function PurchasePageContent() {
         <Toolbar
           mode={mode}
           saving={saving}
+          posting={posting}
           loading={loading}
           hasRecord={hasRecord}
+          isPosted={isPosted}
+          isPostButtonVisible={isPostButtonVisible}
+          isTransferButtonVisible={isTransferButtonVisible}
+          isBarcodeButtonVisible={isBarcodeButtonVisible}
+          barcodeLoading={barcodeLoading}
           nav={navState}
           onNew={onNew}
           onSave={() => void handleSave(itemByCode, selectedMovement, catalogItems)}
+          onTransfer={handleTransfer}
+          onPost={() => void handlePost(itemByCode, catalogItems)}
+          onPrintBarcode={() => void handlePrintBarcode()}
           onEdit={handleEdit}
           onDelete={confirmDelete}
           onPrint={() => {
@@ -679,17 +703,20 @@ export function PurchasePageContent() {
           open={searchOpen}
           onOpenChange={setSearchOpen}
           onSearch={runSearch}
-          movement={selectedMovement}
-          onMovementChange={(item) => void handleMovementChange(item)}
           movementParentId={PURCHASE_MOV_PARENT_ID}
           token={token}
-          movementDisabled={hasRecord || !isEditable || pthIdLoading}
           catalogItems={catalogItems}
           onSelect={async (row) => {
             const map = await loadRecord(row.id, itemByCode, catalogItems);
             if (map && map.size > 0) setItemByCode(map);
             await syncMovementFromLoadedHeader();
           }}
+        />
+
+        <StockBarcodePrintDialog
+          open={stockBarcodePrintOpen}
+          onOpenChange={setStockBarcodePrintOpen}
+          labels={stockBarcodeLabels}
         />
       </div>
     </PageGuard>

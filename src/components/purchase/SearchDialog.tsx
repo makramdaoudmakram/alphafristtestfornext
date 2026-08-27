@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { ItemCatalogAutocompleteCell } from "@/components/purchase/ItemCatalogAutocompleteCell";
+import { hasPurchaseSearchCriteria } from "@/lib/purchase-search";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { MovmentLookupItem } from "@/types/movment";
 import { displaySearchMovementName } from "@/lib/purchase.mapper";
@@ -34,11 +35,8 @@ type SearchDialogProps = {
   onOpenChange: (open: boolean) => void;
   onSearch: (filters: PurchaseSearchFilters) => Promise<PurchaseSearchResult[]>;
   onSelect: (result: PurchaseSearchResult) => void;
-  movement: MovmentLookupItem | null;
-  onMovementChange: (item: MovmentLookupItem | null) => void;
   movementParentId: number;
   token?: string | null;
-  movementDisabled?: boolean;
   catalogItems: ItemCatalogItem[];
 };
 
@@ -54,19 +52,20 @@ export function SearchDialog({
   onOpenChange,
   onSearch,
   onSelect,
-  movement,
-  onMovementChange,
   movementParentId,
   token,
-  movementDisabled = false,
   catalogItems,
 }: SearchDialogProps) {
   const [filters, setFilters] = useState<PurchaseSearchFilters>(emptyFilters);
+  const [searchMovement, setSearchMovement] = useState<MovmentLookupItem | null>(
+    null
+  );
   const [results, setResults] = useState<PurchaseSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [itmNameEn, setItmNameEn] = useState("");
   const [selectedItemCode, setSelectedItemCode] = useState<string | null>(null);
+  const [searchedByItem, setSearchedByItem] = useState(false);
   const selectedItemCodeRef = useRef<string | null>(null);
 
   const setItemFilter = useCallback((name: string, code: string | null) => {
@@ -91,27 +90,45 @@ export function SearchDialog({
     setResults([]);
     setSelectedIndex(0);
     setLoading(false);
+    setSearchedByItem(false);
     setFilters(emptyFilters);
+    setSearchMovement(null);
     resetItemFilter();
   }, [open, resetItemFilter]);
 
   const runSearch = useCallback(async () => {
+    const itemCode =
+      selectedItemCodeRef.current?.trim() ||
+      selectedItemCode?.trim() ||
+      undefined;
+    const itemName = itmNameEn.trim();
+    const selectedMovementId =
+      searchMovement?.movChiledId != null
+        ? String(searchMovement.movChiledId)
+        : undefined;
+
+    if (
+      !hasPurchaseSearchCriteria(filters, searchMovement, itemCode, itemName)
+    ) {
+      toast.error("Enter at least one search condition.");
+      return;
+    }
+
     setLoading(true);
     try {
-      const itemCode =
-        selectedItemCodeRef.current?.trim() ||
-        selectedItemCode?.trim() ||
-        undefined;
-      const selectedMovementId =
-        movement?.movChiledId != null ? String(movement.movChiledId) : undefined;
       const data = await onSearch({
         ...filters,
-        vendor: movement?.movAccountEntry1?.trim() || undefined,
+        pthId: filters.pthId?.trim() || undefined,
+        venBillNo: filters.venBillNo?.trim() || undefined,
+        dateFrom: filters.dateFrom?.trim() || undefined,
+        dateTo: filters.dateTo?.trim() || undefined,
         itmId: itemCode,
+        itmName: itemCode ? undefined : itemName || undefined,
         movId: selectedMovementId,
       });
       setResults(data);
       setSelectedIndex(0);
+      setSearchedByItem(Boolean(itemCode || itemName));
       if (!data.length) {
         toast.message("No matching purchase documents found.");
       }
@@ -120,7 +137,7 @@ export function SearchDialog({
     } finally {
       setLoading(false);
     }
-  }, [filters, selectedItemCode, movement, onSearch]);
+  }, [filters, itmNameEn, onSearch, searchMovement, selectedItemCode]);
 
   const loadSelected = useCallback(
     (index: number) => {
@@ -138,9 +155,9 @@ export function SearchDialog({
         <DialogHeader>
           <DialogTitle>Search purchase documents</DialogTitle>
           <DialogDescription>
-            Filter by PthId, movement, item name English, invoice number, or date
-            range. Double-click or press Enter to load. Search runs only when you
-            press Search.
+            Each field is optional — combine any conditions you need (movement,
+            dates, item, PthId, invoice number). Enter at least one, then press
+            Search. Double-click or press Enter to load a result.
           </DialogDescription>
         </DialogHeader>
 
@@ -156,13 +173,12 @@ export function SearchDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="search-vendor">Movement</Label>
+            <Label htmlFor="search-movement">Movement</Label>
             <MovementLookup
               parentId={movementParentId}
               token={token}
-              value={movement}
-              onChange={onMovementChange}
-              disabled={movementDisabled}
+              value={searchMovement}
+              onChange={setSearchMovement}
               placeholder="Select movement..."
             />
           </div>
@@ -253,7 +269,9 @@ export function SearchDialog({
                 <TableRow>
                   <TableHead>PthId</TableHead>
                   <TableHead>MovementName</TableHead>
+                  {searchedByItem ? <TableHead>Item</TableHead> : null}
                   <TableHead>InvoicePhtDate</TableHead>
+                  <TableHead>PostStatus</TableHead>
                   <TableHead className="text-right">Net</TableHead>
                 </TableRow>
               </TableHeader>
@@ -262,7 +280,9 @@ export function SearchDialog({
                   <TableRow
                     key={row.id}
                     className={
-                      index === selectedIndex ? "bg-muted/50 cursor-pointer" : "cursor-pointer"
+                      index === selectedIndex
+                        ? "bg-muted/50 cursor-pointer"
+                        : "cursor-pointer"
                     }
                     onClick={() => setSelectedIndex(index)}
                     onDoubleClick={() => loadSelected(index)}
@@ -273,7 +293,15 @@ export function SearchDialog({
                   >
                     <TableCell>{row.pthId}</TableCell>
                     <TableCell>{displaySearchMovementName(row.movementName)}</TableCell>
+                    {searchedByItem ? (
+                      <TableCell>
+                        {row.matchedItemNameEn?.trim() ||
+                          row.matchedItemCode?.trim() ||
+                          "—"}
+                      </TableCell>
+                    ) : null}
                     <TableCell>{row.phtDate ?? "—"}</TableCell>
+                    <TableCell>{row.postStatus}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.pthNetBill.toFixed(2)}
                     </TableCell>

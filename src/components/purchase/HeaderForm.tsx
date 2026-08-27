@@ -43,6 +43,28 @@ function ReadonlyMoney({
   );
 }
 
+function ReadonlyCount({
+  id,
+  label,
+  value,
+}: {
+  id: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <FormFieldInline
+      id={id}
+      label={label}
+      readOnly
+      value={String(value)}
+      className={headerFieldGrid}
+      labelClassName={headerLabelClass}
+      inputClassName="bg-muted/50 font-medium tabular-nums opacity-90"
+    />
+  );
+}
+
 /** PthId, VenBillNo, VenBillDate, PhtDate — top of page */
 export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
   const {
@@ -109,6 +131,8 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
           inputMode="numeric"
           disabled={disabled}
           placeholder="Select movement…"
+          readOnly
+          inputClassName="bg-muted/50 font-medium tabular-nums opacity-90"
           aria-invalid={!!errors.pthId}
           {...fieldProps}
           {...register("pthId", {
@@ -178,7 +202,10 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
 
 /** Totals, discounts, notice — bottom of page */
 export function HeaderTotalsFields({ form, disabled, totalDesMon }: HeaderFormProps) {
-  const { register } = form;
+  const { register, setValue } = form;
+
+  const purchExtraDisCountField = register("purchExtraDisCount");
+  const pOtherExpensesField = register("pOtherExpenses");
 
   const fieldProps = {
     className: headerFieldGrid,
@@ -189,6 +216,11 @@ export function HeaderTotalsFields({ form, disabled, totalDesMon }: HeaderFormPr
 
   return (
     <div className="w-full min-w-0 space-y-3">
+        <ReadonlyCount
+          id="noOfItems"
+          label="No. of Items"
+          value={form.watch("noOfItems") ?? 0}
+        />
         <ReadonlyMoney
           id="totalQuantity"
           label="TotalQuantity"
@@ -201,27 +233,37 @@ export function HeaderTotalsFields({ form, disabled, totalDesMon }: HeaderFormPr
         />
         <FormFieldInline
           id="purchExtraDisCount"
-          label="PurchExtraDisCount"
+          label="Extra Disc"
           type="number"
           step="0.01"
           disabled={disabled}
           {...fieldProps}
-          {...register("purchExtraDisCount")}
+          name={purchExtraDisCountField.name}
+          ref={purchExtraDisCountField.ref}
+          onBlur={purchExtraDisCountField.onBlur}
+          onChange={(event) => {
+            void purchExtraDisCountField.onChange(event);
+            setValue("pOtherExpenses", 0, { shouldDirty: true });
+          }}
         />
-        <FormFieldInline
-          id="totalDisPer"
-          label="TotalDisPer"
-          type="number"
-          step="0.01"
-          disabled={disabled}
-          {...fieldProps}
-          {...register("totalDisPer")}
-        />
-        <ReadonlyMoney
-          id="totalDesMon"
-          label="TotalDesMon"
-          value={totalDesMonValue}
-        />
+        <div className="hidden">
+          <FormFieldInline
+            id="totalDisPer"
+            label="TotalDisPer"
+            type="number"
+            step="0.01"
+            disabled={disabled}
+            {...fieldProps}
+            {...register("totalDisPer")}
+          />
+        </div>
+        <div className="hidden">
+          <ReadonlyMoney
+            id="totalDesMon"
+            label="TotalDesMon"
+            value={totalDesMonValue}
+          />
+        </div>
         <ReadonlyMoney
           id="totalTax"
           label="TotalTax"
@@ -229,12 +271,20 @@ export function HeaderTotalsFields({ form, disabled, totalDesMon }: HeaderFormPr
         />
         <FormFieldInline
           id="pOtherExpenses"
-          label="POtherExpenses"
+          label="Perc Disc"
           type="number"
           step="0.01"
+          min={0}
+          max={100}
           disabled={disabled}
           {...fieldProps}
-          {...register("pOtherExpenses")}
+          name={pOtherExpensesField.name}
+          ref={pOtherExpensesField.ref}
+          onBlur={pOtherExpensesField.onBlur}
+          onChange={(event) => {
+            void pOtherExpensesField.onChange(event);
+            setValue("purchExtraDisCount", 0, { shouldDirty: true });
+          }}
         />
         <ReadonlyMoney
           id="pthNetBill"

@@ -12,9 +12,9 @@ export type PurchaseHeader = {
   movId: number | null;
   /** Movment.Id PK — server uses this to map detail StoId/MovId/accounts */
   movmentRowId: number | null;
-  /** From movement MovAccountEntry2 */
+  /** From movement MovAccountEntry1 (authoritative on save) */
   movAccount: string;
-  /** From movement MovAccountEntry1 */
+  /** From movement MovAccountEntry2 */
   movAccountsec: string;
   /** From movement MovAccountEntry3 */
   movAccounttherd: string;
@@ -30,6 +30,8 @@ export type PurchaseHeader = {
   pOtherExpenses: number;
   pthNetBill: number;
   pthNotice: string;
+  /** 0 = draft/saved, 5 = posted to GeneralLedger */
+  movStat: number | null;
 };
 
 /** Purchase detail line (dbo.PurTransD) */
@@ -40,7 +42,6 @@ export type PurchaseDetail = {
   itmId: string;
   itmNameAr: string;
   itmNameEn: string;
-  cId: number;
   expDate: string;
   qnty: number;
   bonus: number;
@@ -80,6 +81,12 @@ export type PurchaseDetail = {
   stoId: string;
   /** Computed: quantity × price − discounts + tax */
   lineTotal: number;
+};
+
+/** Row patch. skipDiscPercent / skipTax keep existing values during item retrieval. */
+export type PurchaseDetailPatch = Partial<PurchaseDetail> & {
+  skipDiscPercent?: boolean;
+  skipTax?: boolean;
 };
 
 export type PurTransDExcelPreviewRow = {
@@ -129,20 +136,32 @@ export type PurTransDExcelPreviewValidated = Omit<
 export const PURTRANS_D_EXCEL_VALIDATION_SUMMARY =
   "The Excel file contains invalid data. Please correct the highlighted rows.";
 
+/** Stock batches created or updated when a purchase is saved. */
+export type PurchaseStockBatch = {
+  stockId: number;
+  batchNo: string;
+  itemCode: string;
+  storeId: number;
+  quantityNet: number;
+  inserted: boolean;
+};
+
 export type PurchaseDocument = {
   header: PurchaseHeader;
   details: PurchaseDetail[];
+  stockBatches?: PurchaseStockBatch[];
 };
 
 export type PurchaseSearchFilters = {
   pthId?: string;
-  vendor?: string;
   venBillNo?: string;
   dateFrom?: string;
   dateTo?: string;
-  /** Selected ItemCatalog.Itm_Code — used to search PurTransD, not the typed name. */
+  /** Exact ItemCatalog.Itm_Code — from catalog selection. */
   itmId?: string;
-  /** Selected Movement.MovChiledId when Movement is chosen. */
+  /** Contains match on ItemCatalog English/Arabic name (typed text without code). */
+  itmName?: string;
+  /** Movement.MovChiledId when Movement is chosen. */
   movId?: string;
 };
 
@@ -152,6 +171,11 @@ export type PurchaseSearchResult = {
   movementName: string;
   phtDate: string | null;
   pthNetBill: number;
+  /** Populated when search filtered by item. */
+  matchedItemCode?: string | null;
+  matchedItemNameEn?: string | null;
+  /** Derived from MovStat — 5 = Post, otherwise Not Post. */
+  postStatus: string;
 };
 
 export type PurchaseNavigationIds = {
@@ -161,10 +185,7 @@ export type PurchaseNavigationIds = {
 
 /** Payload sent to Alfa API when endpoints are available */
 export type PurchaseUpsertPayload = {
-  header: Omit<
-    PurchaseHeader,
-    "noOfItems" | "totalQuantity" | "totalBill" | "totalDesMon" | "totalTax" | "pthNetBill"
-  >;
+  header: Omit<PurchaseHeader, "noOfItems" | "totalQuantity">;
   details: (Omit<
     PurchaseDetail,
     | "clientRowId"
