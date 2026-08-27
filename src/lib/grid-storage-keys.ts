@@ -11,6 +11,7 @@ export function buildLegacyGridWidthStorageKey(moduleKey: string): string {
 /** Predefined module keys for master-detail grids. */
 export const GRID_MODULE_KEYS = {
   purchaseDetail: "purchase",
+  returnDetail: "return",
   salesDetail: "sales",
   transferDetail: "transfer",
   inventoryDetail: "inventory",

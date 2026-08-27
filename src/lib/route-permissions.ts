@@ -28,6 +28,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/transactions/purchase": null,
+  "/dashboard/transactions/return": null,
   "/dashboard/item-transactions": null,
   "/dashboard/movement-setting": null,
 };
