@@ -224,6 +224,7 @@ export class ReturnRepository {
         StdItmStock: d.stdItmStock,
         UnitId: d.unitId,
         StoId: d.stoId || null,
+        BatchNo: d.batchNo?.trim() || null,
       })),
     };
 
@@ -269,6 +270,15 @@ export class ReturnRepository {
         `Request failed (${response.status}).`;
       throw new ReturnRepositoryError(message, response.status);
     }
+  }
+
+  async post(id: number): Promise<ReturnDocument> {
+    const response = await fetch(this.url(`ReturnTransH/${id}/post`), {
+      method: "POST",
+      headers: this.authHeaders(),
+    });
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return mapDocumentFromApi(raw);
   }
 }
 

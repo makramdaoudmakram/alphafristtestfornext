@@ -30,7 +30,7 @@ export type PurchaseHeader = {
   pOtherExpenses: number;
   pthNetBill: number;
   pthNotice: string;
-  /** 0 = draft/saved, 5 = posted to GeneralLedger */
+  /** 0 = draft/saved, 1 = reversed (editable), 5 = posted to GeneralLedger */
   movStat: number | null;
 };
 
@@ -79,6 +79,15 @@ export type PurchaseDetail = {
   unitId: number | null;
   /** Store from movement MovStor — one value per detail line */
   stoId: string;
+  /**
+   * Stock.BatchNo from the Return Page search row. Empty for catalog-only lines.
+   * Changing quantity must not clear this value.
+   */
+  batchNo?: string;
+  /**
+   * Max return qty from the selected search row. UI-only; not sent on purchase save.
+   */
+  maxReturnQty?: number;
   /** Computed: quantity × price − discounts + tax */
   lineTotal: number;
 };
@@ -200,4 +209,74 @@ export type PurchaseUpsertPayload = {
   > & { unitId?: number; itmTaxPrice: number })[];
   /** Existing PurTransD ids removed on save (update only). */
   deletedDetailIds?: number[];
+};
+
+export type PostedPurchaseInvoiceReversalItem = {
+  id: number;
+  pthId: number;
+  vendorName: string;
+  venId: string;
+  venBillNo: string;
+  venBillDate: string | null;
+  insertTime: string | null;
+  userName: string;
+  totalBill: number | null;
+  pthNetBill: number | null;
+  quantity: number | null;
+};
+
+export type PostedPurchaseInvoiceReversalPage = {
+  items: PostedPurchaseInvoiceReversalItem[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PostedPurchaseInvoiceReversalQuery = {
+  vendorAccountId?: string;
+  vendorName?: string;
+  pageNumber: number;
+  pageSize: number;
+};
+
+export type PurchaseInvoiceDraftItem = {
+  id: number;
+  pthId: number;
+  vendorName: string;
+  venId: string;
+  venBillNo: string;
+  venBillDate: string | null;
+  phtDate: string | null;
+  insertTime: string | null;
+  userName: string;
+  movementName: string;
+  totalBill: number | null;
+  pthNetBill: number | null;
+  quantity: number | null;
+  movStat: number | null;
+  status: string;
+};
+
+export type PurchaseInvoiceDraftPage = {
+  items: PurchaseInvoiceDraftItem[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type PurchaseInvoiceDraftQuery = {
+  vendorAccountId?: string;
+  vendorName?: string;
+  pageNumber: number;
+  pageSize: number;
+};
+
+export type PurchaseInvoiceReverseResult = {
+  id: number;
+  pthId: number;
+  movStat: number | null;
+  pthNotice: string;
+  reversedLedgerRows: number;
 };

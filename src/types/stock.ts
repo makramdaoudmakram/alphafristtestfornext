@@ -22,6 +22,20 @@ export interface StockBalanceItem {
   batchCount: number;
 }
 
+/** Return-page item stock search result row (one BatchNo / ExpDate / SalesPrice group). */
+export interface ReturnItemStockSearchItem {
+  itemCatalogId: number;
+  itemCode: string;
+  itemNameAr: string | null;
+  itemNameEn: string | null;
+  itemName: string;
+  storeId: number;
+  totalQuantity: number;
+  salesPrice: number;
+  expDate: string | null;
+  batchNo: string;
+}
+
 export type StockSearchFilters = {
   itemCode?: string;
   itemName?: string;

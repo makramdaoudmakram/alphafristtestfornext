@@ -10,11 +10,11 @@ import type {
   ReturnSearchFilters,
   ReturnSearchResult,
 } from "@/types/return";
-import type { ReturnHeaderFormValues } from "@/validation/return.schema";
 import {
-  purchaseDocumentSchema,
-  purchaseDocumentUpdateSchema,
-} from "@/validation/purchase.schema";
+  returnDocumentSchema,
+  returnDocumentUpdateSchema,
+  type ReturnHeaderFormValues,
+} from "@/validation/return.schema";
 
 import { validatePurchaseDetailUnits } from "@/lib/item-unit-options";
 import { z } from "zod";
@@ -53,8 +53,8 @@ export class ReturnService {
       options?.allowEmptyDetails === true ||
       (options?.isUpdate === true && details.length === 0);
     const schema = useUpdateSchema
-      ? purchaseDocumentUpdateSchema
-      : purchaseDocumentSchema;
+      ? returnDocumentUpdateSchema
+      : returnDocumentSchema;
     const parsed = schema.safeParse(document);
     if (!parsed.success) return parsed;
 
@@ -93,8 +93,8 @@ export class ReturnService {
       options?.allowEmptyDetails === true ||
       (options?.isUpdate === true && details.length === 0);
     const schema = useUpdateSchema
-      ? purchaseDocumentUpdateSchema
-      : purchaseDocumentSchema;
+      ? returnDocumentUpdateSchema
+      : returnDocumentSchema;
     return schema.safeParse(document);
   }
 
@@ -145,6 +145,16 @@ export class ReturnService {
 
   async remove(id: number): Promise<void> {
     return this.repository.delete(id);
+  }
+
+  async post(id: number): Promise<ReturnDocument> {
+    if (id <= 0) {
+      throw new ReturnRepositoryError(
+        "Could not determine the return document to post. Save or reload it first.",
+        400
+      );
+    }
+    return this.repository.post(id);
   }
 }
 

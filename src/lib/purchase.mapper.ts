@@ -124,6 +124,8 @@ export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
     stdItmStock: 0,
     unitId: null,
     stoId,
+    batchNo: "",
+    maxReturnQty: undefined,
     lineTotal: 0,
   };
 }
@@ -218,8 +220,12 @@ export function mapDetailFromApi(raw: Record<string, unknown>): PurchaseDetail {
     stdItmStock: readNumber(raw, "stdItmStock", "StdItmStock"),
     unitId: readUnitId(raw),
     stoId: readString(raw, "stoId", "StoId"),
+    batchNo: readString(raw, "batchNo", "BatchNo"),
     lineTotal: 0,
   };
+  if (row.batchNo?.trim() && Number.isFinite(row.stdItmStock) && row.stdItmStock > 0) {
+    row.maxReturnQty = row.stdItmStock;
+  }
   row.lineTotal = computeLineTotal(row);
   return row;
 }
@@ -353,6 +359,7 @@ export function mergeSavedDetailsWithPrior(
       ...line,
       itmNameAr: line.itmNameAr || fromPrior?.itmNameAr || "",
       itmNameEn: line.itmNameEn || fromPrior?.itmNameEn || "",
+      batchNo: line.batchNo?.trim() || fromPrior?.batchNo?.trim() || "",
       taxPercent: fromPrior?.taxPercent ?? line.taxPercent ?? null,
     };
     if (itemByCode && itemByCode.size > 0) {
@@ -451,6 +458,7 @@ export function toUpsertPayload(
         | "baseItmPurPrice"
         | "baseItmSell"
         | "priceQtyNet"
+        | "maxReturnQty"
       > & { unitId?: number; itmTaxPrice: number } = {
         id: detail.id,
         itmId: detail.itmId.trim(),
@@ -468,6 +476,7 @@ export function toUpsertPayload(
         itmNet: detail.itmNet,
         stdItmStock: detail.stdItmStock,
         stoId: detail.stoId?.trim() ?? "",
+        batchNo: detail.batchNo?.trim() ?? "",
       };
       if (unitId != null && unitId > 0) line.unitId = unitId;
       return line;

@@ -12,13 +12,23 @@ import {
   getMovmentById,
   getNextMovValue,
   getStors,
+  getUnitConversionInfo,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
 import {
   getItemUnitIds,
+  findCatalogItemByCode,
+  getItemDefaultUnitId,
   mergeCatalogItemWithCache,
 } from "@/lib/item-unit-options";
+import { applyReturnDetailPatch } from "@/lib/return-calculations";
+import { createEmptyDetailRow } from "@/lib/return.mapper";
+import {
+  findEmptyDetailRowIndex,
+  patchDetailFromStockSearchResult,
+} from "@/lib/return-item-stock-search";
+import { applyPriceQtyNetToBasePrices } from "@/lib/return-unit-conversion";
 import { createUnitService } from "@/services/unit.service";
 import { DetailsGrid } from "@/components/return/DetailsGrid";
 import {
@@ -26,9 +36,9 @@ import {
   HeaderTotalsFields,
 } from "@/components/return/HeaderForm";
 import { SearchDialog } from "@/components/return/SearchDialog";
-import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { Toolbar } from "@/components/return/Toolbar";
 import { MovementLookup } from "@/components/movement/MovementLookup";
+import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { PageGuard } from "@/components/permissions/page-guard";
 import {
   FormFieldInlineWrap,
@@ -43,6 +53,7 @@ import {
 import { useReturn } from "@/hooks/useReturn";
 import type { MovmentLookupItem } from "@/types/movment";
 import type { StorItem } from "@/types/stor";
+import type { ReturnItemStockSearchItem } from "@/types/stock";
 
 /** Return transactions use MovParent / MovParientId = 2 */
 const RETURN_MOV_PARENT_ID = 2;
@@ -268,20 +279,12 @@ export function ReturnPageContent() {
     saving,
     posting,
     isPostButtonVisible,
-    isTransferButtonVisible,
-    isBarcodeButtonVisible,
     isEditable,
     searchOpen,
     setSearchOpen,
-    stockBarcodePrintOpen,
-    setStockBarcodePrintOpen,
-    stockBarcodeLabels,
-    barcodeLoading,
     handleNew,
     handleEdit,
     handleSave,
-    handlePrintBarcode,
-    handleTransfer,
     handlePost,
     handleDelete,
     handleRefresh,
@@ -294,6 +297,106 @@ export function ReturnPageContent() {
     updateDetailRow,
     computedTotals,
   } = returnState;
+
+  const handleStockSearchItemSelected = useCallback(
+    async (searchResult: ReturnItemStockSearchItem) => {
+      if (!isEditable) {
+        toast.message("Document is not editable.");
+        return;
+      }
+      if (!token) return;
+
+      const storeId = getDefaultMovementStoreId(selectedMovement);
+      if (!storeId) {
+        toast.message("Select a movement first.");
+        return;
+      }
+
+      let catalogItem = findCatalogItemByCode(
+        searchResult.itemCode,
+        itemByCode,
+        catalogItems
+      );
+
+      if (!catalogItem && searchResult.itemCatalogId > 0) {
+        try {
+          catalogItem = await getItemCatalog(searchResult.itemCatalogId, token);
+        } catch {
+          toast.error("Could not load item catalog record.");
+          return;
+        }
+      }
+
+      if (!catalogItem) {
+        toast.error(`Item "${searchResult.itemCode}" was not found in catalog.`);
+        return;
+      }
+
+      handleCatalogItemApplied(catalogItem);
+
+      const patch = patchDetailFromStockSearchResult(
+        catalogItem,
+        searchResult,
+        storeId
+      );
+
+      const emptyIndex = findEmptyDetailRowIndex(details);
+      const targetIndex = emptyIndex >= 0 ? emptyIndex : details.length;
+
+      setSelectedRowIndex(targetIndex);
+      setDetails((rows) => {
+        if (emptyIndex >= 0 && emptyIndex < rows.length) {
+          return rows.map((row, index) =>
+            index === emptyIndex ? applyReturnDetailPatch(row, patch) : row
+          );
+        }
+        return [
+          ...rows,
+          applyReturnDetailPatch(createEmptyDetailRow(storeId), patch),
+        ];
+      });
+
+      const itemCode = catalogItem.itmCode?.trim() ?? searchResult.itemCode.trim();
+      const unitId = getItemDefaultUnitId(catalogItem);
+      if (!itemCode || unitId == null || unitId <= 0) return;
+
+      const conversionQty =
+        Number.isFinite(searchResult.totalQuantity) && searchResult.totalQuantity > 0
+          ? searchResult.totalQuantity
+          : 1;
+
+      try {
+        const info = await getUnitConversionInfo(token, itemCode, unitId, conversionQty);
+        const nextPrices = applyPriceQtyNetToBasePrices(
+          patch.baseItmPurPrice ?? 0,
+          patch.baseItmSell ?? searchResult.salesPrice,
+          info.priceQtyNet
+        );
+        updateDetailRow(targetIndex, {
+          unitId,
+          itmPurPrice: nextPrices.itmPurPrice,
+          itmSell: nextPrices.itmSell,
+          baseItmPurPrice: patch.baseItmPurPrice,
+          baseItmSell: patch.baseItmSell,
+          priceQtyNet: info.priceQtyNet,
+        });
+      } catch {
+        // Row already has stock sales price; conversion is best-effort.
+      }
+    },
+    [
+      catalogItems,
+      details,
+      handleCatalogItemApplied,
+      isEditable,
+      itemByCode,
+      selectedMovement,
+      setDetails,
+      setSelectedRowIndex,
+      token,
+      updateDetailRow,
+    ]
+  );
 
   const hasRecord = !!form.watch("id");
   const isPosted = form.watch("movStat") === 5;
@@ -557,15 +660,10 @@ export function ReturnPageContent() {
           hasRecord={hasRecord}
           isPosted={isPosted}
           isPostButtonVisible={isPostButtonVisible}
-          isTransferButtonVisible={isTransferButtonVisible}
-          isBarcodeButtonVisible={isBarcodeButtonVisible}
-          barcodeLoading={barcodeLoading}
           nav={navState}
           onNew={onNew}
           onSave={() => void handleSave(itemByCode, selectedMovement, catalogItems)}
-          onTransfer={handleTransfer}
-          onPost={() => void handlePost()}
-          onPrintBarcode={() => void handlePrintBarcode()}
+          onPost={() => void handlePost(itemByCode, catalogItems)}
           onEdit={handleEdit}
           onDelete={confirmDelete}
           onPrint={() => {
@@ -625,6 +723,21 @@ export function ReturnPageContent() {
                     value={selectedMovement}
                     disabled={hasRecord || !isEditable || pthIdLoading}
                     onChange={(item) => void handleMovementChange(item)}
+                  />
+                </FormFieldInlineWrap>
+                <FormFieldInlineWrap
+                  id="return-item-stock-search-wrap"
+                  label="Item search"
+                  className="sm:grid-cols-[4.75rem_minmax(0,1fr)] w-full"
+                  labelClassName="text-neutral-950 shrink-0 text-sm font-semibold sm:text-end"
+                >
+                  <ReturnItemStockSearchBox
+                    token={token}
+                    storeId={getDefaultMovementStoreId(selectedMovement)}
+                    disabled={!sessionAuthenticated || loading || !isEditable}
+                    onItemSelected={(item) =>
+                      void handleStockSearchItemSelected(item)
+                    }
                   />
                 </FormFieldInlineWrap>
                 {pthIdLoading ? (
@@ -687,12 +800,6 @@ export function ReturnPageContent() {
             if (map && map.size > 0) setItemByCode(map);
             await syncMovementFromLoadedHeader();
           }}
-        />
-
-        <StockBarcodePrintDialog
-          open={stockBarcodePrintOpen}
-          onOpenChange={setStockBarcodePrintOpen}
-          labels={stockBarcodeLabels}
         />
       </div>
     </PageGuard>

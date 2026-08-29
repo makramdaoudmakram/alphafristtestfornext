@@ -73,6 +73,7 @@ export function PurchasePageContent() {
   const [templateDownloading, setTemplateDownloading] = useState(false);
   const nextValueAbortRef = useRef<AbortController | null>(null);
   const nextValueRequestRef = useRef(0);
+  const movementSyncRequestRef = useRef(0);
 
   const loadItemCatalog = useCallback(async () => {
     if (!token) {
@@ -299,10 +300,12 @@ export function PurchasePageContent() {
   const hasRecord = !!form.watch("id");
   const isPosted = form.watch("movStat") === 5;
   const recordId = form.watch("id");
-  const headerMovId = form.watch("movId");
 
   const syncMovementFromLoadedHeader = useCallback(async () => {
     if (!token || recordId == null) return;
+
+    const requestId = ++movementSyncRequestRef.current;
+    const savedMovId = form.getValues("movId");
 
     try {
       const movement = await resolveMovementForPurchaseHeader(
@@ -310,23 +313,24 @@ export function PurchasePageContent() {
         PURCHASE_MOV_PARENT_ID,
         form.getValues()
       );
+      if (requestId !== movementSyncRequestRef.current) return;
       if (movement) {
         setSelectedMovement(movement);
         form.setValue("movmentRowId", movement.id, {
           shouldDirty: false,
           shouldValidate: false,
         });
-      } else if (headerMovId != null) {
+      } else if (savedMovId != null) {
         setSelectedMovement({
           id: form.getValues("movmentRowId") ?? 0,
-          movChiledId: headerMovId,
-          movChiledName: `Movement #${headerMovId}`,
+          movChiledId: savedMovId,
+          movChiledName: `Movement #${savedMovId}`,
           movParientId: PURCHASE_MOV_PARENT_ID,
           movStor: null,
           movStor2: null,
           movSingleStore: false,
-          movAccountEntry1: form.getValues("movAccountsec") || null,
-          movAccountEntry2: form.getValues("movAccount") || null,
+          movAccountEntry1: form.getValues("movAccount") || null,
+          movAccountEntry2: form.getValues("movAccountsec") || null,
           movAccountEntry3: form.getValues("movAccounttherd") || null,
           movAccountEntry4: form.getValues("movAccountfourth") || null,
         });
@@ -334,28 +338,29 @@ export function PurchasePageContent() {
         setSelectedMovement(null);
       }
     } catch {
-      if (headerMovId != null) {
+      if (requestId !== movementSyncRequestRef.current) return;
+      if (savedMovId != null) {
         setSelectedMovement({
           id: form.getValues("movmentRowId") ?? 0,
-          movChiledId: headerMovId,
-          movChiledName: `Movement #${headerMovId}`,
+          movChiledId: savedMovId,
+          movChiledName: `Movement #${savedMovId}`,
           movParientId: PURCHASE_MOV_PARENT_ID,
           movStor: null,
           movStor2: null,
           movSingleStore: false,
-          movAccountEntry1: form.getValues("movAccountsec") || null,
-          movAccountEntry2: form.getValues("movAccount") || null,
+          movAccountEntry1: form.getValues("movAccount") || null,
+          movAccountEntry2: form.getValues("movAccountsec") || null,
           movAccountEntry3: form.getValues("movAccounttherd") || null,
           movAccountEntry4: form.getValues("movAccountfourth") || null,
         });
       }
     }
-  }, [form, headerMovId, recordId, token]);
+  }, [form, recordId, token]);
 
   useEffect(() => {
     if (!token || recordId == null) return;
     void syncMovementFromLoadedHeader();
-  }, [recordId, headerMovId, syncMovementFromLoadedHeader, token]);
+  }, [recordId, syncMovementFromLoadedHeader, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -407,11 +412,16 @@ export function PurchasePageContent() {
 
   const handleMovementChange = useCallback(
     async (item: MovmentLookupItem | null) => {
+      movementSyncRequestRef.current += 1;
+      const isExistingDocument = (form.getValues("id") ?? 0) > 0;
+
       if (!item) {
         setSelectedMovement(null);
         form.setValue("movmentRowId", null, { shouldDirty: true, shouldValidate: false });
         form.setValue("movId", null, { shouldDirty: true, shouldValidate: false });
-        form.setValue("pthId", null, { shouldDirty: true, shouldValidate: false });
+        if (!isExistingDocument) {
+          form.setValue("pthId", null, { shouldDirty: true, shouldValidate: false });
+        }
         form.setValue("venId", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccountsec", "", { shouldDirty: true, shouldValidate: false });
         form.setValue("movAccount", "", { shouldDirty: true, shouldValidate: false });
@@ -434,7 +444,9 @@ export function PurchasePageContent() {
       nextValueAbortRef.current = controller;
       const requestId = ++nextValueRequestRef.current;
 
-      setPthIdLoading(true);
+      if (!isExistingDocument) {
+        setPthIdLoading(true);
+      }
       try {
         const full = await getMovmentById(item.id, token, {
           signal: controller.signal,
@@ -468,6 +480,9 @@ export function PurchasePageContent() {
           toast.error("Selected movement has no MovChiledId.");
           return;
         }
+
+        // Existing invoices keep their PthId. Next-number preview is for new documents only.
+        if (isExistingDocument) return;
 
         // Preview MaxValue + 1 only. MovValue is reserved when the header is saved.
         const result = await getNextMovValue(movChiledId, token, {
@@ -647,7 +662,7 @@ export function PurchasePageContent() {
                     parentId={PURCHASE_MOV_PARENT_ID}
                     token={token}
                     value={selectedMovement}
-                    disabled={hasRecord || !isEditable || pthIdLoading}
+                    disabled={!isEditable || pthIdLoading}
                     onChange={(item) => void handleMovementChange(item)}
                   />
                 </FormFieldInlineWrap>

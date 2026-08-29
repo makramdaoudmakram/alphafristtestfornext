@@ -3,7 +3,6 @@
 import type { ComponentType } from "react";
 import Link from "next/link";
 import {
-  Barcode,
   BookOpen,
   ChevronFirst,
   ChevronLast,
@@ -38,15 +37,10 @@ type ToolbarProps = {
   hasRecord: boolean;
   isPosted: boolean;
   isPostButtonVisible: boolean;
-  isTransferButtonVisible: boolean;
-  isBarcodeButtonVisible: boolean;
-  barcodeLoading?: boolean;
   nav: { atFirst: boolean; atLast: boolean; hasRecords: boolean };
   onNew: () => void;
   onSave: () => void;
   onPost: () => void;
-  onTransfer: () => void;
-  onPrintBarcode: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
@@ -61,34 +55,6 @@ type ToolbarProps = {
   excelTemplateLoading?: boolean;
   excelImportHref: string;
 };
-
-function ToolbarTextButton({
-  label,
-  onClick,
-  disabled,
-  className,
-  loading,
-}: {
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-  loading?: boolean;
-}) {
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={disabled}
-      onClick={onClick}
-      className={className}
-    >
-      {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-      {label}
-    </Button>
-  );
-}
 
 function ToolbarButton({
   label,
@@ -162,15 +128,10 @@ export function Toolbar({
   hasRecord,
   isPosted,
   isPostButtonVisible,
-  isTransferButtonVisible,
-  isBarcodeButtonVisible,
-  barcodeLoading,
   nav,
   onNew,
   onSave,
   onPost,
-  onTransfer,
-  onPrintBarcode,
   onEdit,
   onDelete,
   onPrint,
@@ -251,19 +212,6 @@ export function Toolbar({
         <ToolbarButton label="Search" icon={Search} onClick={onSearch} />
 
         <div className="ml-auto flex items-center gap-1">
-          {isTransferButtonVisible ? (
-            <ToolbarTextButton
-              label="Transfer"
-              onClick={onTransfer}
-              disabled={saving || posting || loading}
-              className={cn(
-                "border-transparent bg-violet-600 text-white shadow-sm",
-                "hover:bg-violet-700 hover:text-white",
-                "focus-visible:ring-violet-600/40",
-                "disabled:opacity-50"
-              )}
-            />
-          ) : null}
           {isPostButtonVisible ? (
             <ToolbarButton
               label="Post"
@@ -277,15 +225,6 @@ export function Toolbar({
                 "focus-visible:ring-yellow-500/40",
                 "disabled:opacity-50"
               )}
-            />
-          ) : null}
-          {isBarcodeButtonVisible ? (
-            <ToolbarButton
-              label="Print Barcode"
-              icon={Barcode}
-              onClick={onPrintBarcode}
-              disabled={saving || posting || loading || barcodeLoading}
-              loading={barcodeLoading}
             />
           ) : null}
           <ToolbarButton

@@ -23,6 +23,10 @@ import {
 } from "@/lib/return.mapper";
 import { enrichDetailFromCatalog } from "@/lib/item-catalog-search";
 import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
+import {
+  formatReturnAvailableQty,
+  getReturnDetailMaxQty,
+} from "@/lib/return-item-stock-search";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import {
   createReturnService,
@@ -411,9 +415,60 @@ export function useReturn(token: string | undefined) {
     toast.message("Under construction");
   }, []);
 
-  const handlePost = useCallback(async () => {
-    toast.message("Under construction");
-  }, []);
+  const handlePost = useCallback(
+    async (
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
+    ) => {
+      if (!service) return;
+
+      const recordId =
+        (form.getValues("id") != null && form.getValues("id")! > 0
+          ? form.getValues("id")
+          : null) ??
+        (currentId != null && currentId > 0 ? currentId : null) ??
+        (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+          ? loadedRecordIdRef.current
+          : null);
+
+      if (recordId == null) {
+        toast.error("Save the document first, or load an existing return.");
+        return;
+      }
+
+      if (form.getValues("movStat") === 5) {
+        toast.message("Return document is already posted.");
+        return;
+      }
+
+      setPosting(true);
+      try {
+        const saved = await service.post(recordId);
+
+        let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+        if (token) {
+          catalogMap = await ensureCatalogItemsForItmCodes(
+            saved.details,
+            catalogMap,
+            catalogItems,
+            token
+          );
+        }
+
+        const mergedDetails = saved.details.map((line) =>
+          enrichDetailFromCatalog(line, catalogMap)
+        );
+        applyDocument(saved.header, mergedDetails);
+        setMode("view");
+        toast.success("Return document posted successfully.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Post failed");
+      } finally {
+        setPosting(false);
+      }
+    },
+    [applyDocument, currentId, form, service, token]
+  );
 
   const handleRefresh = useCallback(
     async (
@@ -500,9 +555,42 @@ export function useReturn(token: string | undefined) {
   const updateDetailRow = useCallback(
     (index: number, patch: ReturnDetailPatch) => {
       setDetails((rows) =>
-        rows.map((row, i) =>
-          i === index ? applyReturnDetailPatch(row, patch) : row
-        )
+        rows.map((row, i) => {
+          if (i !== index) return row;
+
+          const nextPatch =
+            patch.itmId != null && patch.batchNo === undefined
+              ? { ...patch, batchNo: "", maxReturnQty: undefined }
+              : patch;
+
+          if (nextPatch.qnty != null) {
+            const max = getReturnDetailMaxQty({
+              batchNo:
+                nextPatch.batchNo !== undefined ? nextPatch.batchNo : row.batchNo,
+              maxReturnQty:
+                nextPatch.maxReturnQty !== undefined
+                  ? nextPatch.maxReturnQty
+                  : row.maxReturnQty,
+              stdItmStock:
+                nextPatch.stdItmStock !== undefined
+                  ? nextPatch.stdItmStock
+                  : row.stdItmStock,
+            });
+            const nextQty = Number(nextPatch.qnty);
+            if (
+              max != null &&
+              Number.isFinite(nextQty) &&
+              nextQty > max
+            ) {
+              toast.error(
+                `Quantity cannot be greater than available quantity (${formatReturnAvailableQty(max)}).`
+              );
+              return row;
+            }
+          }
+
+          return applyReturnDetailPatch(row, nextPatch);
+        })
       );
     },
     []

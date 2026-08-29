@@ -83,6 +83,7 @@ import type {
 } from "@/types/user";
 import type { PharmFormValues, PharmItem } from "@/types/pharm";
 import type {
+  ReturnItemStockSearchItem,
   StockBalanceItem,
   StockBarcodeLabel,
   StockBarcodeLookupResult,
@@ -103,6 +104,13 @@ import type {
   ExcelTemplateRequest,
 } from "@/types/excel";
 import type {
+  PostedPurchaseInvoiceReversalItem,
+  PostedPurchaseInvoiceReversalPage,
+  PostedPurchaseInvoiceReversalQuery,
+  PurchaseInvoiceDraftItem,
+  PurchaseInvoiceDraftPage,
+  PurchaseInvoiceDraftQuery,
+  PurchaseInvoiceReverseResult,
   PurTransDExcelPreview,
   PurTransDExcelPreviewRow,
 } from "@/types/purchase";
@@ -1634,6 +1642,23 @@ function normalizeStockBalanceItem(item: Record<string, unknown>): StockBalanceI
   };
 }
 
+function normalizeReturnItemStockSearchItem(
+  item: Record<string, unknown>
+): ReturnItemStockSearchItem {
+  return {
+    itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
+    itemName: readString(item, "itemName", "ItemName"),
+    storeId: readNumber(item, "storeId", "StoreId"),
+    totalQuantity: readNumber(item, "totalQuantity", "TotalQuantity"),
+    salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+    expDate: readNullableString(item, "expDate", "ExpDate"),
+    batchNo: readString(item, "batchNo", "BatchNo"),
+  };
+}
+
 function normalizeStockPagedResult(data: unknown): StockPagedResult {
   if (Array.isArray(data)) {
     return {
@@ -1693,6 +1718,34 @@ export function getStockBalanceByItem(
   });
 }
 
+export function searchReturnItemsWithStock(
+  token: string,
+  search: string,
+  storeId: string,
+  options?: { take?: number; signal?: AbortSignal }
+) {
+  const params = new URLSearchParams();
+  const q = search.trim();
+  if (q) params.set("search", q);
+  params.set("storeId", storeId.trim());
+  if (options?.take != null && options.take > 0) {
+    params.set("take", String(options.take));
+  }
+
+  return apiFetch<unknown>(
+    `Stock/return-item-search?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((item) =>
+        normalizeReturnItemStockSearchItem(item as Record<string, unknown>)
+      );
+    }
+    return parseArrayOrPaged(data, normalizeReturnItemStockSearchItem);
+  });
+}
+
 function normalizeStockBarcodeLabel(item: Record<string, unknown>): StockBarcodeLabel {
   const batchNo = readString(item, "batchNo", "BatchNo");
   const barcodeValue =
@@ -1745,6 +1798,167 @@ export function getPurchaseStockBarcodeLabels(token: string, purchaseId: number)
       normalizeStockBarcodeLabel(item as Record<string, unknown>)
     );
   });
+}
+
+function normalizePostedPurchaseInvoiceReversalItem(
+  raw: Record<string, unknown>
+): PostedPurchaseInvoiceReversalItem {
+  return {
+    id: readNumber(raw, "id", "Id"),
+    pthId: readNumber(raw, "pthId", "PthId"),
+    vendorName: readString(raw, "vendorName", "VendorName"),
+    venId: readString(raw, "venId", "VenId"),
+    venBillNo: readString(raw, "venBillNo", "VenBillNo"),
+    venBillDate: readNullableString(raw, "venBillDate", "VenBillDate"),
+    insertTime: readNullableString(raw, "insertTime", "InsertTime"),
+    userName: readString(raw, "userName", "UserName"),
+    totalBill: readNullableNumber(raw, "totalBill", "TotalBill"),
+    pthNetBill: readNullableNumber(raw, "pthNetBill", "PthNetBill"),
+    quantity: readNullableNumber(raw, "quantity", "Quantity"),
+  };
+}
+
+function normalizePostedPurchaseInvoiceReversalPage(
+  raw: Record<string, unknown>
+): PostedPurchaseInvoiceReversalPage {
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) =>
+        normalizePostedPurchaseInvoiceReversalItem(item as Record<string, unknown>)
+      )
+    : [];
+
+  const pageNumber =
+    readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1;
+  const pageSize = readNumber(raw, "pageSize", "PageSize") || items.length;
+  const totalCount = readNumber(raw, "totalCount", "TotalCount");
+  const totalPages =
+    readNumber(raw, "totalPages", "TotalPages") ||
+    (pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0);
+
+  return {
+    items,
+    totalCount,
+    pageNumber,
+    pageSize,
+    totalPages,
+  };
+}
+
+export async function getPostedPurchaseInvoicesForReversal(
+  token: string,
+  query: PostedPurchaseInvoiceReversalQuery
+): Promise<PostedPurchaseInvoiceReversalPage> {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(query.pageNumber));
+  params.set("pageSize", String(query.pageSize));
+  if (query.vendorAccountId?.trim()) {
+    params.set("vendorAccountId", query.vendorAccountId.trim());
+  }
+  if (query.vendorName?.trim()) {
+    params.set("vendorName", query.vendorName.trim());
+  }
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `PurTransH/posted-for-reversal?${params.toString()}`,
+    {},
+    token
+  );
+  return normalizePostedPurchaseInvoiceReversalPage(data);
+}
+
+function normalizePurchaseInvoiceDraftItem(
+  raw: Record<string, unknown>
+): PurchaseInvoiceDraftItem {
+  return {
+    id: readNumber(raw, "id", "Id"),
+    pthId: readNumber(raw, "pthId", "PthId"),
+    vendorName: readString(raw, "vendorName", "VendorName"),
+    venId: readString(raw, "venId", "VenId"),
+    venBillNo: readString(raw, "venBillNo", "VenBillNo"),
+    venBillDate: readNullableString(raw, "venBillDate", "VenBillDate"),
+    phtDate: readNullableString(raw, "phtDate", "PhtDate"),
+    insertTime: readNullableString(raw, "insertTime", "InsertTime"),
+    userName: readString(raw, "userName", "UserName"),
+    movementName: readString(raw, "movementName", "MovementName"),
+    totalBill: readNullableNumber(raw, "totalBill", "TotalBill"),
+    pthNetBill: readNullableNumber(raw, "pthNetBill", "PthNetBill"),
+    quantity: readNullableNumber(raw, "quantity", "Quantity"),
+    movStat: readNullableNumber(raw, "movStat", "MovStat"),
+    status: readString(raw, "status", "Status") || "Draft",
+  };
+}
+
+function normalizePurchaseInvoiceDraftPage(
+  raw: Record<string, unknown>
+): PurchaseInvoiceDraftPage {
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) =>
+        normalizePurchaseInvoiceDraftItem(item as Record<string, unknown>)
+      )
+    : [];
+
+  const pageNumber =
+    readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1;
+  const pageSize = readNumber(raw, "pageSize", "PageSize") || items.length;
+  const totalCount = readNumber(raw, "totalCount", "TotalCount");
+  const totalPages =
+    readNumber(raw, "totalPages", "TotalPages") ||
+    (pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0);
+
+  return {
+    items,
+    totalCount,
+    pageNumber,
+    pageSize,
+    totalPages,
+  };
+}
+
+export async function getPurchaseInvoiceDrafts(
+  token: string,
+  query: PurchaseInvoiceDraftQuery
+): Promise<PurchaseInvoiceDraftPage> {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(query.pageNumber));
+  params.set("pageSize", String(query.pageSize));
+  if (query.vendorAccountId?.trim()) {
+    params.set("vendorAccountId", query.vendorAccountId.trim());
+  }
+  if (query.vendorName?.trim()) {
+    params.set("vendorName", query.vendorName.trim());
+  }
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `PurTransH/draft-invoices?${params.toString()}`,
+    {},
+    token
+  );
+  return normalizePurchaseInvoiceDraftPage(data);
+}
+
+export async function reversePostedPurchaseInvoice(
+  token: string,
+  id: number
+): Promise<PurchaseInvoiceReverseResult> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `PurTransH/${id}/reverse`,
+    { method: "POST" },
+    token
+  );
+
+  return {
+    id: readNumber(data, "id", "Id"),
+    pthId: readNumber(data, "pthId", "PthId"),
+    movStat: readNullableNumber(data, "movStat", "MovStat"),
+    pthNotice: readString(data, "pthNotice", "PthNotice"),
+    reversedLedgerRows: readNumber(
+      data,
+      "reversedLedgerRows",
+      "ReversedLedgerRows"
+    ),
+  };
 }
 
 export function lookupStockByBarcodeScan(token: string, scan: string) {

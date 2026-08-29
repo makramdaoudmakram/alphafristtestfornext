@@ -202,7 +202,8 @@ export function DetailsGrid({
     const numberCell = (
       field: NumericDetailField,
       dataCol: string,
-      header: string
+      header: string,
+      step = "0.01"
     ): ColumnDef<ReturnDetail> => ({
       id: field,
       accessorKey: field,
@@ -212,7 +213,7 @@ export function DetailsGrid({
           data-row={row.index}
           data-col={dataCol}
           type="number"
-          step="0.01"
+          step={step}
           disabled={disabled}
           value={row.original[field]}
           onFocus={() => onSelectRow(row.index)}
@@ -349,7 +350,7 @@ export function DetailsGrid({
           />
         ),
       },
-      numberCell("qnty", "qnty", "Qty"),
+      numberCell("qnty", "qnty", "Qty", "1"),
       numberCell("bonus", "bonus", "Bonus"),
       {
         id: "unitId",

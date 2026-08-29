@@ -176,6 +176,16 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: null,
       },
       {
+        title: "Purchase Invoice Reversal",
+        href: "/dashboard/transactions/purchase/reversal",
+        permission: null,
+      },
+      {
+        title: "Invoice Draft",
+        href: "/dashboard/transactions/purchase/invoice-draft",
+        permission: null,
+      },
+      {
         title: "Return",
         href: "/dashboard/transactions/return",
         permission: null,
@@ -216,6 +226,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
   "/dashboard/transactions/purchase": "Purchase",
+  "/dashboard/transactions/purchase/reversal": "Purchase Invoice Reversal",
+  "/dashboard/transactions/purchase/invoice-draft": "Invoice Draft",
   "/dashboard/transactions/return": "Return",
   "/dashboard/transactions/purchase/import": "Import Purchase Excel",
   "/dashboard/stock": "Stock Control",
