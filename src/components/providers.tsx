@@ -5,6 +5,7 @@ import type { Session } from "next-auth";
 import { UnitOfflineBootstrap } from "@/components/offline/unit-offline-bootstrap";
 import { OfflineProvider } from "@/components/providers/offline-provider";
 import { PermissionProvider } from "@/components/permissions/permission-provider";
+import { PharmacyScopeProvider } from "@/components/pharmacy/pharmacy-scope-provider";
 
 export function Providers({
   children,
@@ -17,7 +18,9 @@ export function Providers({
     <SessionProvider session={session} refetchOnWindowFocus={false}>
       <OfflineProvider autoSync>
         <UnitOfflineBootstrap />
-        <PermissionProvider>{children}</PermissionProvider>
+        <PermissionProvider>
+          <PharmacyScopeProvider>{children}</PharmacyScopeProvider>
+        </PermissionProvider>
       </OfflineProvider>
     </SessionProvider>
   );

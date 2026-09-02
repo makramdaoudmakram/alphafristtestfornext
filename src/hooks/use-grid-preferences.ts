@@ -92,21 +92,7 @@ export function useGridPreferences({
     [columns]
   );
 
-  const [preferences, setPreferences] = useState<GridPreferences>(() => {
-    const stored = readGridPreferencesFromStorage(storageKey);
-    if (stored) {
-      return mergeGridPreferences(columns, stored, minWidth, maxWidth);
-    }
-
-    if (legacyWidthStorageKey) {
-      const migrated = migrateLegacyWidthStorage(legacyWidthStorageKey, columns);
-      if (migrated) {
-        return mergeGridPreferences(columns, migrated, minWidth, maxWidth);
-      }
-    }
-
-    return defaultPreferences;
-  });
+  const [preferences, setPreferences] = useState<GridPreferences>(defaultPreferences);
 
   const [isResizing, setIsResizing] = useState(false);
   const resizeSessionRef = useRef<{

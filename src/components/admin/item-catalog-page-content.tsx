@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { useSession } from "next-auth/react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   createItemCatalog,
@@ -30,6 +31,8 @@ import type { ItemOriginItem } from "@/types/item-origin";
 import type { UnitItem } from "@/types/unit";
 import { ItemCatalogForm } from "@/components/admin/item-catalog/item-catalog-form";
 import { useItemCatalogColumns } from "@/components/admin/item-catalog-table-columns";
+import { ExcelTemplateWizard } from "@/components/excel/excel-template-wizard";
+import { ExcelImportDialog } from "@/components/excel/excel-import-dialog";
 import { ActionGuard, PageGuard } from "@/components/permissions/page-guard";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { DataTable } from "@/components/data-table";
@@ -92,6 +95,8 @@ export function ItemCatalogPageContent() {
   const [activeTab, setActiveTab] = useState(DEFAULT_TAB);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [templateWizardOpen, setTemplateWizardOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [formValues, setFormValues] = useState<ItemCatalogFormValues>(
     emptyItemCatalogFormValues
   );
@@ -390,6 +395,28 @@ export function ItemCatalogPageContent() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <ActionGuard permission={PERMISSIONS.itemCatalog.import}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setImportDialogOpen(true)}
+                disabled={!sessionReady || !token}
+              >
+                <Upload className="size-4" />
+                Import Excel
+              </Button>
+            </ActionGuard>
+            <ActionGuard permission={PERMISSIONS.itemCatalog.export}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setTemplateWizardOpen(true)}
+                disabled={!sessionReady || !token}
+              >
+                <FileSpreadsheet className="size-4" />
+                Download Excel Template
+              </Button>
+            </ActionGuard>
             <ActionGuard permission={PERMISSIONS.itemCatalog.create}>
               <Button type="button" variant="outline" onClick={handleNew}>
                 New item
@@ -501,6 +528,23 @@ export function ItemCatalogPageContent() {
             ) : null}
           </CardContent>
         </Card>
+
+        <ExcelTemplateWizard
+          open={templateWizardOpen}
+          onOpenChange={setTemplateWizardOpen}
+          entityName="ItemCatalog"
+          entityLabel="Item Catalog"
+          token={token}
+        />
+
+        <ExcelImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          entityName="ItemCatalog"
+          entityLabel="Item Catalog"
+          token={token}
+          onCommitted={loadPageData}
+        />
       </div>
     </PageGuard>
   );

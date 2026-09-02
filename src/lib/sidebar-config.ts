@@ -30,6 +30,16 @@ export const SIDEBAR_NAV: NavItem[] = [
     permission: null,
   },
   {
+    title: "Sales Test",
+    href: "/dashboard/sales-test",
+    permission: PERMISSIONS.sales.view,
+  },
+  {
+    title: "System Audit Center",
+    href: "/dashboard/audit",
+    permission: PERMISSIONS.permissions.manage,
+  },
+  {
     title: "Settings",
     groups: [
       {
@@ -54,6 +64,10 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "User Permissions",
             href: "/dashboard/admin/user-permissions",
+          },
+          {
+            title: "Pharmacy Scope",
+            href: "/dashboard/admin/pharmacy-scope",
           },
           {
             title: "Role Permissions",
@@ -191,8 +205,18 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: null,
       },
       {
-        title: "Stock",
-        href: "/dashboard/stock",
+        title: "Pharmacy Receiving",
+        href: "/dashboard/transactions/pharm-recive",
+        permission: null,
+      },
+      {
+        title: "Inventory",
+        href: "/dashboard/inventory",
+        permission: PERMISSIONS.stock.view,
+      },
+      {
+        title: "Inventory Adjustment",
+        href: "/dashboard/transactions/inventory-adjustment",
         permission: PERMISSIONS.stock.view,
       },
     ],
@@ -201,12 +225,15 @@ export const SIDEBAR_NAV: NavItem[] = [
 
 export const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Overview",
+  "/dashboard/audit": "System Audit Center",
   "/dashboard/admin/permissions": "Create Permission",
   "/dashboard/admin/roles": "Create Role",
   "/dashboard/admin/users": "Users",
   "/dashboard/admin/user-roles": "Assign User Roles",
   "/dashboard/admin/user-permissions": "User Permissions",
   "/dashboard/permissions": "Role Permissions",
+  "/dashboard/sales-test": "Sales Test",
+  "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/customers": "Customers",
   "/dashboard/item-formats": "Item Formats",
   "/dashboard/item-origins": "Item Origins",
@@ -229,8 +256,12 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/transactions/purchase/reversal": "Purchase Invoice Reversal",
   "/dashboard/transactions/purchase/invoice-draft": "Invoice Draft",
   "/dashboard/transactions/return": "Return",
+  "/dashboard/transactions/pharm-recive": "Pharmacy Receiving",
+  "/dashboard/transactions/pharm-recive/import": "Pharmacy Receiving Excel Import",
   "/dashboard/transactions/purchase/import": "Import Purchase Excel",
-  "/dashboard/stock": "Stock Control",
+  "/dashboard/inventory": "Inventory",
+  "/dashboard/stock": "Inventory",
+  "/dashboard/transactions/inventory-adjustment": "Inventory Adjustment",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",
 };

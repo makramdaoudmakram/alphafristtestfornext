@@ -213,15 +213,43 @@ function normalizeUserRoles(data: Record<string, unknown>): UserRoles {
   };
 }
 
+function coerceNullableBoolean(value: unknown): boolean | null | undefined {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1" || normalized === "yes")
+      return true;
+    if (normalized === "false" || normalized === "0" || normalized === "no")
+      return false;
+    if (!normalized) return null;
+  }
+  return undefined;
+}
+
 function readNullableBoolean(
   obj: Record<string, unknown>,
   ...keys: string[]
 ): boolean | null {
   for (const key of keys) {
-    if (!(key in obj)) continue;
-    const value = obj[key];
-    if (value === null || value === undefined) return null;
-    if (typeof value === "boolean") return value;
+    let found = false;
+    let value: unknown;
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      found = true;
+      value = obj[key];
+    } else {
+      const match = Object.entries(obj).find(
+        ([name]) => name.toLowerCase() === key.toLowerCase()
+      );
+      if (match) {
+        found = true;
+        value = match[1];
+      }
+    }
+    if (!found) continue;
+    const coerced = coerceNullableBoolean(value);
+    if (coerced !== undefined) return coerced;
   }
   return null;
 }
@@ -630,7 +658,15 @@ function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogIte
       "Itm_DefPharm_Price",
       "ItmDefPharmPrice"
     ),
-    itmHasExpire: readNullableBoolean(item, "itmHasExpire", "Itm_Has_Expire"),
+    itmHasExpire: readNullableBoolean(
+      item,
+      "itmHasExpire",
+      "itm_Has_Expire",
+      "Itm_Has_Expire",
+      "ItmHasExpire",
+      "hasExpire",
+      "HasExpire"
+    ),
     itmIsmedicine: readBoolean(item, "itmIsmedicine", "Itm_Ismedicine"),
     itmActive: readBoolean(item, "itmActive", "Itm_Active"),
     itmStopSell: readBoolean(item, "itmStopSell", "Itm_Stop_Sell"),
@@ -1618,8 +1654,10 @@ function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem 
     itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
     itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
     storeId: readNumber(item, "storeId", "StoreId"),
+    storeName: readNullableString(item, "storeName", "StoreName"),
     expDate: readNullableString(item, "expDate", "ExpDate"),
     qty: readNumber(item, "qty", "Qty"),
+    qtyUnit3: readNullableNumber(item, "qtyUnit3", "QtyUnit3"),
     purshPrice: readNumber(item, "purshPrice", "PurshPrice"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
     costPrice: readNumber(item, "costPrice", "CostPrice"),
@@ -1697,6 +1735,24 @@ export function searchStockBatches(token: string, filters: StockSearchFilters = 
   );
 }
 
+/** Inventory adjustment — returns batches or auto-creates a zero-qty batch on the server. */
+export function searchStockBatchesForInventoryAdjustment(
+  token: string,
+  filters: { itemCode: string; storeId: string; pageSize?: number }
+) {
+  const params = new URLSearchParams();
+  params.set("itemCode", filters.itemCode.trim());
+  params.set("storeId", filters.storeId.trim());
+  params.set("pageNumber", "1");
+  params.set("pageSize", String(filters.pageSize ?? 100));
+
+  return apiFetch<unknown>(
+    `Stock/inventory-adjustment-batches?${params.toString()}`,
+    {},
+    token
+  ).then(normalizeStockPagedResult);
+}
+
 export function getStockBalanceByItem(
   itemCode: string,
   token: string,
@@ -1722,7 +1778,11 @@ export function searchReturnItemsWithStock(
   token: string,
   search: string,
   storeId: string,
-  options?: { take?: number; signal?: AbortSignal }
+  options?: {
+    take?: number;
+    language?: "en" | "ar";
+    signal?: AbortSignal;
+  }
 ) {
   const params = new URLSearchParams();
   const q = search.trim();
@@ -1730,6 +1790,9 @@ export function searchReturnItemsWithStock(
   params.set("storeId", storeId.trim());
   if (options?.take != null && options.take > 0) {
     params.set("take", String(options.take));
+  }
+  if (options?.language === "en" || options?.language === "ar") {
+    params.set("language", options.language);
   }
 
   return apiFetch<unknown>(
@@ -3059,6 +3122,60 @@ export function lookupItemCatalog(
       normalizeItemCatalogLookupItem(row as Record<string, unknown>)
     );
   });
+}
+
+/**
+ * Inventory adjustment item name search — two or more spaces separate LIKE wildcards.
+ * Server builds the pattern (e.g. "aug  lm" → %aug%lm%).
+ * Falls back to the standard lookup endpoint when segment routes are unavailable.
+ */
+export async function lookupItemCatalogBySegment(
+  token: string,
+  search: string,
+  field: "code" | "nameAr" | "nameEn",
+  options?: { take?: number; signal?: AbortSignal }
+): Promise<ItemCatalogItem[]> {
+  const term = search.trim();
+  if (!term) return [];
+
+  const take = String(options?.take ?? 20);
+  const params = new URLSearchParams();
+  params.set("search", term);
+  params.set("field", field);
+  params.set("take", take);
+
+  const mapRows = (data: unknown): ItemCatalogItem[] => {
+    if (!Array.isArray(data)) return [];
+    return data.map((row) =>
+      normalizeItemCatalogLookupItem(row as Record<string, unknown>)
+    );
+  };
+
+  try {
+    const data = await apiFetch<unknown>(
+      `ItemCatalog/lookup-segment?${params.toString()}`,
+      { signal: options?.signal },
+      token
+    );
+    return mapRows(data);
+  } catch (error) {
+    if (options?.signal?.aborted) throw error;
+
+    const segmentParams = new URLSearchParams(params);
+    segmentParams.set("segment", "true");
+
+    try {
+      const data = await apiFetch<unknown>(
+        `ItemCatalog/lookup?${segmentParams.toString()}`,
+        { signal: options?.signal },
+        token
+      );
+      return mapRows(data);
+    } catch (innerError) {
+      if (options?.signal?.aborted) throw innerError;
+      return lookupItemCatalog(token, term, options);
+    }
+  }
 }
 
 const ITEM_CATALOG_BY_CODES_BATCH = 500;

@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { getAlfaApiHint } from "@/lib/api-config";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { usePermissions, canAccessPermission } from "./permission-provider";
@@ -14,14 +17,31 @@ import {
 
 export function PageGuard({
   permission,
+  redirectTo,
   children,
 }: {
   permission: string | string[] | null;
+  redirectTo?: string;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const { roles, permissions, loading, ready, error, refresh } =
     usePermissions();
   const hydrated = useHydrated();
+  const signingOutRef = useRef(false);
+  const redirectedRef = useRef(false);
+
+  useEffect(() => {
+    if (!error) return;
+    const lower = error.toLowerCase();
+    const isSessionError =
+      lower.includes("session") ||
+      lower.includes("sign in") ||
+      lower.includes("unauthorized");
+    if (!isSessionError || signingOutRef.current) return;
+    signingOutRef.current = true;
+    void signOut({ callbackUrl: "/login" });
+  }, [error]);
 
   const allowed =
     permission === null
@@ -31,6 +51,15 @@ export function PageGuard({
             canAccessPermission(code, roles, permissions)
           )
         : canAccessPermission(permission, roles, permissions);
+
+  useEffect(() => {
+    if (!redirectTo || redirectedRef.current) return;
+    if (!hydrated || loading || !ready || error) return;
+    if (allowed) return;
+
+    redirectedRef.current = true;
+    router.replace(redirectTo);
+  }, [allowed, error, hydrated, loading, ready, redirectTo, router]);
 
   if (!hydrated || loading || !ready) {
     return (
@@ -44,6 +73,22 @@ export function PageGuard({
   }
 
   if (error) {
+    const isSessionError =
+      error.toLowerCase().includes("session") ||
+      error.toLowerCase().includes("sign in") ||
+      error.toLowerCase().includes("unauthorized");
+
+    if (isSessionError) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>Session expired</CardTitle>
+            <CardDescription>Redirecting to sign in…</CardDescription>
+          </CardHeader>
+        </Card>
+      );
+    }
+
     return (
       <Card>
         <CardHeader>
@@ -59,19 +104,25 @@ export function PageGuard({
           <Button type="button" variant="outline" onClick={() => void refresh()}>
             Retry
           </Button>
-          {error.toLowerCase().includes("sign in") ||
-          error.toLowerCase().includes("unauthorized") ||
-          error.toLowerCase().includes("session") ? (
-            <Button asChild>
-              <a href="/login">Sign in again</a>
-            </Button>
-          ) : null}
         </CardContent>
       </Card>
     );
   }
 
   if (!allowed) {
+    if (redirectTo) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>Redirecting...</CardTitle>
+            <CardDescription>
+              You do not have permission to view this page.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      );
+    }
+
     return (
       <Card>
         <CardHeader>

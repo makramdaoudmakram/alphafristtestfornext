@@ -17,6 +17,7 @@ import {
   getReturnItemStockSearchDisplayParts,
   RETURN_ITEM_STOCK_SEARCH_DEBOUNCE_MS,
   RETURN_ITEM_STOCK_SEARCH_LIMIT,
+  type ItemStockSearchLanguage,
 } from "@/lib/return-item-stock-search";
 import { cn } from "@/lib/utils";
 import type { ReturnItemStockSearchItem } from "@/types/stock";
@@ -28,6 +29,8 @@ type ReturnItemStockSearchBoxProps = {
   storeId?: string;
   disabled?: boolean;
   className?: string;
+  /** When set, search and result labels use Arabic or English names. */
+  itemLanguage?: ItemStockSearchLanguage;
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
 };
@@ -44,6 +47,7 @@ export function ReturnItemStockSearchBox({
   storeId,
   disabled = false,
   className,
+  itemLanguage,
   onItemSelected,
 }: ReturnItemStockSearchBoxProps) {
   const listId = useId();
@@ -90,6 +94,7 @@ export function ReturnItemStockSearchBox({
       try {
         const rows = await searchReturnItemsWithStock(token, q, storeId, {
           take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+          language: itemLanguage,
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
@@ -106,7 +111,7 @@ export function ReturnItemStockSearchBox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, token, storeId, wantList, inputDisabled]);
+  }, [query, token, storeId, wantList, inputDisabled, itemLanguage]);
 
   useEffect(() => {
     setHighlight(0);
@@ -239,13 +244,13 @@ export function ReturnItemStockSearchBox({
         ) : null}
         {results.map((item, index) => {
           const { itemName, expDate, totalQuantity, salesPrice } =
-            getReturnItemStockSearchDisplayParts(item);
+            getReturnItemStockSearchDisplayParts(item, itemLanguage);
           return (
           <li
             key={`${item.itemCatalogId}-${item.batchNo}-${item.expDate ?? ""}-${item.salesPrice}-${index}`}
             role="option"
             aria-selected={index === highlight}
-            aria-label={formatReturnItemStockSearchLabel(item)}
+            aria-label={formatReturnItemStockSearchLabel(item, itemLanguage)}
             data-suggestion-index={index}
           >
             <button
@@ -319,7 +324,9 @@ export function ReturnItemStockSearchBox({
         value={query}
         placeholder={
           storeReady
-            ? "Search item — Name / Exp Date / Qty / Sales Price"
+            ? itemLanguage === "ar"
+              ? "بحث عن صنف — الاسم / تاريخ الانتهاء / الكمية / سعر البيع"
+              : "Search item — Name / Exp Date / Qty / Sales Price"
             : "Select a movement first"
         }
         className={formControlFocusClass}

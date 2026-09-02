@@ -25,6 +25,14 @@ function formatMoney(value: number) {
   return Number.isFinite(value) ? value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : "—";
 }
 
+function stockDisplayQty(row: StockBatchItem) {
+  return row.qtyUnit3 != null && Number.isFinite(row.qtyUnit3) ? row.qtyUnit3 : row.qty;
+}
+
+function stockDisplayStoreName(row: StockBatchItem) {
+  return row.storeName?.trim() || String(row.storeId);
+}
+
 type UseStockColumnsOptions = {
   onPrintBarcode?: (row: StockBatchItem) => void;
 };
@@ -62,7 +70,7 @@ export function useStockColumns(options: UseStockColumnsOptions = {}): ColumnDef
         {
           accessorKey: "storeId",
           header: "Store",
-          cell: ({ row }) => String(row.original.storeId),
+          cell: ({ row }) => cellText(stockDisplayStoreName(row.original)),
         },
         {
           accessorKey: "expDate",
@@ -72,7 +80,7 @@ export function useStockColumns(options: UseStockColumnsOptions = {}): ColumnDef
         {
           accessorKey: "qty",
           header: "Qty",
-          cell: ({ row }) => formatQty(row.original.qty),
+          cell: ({ row }) => formatQty(stockDisplayQty(row.original)),
         },
         {
           accessorKey: "purshPrice",

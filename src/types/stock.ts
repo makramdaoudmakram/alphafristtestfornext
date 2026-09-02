@@ -5,8 +5,11 @@ export interface StockBatchItem {
   itemNameAr: string | null;
   itemNameEn: string | null;
   storeId: number;
+  storeName: string | null;
   expDate: string | null;
   qty: number;
+  /** Qty in Unit 3 (base qty / Itm_Unit1_Unit3). */
+  qtyUnit3: number | null;
   purshPrice: number;
   salesPrice: number;
   costPrice: number;

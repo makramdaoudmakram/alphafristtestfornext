@@ -104,10 +104,15 @@ export function StockBarcodeScanCard({ token, onBatchFound }: StockBarcodeScanCa
               {lastResult.batch.itemNameEn || lastResult.batch.itemNameAr || "—"}
             </p>
             <p className="text-muted-foreground mt-1">
-              Store {lastResult.batch.storeId}
+              {lastResult.batch.storeName?.trim() || `Store ${lastResult.batch.storeId}`}
               {lastResult.batch.expDate ? ` · Exp ${lastResult.batch.expDate}` : ""}
               {" · "}
-              Qty {lastResult.batch.qty.toLocaleString()}
+              Qty{" "}
+              {(lastResult.batch.qtyUnit3 != null &&
+              Number.isFinite(lastResult.batch.qtyUnit3)
+                ? lastResult.batch.qtyUnit3
+                : lastResult.batch.qty
+              ).toLocaleString()}
             </p>
           </div>
         ) : null}

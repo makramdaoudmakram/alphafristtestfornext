@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { searchStockBatches } from "@/lib/api-client";
+import { getStors, searchStockBatches } from "@/lib/api-client";
 import { useStockColumns } from "@/components/stock/stock-table-columns";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { StockBarcodeScanCard } from "@/components/stock/stock-barcode-scan-card";
 import { stockBatchToBarcodeLabel } from "@/components/stock/stock-barcode-label";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { PERMISSIONS } from "@/lib/route-permissions";
+import { formatStorDisplayName } from "@/lib/purchase-stores";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,7 +22,12 @@ import {
 import { DataTable } from "@/components/data-table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  SearchableCombobox,
+  type ComboboxOption,
+} from "@/components/ui/searchable-combobox";
 import type { StockBarcodeLabel, StockBatchItem, StockSearchFilters } from "@/types/stock";
+import type { StorItem } from "@/types/stor";
 
 const emptyFilters: StockSearchFilters = {
   itemCode: "",
@@ -46,6 +52,20 @@ export function StockPageContent() {
   const [printOpen, setPrintOpen] = useState(false);
   const [printLabels, setPrintLabels] = useState<StockBarcodeLabel[]>([]);
   const [highlightBatchNo, setHighlightBatchNo] = useState<string | null>(null);
+  const [stores, setStores] = useState<StorItem[]>([]);
+
+  const storeOptions = useMemo<ComboboxOption[]>(() => {
+    const options: ComboboxOption[] = [
+      { value: "", label: "All stores" },
+      ...stores
+        .map((store) => ({
+          value: String(store.id),
+          label: formatStorDisplayName(store) || `Store ${store.id}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })),
+    ];
+    return options;
+  }, [stores]);
 
   const openPrintForBatch = useCallback((batch: StockBatchItem) => {
     setPrintLabels([stockBatchToBarcodeLabel(batch)]);
@@ -86,6 +106,16 @@ export function StockPageContent() {
     if (!sessionReady) return;
     void loadItems();
   }, [sessionReady, loadItems]);
+
+  useEffect(() => {
+    if (!token) {
+      setStores([]);
+      return;
+    }
+    void getStors(token)
+      .then(setStores)
+      .catch(() => setStores([]));
+  }, [token]);
 
   function patchFilters(partial: Partial<StockSearchFilters>) {
     setFilters((current) => ({ ...current, ...partial }));
@@ -171,11 +201,13 @@ export function StockPageContent() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="stock-store">Store</Label>
-                <Input
-                  id="stock-store"
+                <SearchableCombobox
                   value={filters.storeId ?? ""}
-                  onChange={(event) => patchFilters({ storeId: event.target.value })}
-                  placeholder="Store id..."
+                  onValueChange={(value) => patchFilters({ storeId: value })}
+                  options={storeOptions}
+                  placeholder="All stores"
+                  searchPlaceholder="Search store..."
+                  emptyMessage="No stores found."
                 />
               </div>
               <div className="space-y-2">

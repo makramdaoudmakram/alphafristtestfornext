@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import { SidebarProvider, useSidebar } from "@/components/dashboard/sidebar-context";
 import { PAGE_TITLES } from "@/lib/sidebar-config";
+import { PharmacySelector } from "@/components/pharmacy/pharmacy-selector";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,6 +84,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               )}
             </BreadcrumbList>
           </Breadcrumb>
+
+          <div className="ml-auto">
+            <PharmacySelector />
+          </div>
         </header>
 
         <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>

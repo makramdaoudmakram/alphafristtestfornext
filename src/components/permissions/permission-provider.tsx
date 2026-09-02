@@ -6,9 +6,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { getMyPermissions, ApiError } from "@/lib/api-client";
 import { useHydrated } from "@/hooks/use-hydrated";
 
@@ -44,6 +45,13 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
   const [permissions, setPermissions] = useState<string[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signingOutRef = useRef(false);
+
+  const redirectToLogin = useCallback(() => {
+    if (signingOutRef.current) return;
+    signingOutRef.current = true;
+    void signOut({ callbackUrl: "/login" });
+  }, []);
 
   const loadPermissions = useCallback(async () => {
     if (status === "loading") {
@@ -70,20 +78,19 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       setPermissions([]);
 
       if (err instanceof ApiError && err.status === 401) {
-        setError(
-          "Your session expired or the token is invalid. Please sign out and sign in again."
-        );
-      } else {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Could not load your permissions from the API."
-        );
+        redirectToLogin();
+        return;
       }
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load your permissions from the API."
+      );
     } finally {
       setFetching(false);
     }
-  }, [session?.accessToken, status]);
+  }, [redirectToLogin, session?.accessToken, status]);
 
   useEffect(() => {
     void loadPermissions();

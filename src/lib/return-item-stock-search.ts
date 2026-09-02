@@ -11,6 +11,8 @@ import {
 } from "@/lib/return-exp-date";
 import type { ReturnItemStockSearchItem } from "@/types/stock";
 
+export type ItemStockSearchLanguage = "en" | "ar";
+
 export const RETURN_ITEM_STOCK_SEARCH_LIMIT = 15;
 export const RETURN_ITEM_STOCK_SEARCH_DEBOUNCE_MS = 250;
 
@@ -37,9 +39,37 @@ function formatSearchResultExpDateForDetail(value: string | null): string {
   return month ? monthInputToExpDate(month) : "";
 }
 
+/** Resolve display name for stock search / detail rows. */
+export function resolveItemStockSearchDisplayName(
+  item: Pick<
+    ReturnItemStockSearchItem,
+    "itemNameAr" | "itemNameEn" | "itemName" | "itemCode"
+  >,
+  language?: ItemStockSearchLanguage
+): string {
+  if (language === "ar") {
+    return (
+      item.itemNameAr?.trim() ||
+      item.itemNameEn?.trim() ||
+      item.itemCode?.trim() ||
+      item.itemName.trim()
+    );
+  }
+  if (language === "en") {
+    return (
+      item.itemNameEn?.trim() ||
+      item.itemNameAr?.trim() ||
+      item.itemCode?.trim() ||
+      item.itemName.trim()
+    );
+  }
+  return item.itemName.trim();
+}
+
 /** Four display parts — itemName is catalog name only (no qty/price). */
 export function getReturnItemStockSearchDisplayParts(
-  item: ReturnItemStockSearchItem
+  item: ReturnItemStockSearchItem,
+  language?: ItemStockSearchLanguage
 ): {
   itemName: string;
   expDate: string;
@@ -47,7 +77,7 @@ export function getReturnItemStockSearchDisplayParts(
   salesPrice: string;
 } {
   return {
-    itemName: item.itemName.trim(),
+    itemName: resolveItemStockSearchDisplayName(item, language),
     expDate: formatReturnItemStockSearchExpDate(item.expDate),
     totalQuantity: formatDisplayNumber(item.totalQuantity),
     salesPrice: formatDisplayNumber(item.salesPrice),
@@ -56,10 +86,11 @@ export function getReturnItemStockSearchDisplayParts(
 
 /** Single-line display: Item Name / ExpDate / Qty / Sales Price. */
 export function formatReturnItemStockSearchLabel(
-  item: ReturnItemStockSearchItem
+  item: ReturnItemStockSearchItem,
+  language?: ItemStockSearchLanguage
 ): string {
   const { itemName, expDate, totalQuantity, salesPrice } =
-    getReturnItemStockSearchDisplayParts(item);
+    getReturnItemStockSearchDisplayParts(item, language);
   return `${itemName} / ${expDate} / ${totalQuantity} / ${salesPrice}`;
 }
 

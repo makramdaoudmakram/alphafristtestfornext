@@ -146,7 +146,7 @@ export function findCatalogItemByCode(
   );
 }
 
-function indexCatalogItem(
+export function indexCatalogItem(
   map: Map<string, ItemCatalogItem>,
   item: ItemCatalogItem,
   catalogItems?: readonly ItemCatalogItem[]

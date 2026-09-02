@@ -22,6 +22,7 @@ import {
 } from "@/lib/item-unit-options";
 import { createUnitService } from "@/services/unit.service";
 import { DetailsGrid } from "@/components/purchase/DetailsGrid";
+import { DocumentAuditDetails } from "@/components/audit/DocumentAuditDetails";
 import {
   HeaderPrimaryFields,
   HeaderTotalsFields,
@@ -71,6 +72,7 @@ export function PurchasePageContent() {
     useState<MovmentLookupItem | null>(null);
   const [pthIdLoading, setPthIdLoading] = useState(false);
   const [templateDownloading, setTemplateDownloading] = useState(false);
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const nextValueAbortRef = useRef<AbortController | null>(null);
   const nextValueRequestRef = useRef(0);
   const movementSyncRequestRef = useRef(0);
@@ -300,6 +302,7 @@ export function PurchasePageContent() {
   const hasRecord = !!form.watch("id");
   const isPosted = form.watch("movStat") === 5;
   const recordId = form.watch("id");
+  const documentNumber = form.watch("pthId");
 
   const syncMovementFromLoadedHeader = useCallback(async () => {
     if (!token || recordId == null) return;
@@ -551,7 +554,10 @@ export function PurchasePageContent() {
       action: {
         label: "Delete",
         onClick: () =>
-          void handleDelete().then(() => setSelectedMovement(null)),
+          void handleDelete().then(() => {
+            setSelectedMovement(null);
+            setAuditRefreshKey((value) => value + 1);
+          }),
       },
       cancel: { label: "Cancel", onClick: () => toast.message("Cancelled") },
     });
@@ -601,9 +607,17 @@ export function PurchasePageContent() {
           barcodeLoading={barcodeLoading}
           nav={navState}
           onNew={onNew}
-          onSave={() => void handleSave(itemByCode, selectedMovement, catalogItems)}
+          onSave={() => {
+            void handleSave(itemByCode, selectedMovement, catalogItems).then(() => {
+              setAuditRefreshKey((value) => value + 1);
+            });
+          }}
           onTransfer={handleTransfer}
-          onPost={() => void handlePost(itemByCode, catalogItems)}
+          onPost={() => {
+            void handlePost(itemByCode, catalogItems).then(() => {
+              setAuditRefreshKey((value) => value + 1);
+            });
+          }}
           onPrintBarcode={() => void handlePrintBarcode()}
           onEdit={handleEdit}
           onDelete={confirmDelete}
@@ -618,6 +632,7 @@ export function PurchasePageContent() {
             void loadItemCatalog();
             void loadUnits();
             void handleRefresh(itemByCode, catalogItems);
+            setAuditRefreshKey((value) => value + 1);
           }}
           onFirst={() => void navigate("first", itemByCode, catalogItems)}
           onPrev={() => void navigate("prev", itemByCode, catalogItems)}
@@ -713,6 +728,14 @@ export function PurchasePageContent() {
             />
           </CardContent>
         </Card>
+
+        <DocumentAuditDetails
+          token={token}
+          entityType="Purchase"
+          entityId={recordId}
+          documentNumber={documentNumber}
+          refreshKey={auditRefreshKey}
+        />
 
         <SearchDialog
           open={searchOpen}

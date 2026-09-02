@@ -1,6 +1,7 @@
 /** Maps dashboard routes to required page permissions */
 export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard": null,
+  "/dashboard/audit": "Permissions.Manage",
   "/dashboard/permissions": "Permissions.Manage",
   "/dashboard/admin/permissions": "Permissions.Manage",
   "/dashboard/admin/roles": "Permissions.Manage",
@@ -25,6 +26,8 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/stores": null,
   "/dashboard/vendors": null,
   "/dashboard/stock": "Stock.View",
+  "/dashboard/inventory": "Stock.View",
+  "/dashboard/transactions/inventory-adjustment": "Stock.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/transactions/purchase": null,
@@ -86,6 +89,8 @@ export const PERMISSIONS = {
     create: "ItemCatalog.Create",
     edit: "ItemCatalog.Edit",
     delete: "ItemCatalog.Delete",
+    import: "ItemCatalog.Import",
+    export: "ItemCatalog.Export",
   },
   group: {
     view: "Group.View",
@@ -113,6 +118,12 @@ export const PERMISSIONS = {
   permissions: {
     manage: "Permissions.Manage",
   },
+  pharmacyScope: {
+    manage: "PharmacyScope.Manage",
+  },
+  sales: {
+    view: "Sales.View",
+  },
   users: {
     view: "Users.View",
     create: "Users.Create",
@@ -123,6 +134,11 @@ export const PERMISSIONS = {
 
 export const NAV_LINKS = [
   { href: "/dashboard", label: "Overview", permission: null },
+  {
+    href: "/dashboard/audit",
+    label: "System Audit Center",
+    permission: PERMISSIONS.permissions.manage,
+  },
   {
     href: "/dashboard/admin/permissions",
     label: "Create Permissions",

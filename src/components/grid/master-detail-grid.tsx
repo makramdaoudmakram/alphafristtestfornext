@@ -63,6 +63,7 @@ export type MasterDetailGridProps<TData extends RowData> = {
   ) => string | undefined;
   isGridField?: (target: HTMLElement) => boolean;
   shouldIgnoreKeyDown?: (target: HTMLElement, event: KeyboardEvent) => boolean;
+  getRowClassName?: (row: TData, index: number) => string | undefined;
   /** Expose keyboard helpers to column cell renderers via render prop context. */
   keyboardRef?: React.MutableRefObject<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
@@ -91,6 +92,7 @@ export function MasterDetailGrid<TData extends RowData>({
   getFocusColumnAfter,
   isGridField,
   shouldIgnoreKeyDown,
+  getRowClassName,
   keyboardRef,
 }: MasterDetailGridProps<TData>) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -214,7 +216,10 @@ export function MasterDetailGrid<TData extends RowData>({
                   <TableRow
                     key={row.id}
                     data-state={row.index === selectedRowIndex ? "selected" : undefined}
-                    className={cn(row.index === selectedRowIndex && "bg-muted/40")}
+                    className={cn(
+                      row.index === selectedRowIndex && "bg-muted/40",
+                      getRowClassName?.(row.original, row.index)
+                    )}
                     onClick={() => onSelectRow(row.index)}
                   >
                     {row.getVisibleCells().map((cell) => (
