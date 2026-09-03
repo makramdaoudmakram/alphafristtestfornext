@@ -4,6 +4,9 @@ import type {
   InventoryAdjustmentDocument,
   InventoryAdjustmentSaveResult,
   InventoryAdjustmentUpsertPayload,
+  InventoryPostingListItem,
+  InventoryPostingPage,
+  InventoryPostingQuery,
 } from "@/types/inventory-adjustment";
 
 type InventoryApiValidationError = {
@@ -156,6 +159,33 @@ export class InventoryAdjustmentRepository {
       throw new InventoryAdjustmentRepositoryError(message, response.status);
     }
   }
+
+  async listUnpostedForPosting(
+    query: InventoryPostingQuery
+  ): Promise<InventoryPostingPage> {
+    const params = new URLSearchParams();
+    params.set("pageNumber", String(query.pageNumber));
+    params.set("pageSize", String(query.pageSize));
+    if (query.storeId?.trim()) {
+      params.set("storeId", query.storeId.trim());
+    }
+
+    const response = await fetch(
+      this.url(`InventoryH/pending-for-posting?${params.toString()}`),
+      { headers: this.authHeaders() }
+    );
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return normalizeInventoryPostingPage(raw);
+  }
+
+  async post(id: number): Promise<InventoryAdjustmentDocument> {
+    const response = await fetch(this.url(`InventoryH/${id}/post`), {
+      method: "POST",
+      headers: this.authHeaders(),
+    });
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return mapDocumentFromApi(raw);
+  }
 }
 
 export function createInventoryAdjustmentRepository(token: string) {
@@ -170,4 +200,116 @@ export function mapSaveError(error: unknown): InventoryAdjustmentSaveResult {
     return { success: false, message: error.message };
   }
   return { success: false, message: "Inventory save failed." };
+}
+
+function readString(obj: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function readNumber(obj: Record<string, unknown>, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return 0;
+}
+
+function readNullableNumber(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): number | null {
+  for (const key of keys) {
+    const value = obj[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return null;
+}
+
+function readNullableString(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  const value = readString(obj, ...keys).trim();
+  return value.length > 0 ? value : null;
+}
+
+function normalizeInventoryPostingListItem(
+  raw: Record<string, unknown>
+): InventoryPostingListItem {
+  return {
+    id: readNumber(raw, "id", "Id"),
+    fhId: readNullableNumber(raw, "fhId", "FhId"),
+    movId: readNullableNumber(raw, "movId", "MovId"),
+    movementName: readString(raw, "movementName", "MovementName"),
+    invStore: readString(raw, "invStore", "InvStore"),
+    storeName: readString(raw, "storeName", "StoreName"),
+    invDat: readNullableString(raw, "invDat", "InvDat"),
+    invTotalStockQty: readNullableNumber(raw, "invTotalStockQty", "InvTotalStockQty"),
+    invTotalIncresQty: readNullableNumber(raw, "invTotalIncresQty", "InvTotalIncresQty"),
+    invTotalShortQty: readNullableNumber(raw, "invTotalShortQty", "InvTotalShortQty"),
+    invActTotalSalPriceIncres: readNullableNumber(
+      raw,
+      "invActTotalSalPriceIncres",
+      "InvActTotalSalPriceIncres"
+    ),
+    invActTotalSalPriceShort: readNullableNumber(
+      raw,
+      "invActTotalSalPriceShort",
+      "InvActTotalSalPriceShort"
+    ),
+    invActTotalPPriceIncress: readNullableNumber(
+      raw,
+      "invActTotalPPriceIncress",
+      "InvActTotalPPriceIncress"
+    ),
+    invActTotalPPriceShort: readNullableNumber(
+      raw,
+      "invActTotalPPriceShort",
+      "InvActTotalPPriceShort"
+    ),
+    netInventory: readNullableNumber(raw, "netInventory", "NetInventory"),
+    movStat: readNullableNumber(raw, "movStat", "MovStat"),
+    invAccount1: readString(raw, "invAccount1", "InvAccount1"),
+    invAccount2: readString(raw, "invAccount2", "InvAccount2"),
+  };
+}
+
+function normalizeInventoryPostingPage(
+  raw: Record<string, unknown>
+): InventoryPostingPage {
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) =>
+        normalizeInventoryPostingListItem(item as Record<string, unknown>)
+      )
+    : [];
+
+  const pageNumber = readNumber(raw, "pageNumber", "PageNumber") || 1;
+  const pageSize = readNumber(raw, "pageSize", "PageSize") || items.length;
+  const totalCount = readNumber(raw, "totalCount", "TotalCount");
+  const totalPages =
+    readNumber(raw, "totalPages", "TotalPages") ||
+    (pageSize > 0 ? Math.ceil(totalCount / pageSize) : 0);
+
+  return {
+    items,
+    totalCount,
+    pageNumber,
+    pageSize,
+    totalPages,
+  };
 }

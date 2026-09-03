@@ -28,10 +28,13 @@ import type {
   InventoryAdjustmentDetail,
   InventoryAdjustmentHeader,
 } from "@/types/inventory-adjustment";
+import { isInventoryAdjustmentPosted } from "@/types/inventory-adjustment";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { MovmentLookupItem } from "@/types/movment";
 import {
+  DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE,
   inventoryAdjustmentHeaderSchema,
+  isDecreaseGreaterThanCurrentQty,
   validateInventoryDetails,
   type InventoryAdjustmentHeaderFormValues,
 } from "@/validation/inventory-adjustment.schema";
@@ -147,11 +150,22 @@ export function useInventoryAdjustment(token: string | undefined) {
 
   const updateDetailRow = useCallback(
     (clientRowId: string, patch: Partial<InventoryAdjustmentDetail>) => {
-      setDetails((prev) =>
-        prev.map((row) => {
-          if (row.clientRowId !== clientRowId) return row;
-          const qtyPatch = applyIncreaseDecreasePatch(row, patch);
-          const merged = { ...row, ...patch, ...qtyPatch };
+      let rejectedDecrease = false;
+      setDetails((prev) => {
+        const row = prev.find((item) => item.clientRowId === clientRowId);
+        if (!row) return prev;
+
+        const qtyPatch = applyIncreaseDecreasePatch(row, patch);
+        const merged = { ...row, ...patch, ...qtyPatch };
+        if (
+          isDecreaseGreaterThanCurrentQty(merged.itemShortQty, merged.itmStockQty)
+        ) {
+          rejectedDecrease = true;
+          return prev;
+        }
+
+        return prev.map((item) => {
+          if (item.clientRowId !== clientRowId) return item;
           if (
             "itmIncresQty" in patch ||
             "itemShortQty" in patch ||
@@ -166,8 +180,13 @@ export function useInventoryAdjustment(token: string | undefined) {
             };
           }
           return merged;
-        })
-      );
+        });
+      });
+      if (rejectedDecrease) {
+        toast.error(DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE, {
+          id: "inventory-adjustment-decrease-qty",
+        });
+      }
     },
     []
   );
@@ -181,7 +200,7 @@ export function useInventoryAdjustment(token: string | undefined) {
   }, [resetForm]);
 
   const handleEdit = useCallback(() => {
-    if (form.getValues("movStat") === 5) {
+    if (isInventoryAdjustmentPosted(form.getValues("movStat"))) {
       toast.message("Posted inventory documents cannot be edited.");
       return;
     }
@@ -189,7 +208,7 @@ export function useInventoryAdjustment(token: string | undefined) {
   }, [form]);
 
   const handleDelete = useCallback(async () => {
-    if (form.getValues("movStat") === 5) {
+    if (isInventoryAdjustmentPosted(form.getValues("movStat"))) {
       toast.message("Posted inventory documents cannot be deleted.");
       return;
     }
@@ -217,7 +236,7 @@ export function useInventoryAdjustment(token: string | undefined) {
       return false;
     }
 
-    if (form.getValues("movStat") === 5) {
+    if (isInventoryAdjustmentPosted(form.getValues("movStat"))) {
       toast.message("Posted inventory documents cannot be saved.");
       return false;
     }

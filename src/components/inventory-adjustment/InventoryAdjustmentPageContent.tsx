@@ -60,6 +60,7 @@ import type { StockBatchItem } from "@/types/stock";
 import type { StorItem } from "@/types/stor";
 import type { UnitItem } from "@/types/unit";
 import type { InventoryAdjustmentDetail } from "@/types/inventory-adjustment";
+import { isInventoryAdjustmentPosted } from "@/types/inventory-adjustment";
 
 /** Inventory adjustment uses MovParent / MovParientId = 6 */
 const INVENTORY_MOV_PARENT_ID = 6;
@@ -136,7 +137,7 @@ export function InventoryAdjustmentPageContent() {
   }, [movementStoreId, stores]);
 
   const hasRecord = recordId != null && recordId > 0;
-  const isPosted = movStat === 5;
+  const isPosted = isInventoryAdjustmentPosted(movStat);
   const fhId = watch("fhId");
 
   const loadCatalog = useCallback(async () => {

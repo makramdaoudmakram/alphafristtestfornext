@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export const DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE =
+  "Decrease quantity cannot be greater than current quantity.";
+
+export function isDecreaseGreaterThanCurrentQty(
+  decreaseQty: number,
+  currentQty: number
+): boolean {
+  const decrease = Number.isFinite(decreaseQty) ? decreaseQty : 0;
+  const current = Number.isFinite(currentQty) ? currentQty : 0;
+  return decrease > current;
+}
+
 export const inventoryAdjustmentHeaderSchema = z.object({
   id: z.number().nullable().optional(),
   fhId: z.number().nullable().optional(),
@@ -55,9 +67,8 @@ export function validateInventoryDetails(
       return `Row ${index + 1}: Increase and Decrease cannot both have a value.`;
     }
 
-    const newStockQty = row.itmStockQty + row.itmIncresQty - row.itemShortQty;
-    if (newStockQty < 0) {
-      return `Row ${index + 1}: Decrease cannot exceed current stock.`;
+    if (isDecreaseGreaterThanCurrentQty(row.itemShortQty, row.itmStockQty)) {
+      return `Row ${index + 1}: ${DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE}`;
     }
   }
 

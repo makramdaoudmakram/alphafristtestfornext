@@ -215,8 +215,18 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.stock.view,
       },
       {
+        title: "Batch Management",
+        href: "/dashboard/batch-management",
+        permission: PERMISSIONS.stock.view,
+      },
+      {
         title: "Inventory Adjustment",
         href: "/dashboard/transactions/inventory-adjustment",
+        permission: PERMISSIONS.stock.view,
+      },
+      {
+        title: "Inventory Adjustment Posting",
+        href: "/dashboard/transactions/inventory-adjustment/posting",
         permission: PERMISSIONS.stock.view,
       },
     ],
@@ -260,8 +270,11 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/transactions/pharm-recive/import": "Pharmacy Receiving Excel Import",
   "/dashboard/transactions/purchase/import": "Import Purchase Excel",
   "/dashboard/inventory": "Inventory",
+  "/dashboard/batch-management": "Batch Management",
   "/dashboard/stock": "Inventory",
   "/dashboard/transactions/inventory-adjustment": "Inventory Adjustment",
+  "/dashboard/transactions/inventory-adjustment/posting":
+    "Inventory Adjustment Posting",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",
 };

@@ -32,6 +32,8 @@ type InventoryItemAutocompleteProps = {
   className?: string;
   onChange: (value: string) => void;
   onItemSelected: (item: ItemCatalogItem) => void;
+  /** When false, the search text is left in place after a pick (grid cells). Default true. */
+  clearOnSelect?: boolean;
 };
 
 type MenuPosition = {
@@ -49,6 +51,7 @@ export function InventoryItemAutocomplete({
   className,
   onChange,
   onItemSelected,
+  clearOnSelect = true,
 }: InventoryItemAutocompleteProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -188,10 +191,10 @@ export function InventoryItemAutocomplete({
   const applyItem = useCallback(
     (item: ItemCatalogItem) => {
       onItemSelected(item);
-      onChange("");
+      if (clearOnSelect) onChange("");
       setWantList(false);
     },
-    [onChange, onItemSelected]
+    [clearOnSelect, onChange, onItemSelected]
   );
 
   const applyItemFromPointer = useCallback(

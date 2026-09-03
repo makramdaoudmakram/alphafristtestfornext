@@ -14,6 +14,7 @@ export interface StockBatchItem {
   salesPrice: number;
   costPrice: number;
   allowPrintBarcode: boolean;
+  itemCatalogId?: number;
 }
 
 export interface StockBalanceItem {

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { MasterDetailGrid } from "@/components/grid/master-detail-grid";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,10 @@ import type { InventoryAdjustmentDetail } from "@/types/inventory-adjustment";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
 import type { UnitItem } from "@/types/unit";
+import {
+  DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE,
+  isDecreaseGreaterThanCurrentQty,
+} from "@/validation/inventory-adjustment.schema";
 
 const gridInputClass = cn("h-8 w-full min-w-0 tabular-nums", formControlFocusClass);
 
@@ -159,26 +164,47 @@ export function InventoryAdjustmentDetailsGrid({
         id: "itemShortQty",
         header: "Decrease",
         meta: { editable: true },
-        cell: ({ row }) => (
-          <Input
-            data-row={row.index}
-            data-col="itemShortQty"
-            type="number"
-            step="any"
-            min={0}
-            disabled={disabled}
-            value={
-              Number.isFinite(row.original.itemShortQty) ? row.original.itemShortQty : 0
-            }
-            onFocus={() => onSelectRow(row.index)}
-            onChange={(e) => {
-              onChangeRow(row.index, {
-                itemShortQty: parseQtyInput(e.target.value),
-              });
-            }}
-            className={gridInputClass}
-          />
-        ),
+        cell: ({ row }) => {
+          const currentQty = Number.isFinite(row.original.itmStockQty)
+            ? row.original.itmStockQty
+            : 0;
+          const decreaseQty = Number.isFinite(row.original.itemShortQty)
+            ? row.original.itemShortQty
+            : 0;
+          const decreaseInvalid = isDecreaseGreaterThanCurrentQty(
+            decreaseQty,
+            currentQty
+          );
+
+          return (
+            <Input
+              data-row={row.index}
+              data-col="itemShortQty"
+              type="number"
+              step="any"
+              min={0}
+              max={currentQty}
+              disabled={disabled}
+              aria-invalid={decreaseInvalid}
+              title={decreaseInvalid ? DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE : undefined}
+              value={decreaseQty}
+              onFocus={() => onSelectRow(row.index)}
+              onChange={(e) => {
+                const next = parseQtyInput(e.target.value);
+                if (isDecreaseGreaterThanCurrentQty(next, currentQty)) {
+                  toast.error(DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE, {
+                    id: "inventory-adjustment-decrease-qty",
+                  });
+                  return;
+                }
+                onChangeRow(row.index, {
+                  itemShortQty: next,
+                });
+              }}
+              className={gridInputClass}
+            />
+          );
+        },
       },
       {
         id: "totalpurchvalue",

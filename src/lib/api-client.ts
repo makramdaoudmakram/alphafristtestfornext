@@ -1666,6 +1666,7 @@ function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem 
       "allowPrintBarcode",
       "AllowPrintBarcode"
     ),
+    itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
   };
 }
 
@@ -1751,6 +1752,158 @@ export function searchStockBatchesForInventoryAdjustment(
     {},
     token
   ).then(normalizeStockPagedResult);
+}
+
+export function listBatchManagement(
+  token: string,
+  filters: {
+    itemCatalogId?: number;
+    itemCode?: string;
+    storeId?: number;
+    batchNo?: string;
+  } = {}
+) {
+  const params = new URLSearchParams();
+  if (filters.itemCatalogId && filters.itemCatalogId > 0) {
+    params.set("itemCatalogId", String(filters.itemCatalogId));
+  }
+  if (filters.storeId && filters.storeId > 0) {
+    params.set("storeId", String(filters.storeId));
+  }
+  if (filters.batchNo?.trim()) {
+    params.set("batchNo", filters.batchNo.trim());
+  }
+
+  const query = params.toString();
+  return apiFetch<unknown>(
+    `Stock/batch-management${query ? `?${query}` : ""}`,
+    {},
+    token
+  )
+    .then((data) => {
+      const raw = (data ?? {}) as Record<string, unknown>;
+      const itemsRaw = raw.items ?? raw.Items;
+      if (Array.isArray(itemsRaw)) {
+        return itemsRaw.map((item) =>
+          normalizeBatchManagementRow(item as Record<string, unknown>)
+        );
+      }
+      if (Array.isArray(data)) {
+        return data.map((item) =>
+          normalizeBatchManagementRow(item as Record<string, unknown>)
+        );
+      }
+      return [];
+    })
+    .catch(async () => {
+      const page = await searchStockBatches(token, {
+        itemCode: filters.itemCode,
+        storeId:
+          filters.storeId && filters.storeId > 0
+            ? String(filters.storeId)
+            : undefined,
+        pageNumber: 1,
+        pageSize: 500,
+      });
+      return page.items.map((item) => ({
+        id: item.id,
+        itemCatalogId:
+          item.itemCatalogId && item.itemCatalogId > 0
+            ? item.itemCatalogId
+            : filters.itemCatalogId ?? 0,
+        itemCode: item.itemCode,
+        itemNameAr: item.itemNameAr ?? "",
+        itemNameEn: item.itemNameEn ?? "",
+        batchNo: item.batchNo,
+        storeId: item.storeId,
+        storeName: item.storeName ?? "",
+        storeNameAr: item.storeName ?? "",
+        storeNameEn: item.storeName ?? "",
+        expDate: item.expDate,
+        salesPrice: item.salesPrice,
+        costPrice: item.costPrice,
+        qty: item.qty,
+      }));
+    });
+}
+
+export function saveBatchManagement(
+  token: string,
+  rows: Array<{
+    id: number | null;
+    rowIndex?: number;
+    itemCatalogId: number;
+    itemId?: number;
+    storeId: number;
+    expDate: string;
+    salesPrice: number;
+    costPrice: number;
+  }>
+) {
+  return apiFetch<{ success?: boolean; Success?: boolean; message?: string; Message?: string }>(
+    "Stock/batch-management/save",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        rows: rows.map((row) => ({
+          id: row.id,
+          rowIndex: row.rowIndex,
+          itemCatalogId: row.itemCatalogId,
+          itemId: row.itemId ?? row.itemCatalogId,
+          storeId: row.storeId,
+          expDate: row.expDate,
+          salesPrice: row.salesPrice,
+          costPrice: row.costPrice,
+        })),
+      }),
+    },
+    token
+  );
+}
+
+function readExpDateValue(item: Record<string, unknown>): string | null {
+  const direct = readNullableString(item, "expDate", "ExpDate");
+  if (direct) {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(direct);
+    return match ? match[1] : direct;
+  }
+
+  const raw = item.expDate ?? item.ExpDate;
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const year = Number(obj.year ?? obj.Year);
+    const month = Number(obj.month ?? obj.Month);
+    const day = Number(obj.day ?? obj.Day ?? 1);
+    if (year > 0 && month > 0) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
+
+function normalizeBatchManagementRow(item: Record<string, unknown>) {
+  return {
+    id: readNullableNumber(item, "id", "Id"),
+    itemCatalogId: readNumber(
+      item,
+      "itemCatalogId",
+      "ItemCatalogId",
+      "itemId",
+      "ItemId"
+    ),
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readString(item, "itemNameEn", "ItemNameEn"),
+    batchNo: readString(item, "batchNo", "BatchNo"),
+    storeId: readNumber(item, "storeId", "StoreId"),
+    storeName: readString(item, "storeName", "StoreName"),
+    storeNameAr: readString(item, "storeNameAr", "StoreNameAr"),
+    storeNameEn: readString(item, "storeNameEn", "StoreNameEn"),
+    expDate: readExpDateValue(item),
+    salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+    costPrice: readNumber(item, "costPrice", "CostPrice"),
+    qty: readNumber(item, "qty", "Qty"),
+  };
 }
 
 export function getStockBalanceByItem(

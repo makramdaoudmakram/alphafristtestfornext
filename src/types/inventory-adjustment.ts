@@ -203,4 +203,45 @@ export type InventoryAdjustmentSaveResult = {
 
 };
 
+export function isInventoryAdjustmentPosted(
+  movStat: number | null | undefined
+): boolean {
+  return movStat != null && movStat !== 0;
+}
+
+export type InventoryPostingListItem = {
+  id: number;
+  fhId: number | null;
+  movId: number | null;
+  movementName: string;
+  invStore: string;
+  storeName: string;
+  invDat: string | null;
+  invTotalStockQty: number | null;
+  invTotalIncresQty: number | null;
+  invTotalShortQty: number | null;
+  invActTotalSalPriceIncres: number | null;
+  invActTotalSalPriceShort: number | null;
+  invActTotalPPriceIncress: number | null;
+  invActTotalPPriceShort: number | null;
+  netInventory: number | null;
+  movStat: number | null;
+  invAccount1: string;
+  invAccount2: string;
+};
+
+export type InventoryPostingPage = {
+  items: InventoryPostingListItem[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type InventoryPostingQuery = {
+  pageNumber: number;
+  pageSize: number;
+  storeId?: string;
+};
+
 

@@ -219,19 +219,36 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): InventoryAdjustm
   };
 }
 
+function firstDetailArray(
+  ...candidates: unknown[]
+): Record<string, unknown>[] {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      return candidate as Record<string, unknown>[];
+    }
+  }
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate as Record<string, unknown>[];
+    }
+  }
+  return [];
+}
+
 export function mapDocumentFromApi(raw: Record<string, unknown>): InventoryAdjustmentDocument {
   const headerSource =
     (raw.header as Record<string, unknown> | undefined) ??
     (raw.Header as Record<string, unknown> | undefined) ??
     raw;
 
-  const detailsRaw =
-    (headerSource.inventoryDetails as Record<string, unknown>[] | undefined) ??
-    (headerSource.InventoryDetails as Record<string, unknown>[] | undefined) ??
-    (raw.inventoryDetails as Record<string, unknown>[] | undefined) ??
-    (raw.InventoryDetails as Record<string, unknown>[] | undefined) ??
-    (raw.details as Record<string, unknown>[] | undefined) ??
-    [];
+  const detailsRaw = firstDetailArray(
+    raw.details,
+    raw.Details,
+    headerSource.inventoryDetails,
+    headerSource.InventoryDetails,
+    raw.inventoryDetails,
+    raw.InventoryDetails
+  );
 
   return {
     header: mapHeaderFromApi(headerSource),
