@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   createItemCatalog,
   deleteItemCatalog,
-  getCompanies,
+  getBrands,
   getGroups,
   getItemCatalogPage,
   getItemFormats,
@@ -23,13 +23,22 @@ import {
   resolveItemCatalogApiId,
   type ItemCatalogFormValues,
 } from "@/lib/item-catalog-form";
-import type { CompanyItem } from "@/types/company";
+import type { BrandItem } from "@/types/brand";
 import type { GroupItem } from "@/types/group";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { ItemFormatItem } from "@/types/item-format";
 import type { ItemOriginItem } from "@/types/item-origin";
 import type { UnitItem } from "@/types/unit";
 import { ItemCatalogForm } from "@/components/admin/item-catalog/item-catalog-form";
+import { InternationalBarcodDialog } from "@/components/admin/item-catalog/international-barcode-dialog";
+import { ItemCatalogUpdateActions } from "@/components/admin/item-catalog/item-catalog-update-actions";
+import {
+  itemCatalogDialogBodyClass,
+  itemCatalogDialogFooterClass,
+  itemCatalogDialogHeaderClass,
+  itemCatalogEditDialogContentClass,
+} from "@/components/admin/item-catalog/item-catalog-dialog-styles";
+import { VendorCodeDialog } from "@/components/admin/item-catalog/vendor-code-dialog";
 import { useItemCatalogColumns } from "@/components/admin/item-catalog-table-columns";
 import { ExcelTemplateWizard } from "@/components/excel/excel-template-wizard";
 import { ExcelImportDialog } from "@/components/excel/excel-import-dialog";
@@ -83,7 +92,7 @@ export function ItemCatalogPageContent() {
   ]);
   const [tableSearch, setTableSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [brands, setBrands] = useState<BrandItem[]>([]);
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [formats, setFormats] = useState<ItemFormatItem[]>([]);
   const [origins, setOrigins] = useState<ItemOriginItem[]>([]);
@@ -97,19 +106,22 @@ export function ItemCatalogPageContent() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [templateWizardOpen, setTemplateWizardOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [vendorCodeDialogOpen, setVendorCodeDialogOpen] = useState(false);
+  const [internationalBarcodDialogOpen, setInternationalBarcodDialogOpen] =
+    useState(false);
   const [formValues, setFormValues] = useState<ItemCatalogFormValues>(
     emptyItemCatalogFormValues
   );
 
   const columns = useItemCatalogColumns();
 
-  const companyOptions = useMemo<ComboboxOption[]>(
+  const brandOptions = useMemo<ComboboxOption[]>(
     () =>
-      companies.map((company) => ({
-        value: String(company.comId),
-        label: `${company.comNameEn || company.comNameAr || company.comCode} (#${company.comId})`,
+      brands.map((brand) => ({
+        value: String(brand.id),
+        label: `${brand.brandNameEn || brand.brandNameAr || brand.id} (#${brand.id})`,
       })),
-    [companies]
+    [brands]
   );
 
   const unitOptions = useMemo<ComboboxOption[]>(
@@ -121,14 +133,22 @@ export function ItemCatalogPageContent() {
     [units]
   );
 
-  const formatOptions = useMemo<ComboboxOption[]>(
-    () =>
-      formats.map((format) => ({
-        value: String(format.itfCode),
-        label: `${format.itfNameEn || format.itfNameAr || format.itfCode} (#${format.itfCode})`,
-      })),
-    [formats]
-  );
+  const selectedGroupId = useMemo(() => {
+    const parsed = Number.parseInt(formValues.itmGroup, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [formValues.itmGroup]);
+
+  const formatOptions = useMemo<ComboboxOption[]>(() => {
+    const visibleFormats =
+      selectedGroupId == null
+        ? formats
+        : formats.filter((format) => format.groupId === selectedGroupId);
+
+    return visibleFormats.map((format) => ({
+      value: String(format.itfCode),
+      label: `${format.itfNameEn || format.itfNameAr || format.itfCode} (#${format.itfCode})`,
+    }));
+  }, [formats, selectedGroupId]);
 
   const originOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -150,13 +170,13 @@ export function ItemCatalogPageContent() {
 
   const lookups = useMemo(
     () => ({
-      companyOptions,
+      brandOptions,
       unitOptions,
       formatOptions,
       originOptions,
       groupOptions,
     }),
-    [companyOptions, unitOptions, formatOptions, originOptions, groupOptions]
+    [brandOptions, unitOptions, formatOptions, originOptions, groupOptions]
   );
 
   const setField = useCallback(
@@ -164,9 +184,37 @@ export function ItemCatalogPageContent() {
       key: K,
       value: ItemCatalogFormValues[K]
     ) => {
-      setFormValues((current) => ({ ...current, [key]: value }));
+      setFormValues((current) => {
+        const next = { ...current, [key]: value };
+
+        if (key === "itmGroup") {
+          const groupId = Number.parseInt(String(value), 10);
+          const currentFormatId = Number.parseInt(current.itemForm, 10);
+
+          if (
+            Number.isFinite(currentFormatId) &&
+            currentFormatId > 0 &&
+            Number.isFinite(groupId) &&
+            groupId > 0
+          ) {
+            const stillValid = formats.some(
+              (format) =>
+                format.itfCode === currentFormatId &&
+                format.groupId === groupId
+            );
+
+            if (!stillValid) {
+              next.itemForm = "";
+            }
+          } else if (!Number.isFinite(groupId) || groupId <= 0) {
+            next.itemForm = "";
+          }
+        }
+
+        return next;
+      });
     },
-    []
+    [formats]
   );
 
   const loadPageData = useCallback(async () => {
@@ -187,7 +235,7 @@ export function ItemCatalogPageContent() {
       const unitService = createUnitService(token);
       const [
         catalogPage,
-        companyList,
+        brandList,
         unitResult,
         formatList,
         originList,
@@ -200,7 +248,7 @@ export function ItemCatalogPageContent() {
           sortDesc: sort?.desc ?? false,
           search: debouncedSearch.trim() || undefined,
         }),
-        getCompanies(token),
+        getBrands(token),
         unitService.listUnits(),
         getItemFormats(token),
         getItemOrigins(token),
@@ -209,7 +257,7 @@ export function ItemCatalogPageContent() {
 
       setItems(catalogPage.items);
       setTotalCount(catalogPage.totalCount);
-      setCompanies(companyList);
+      setBrands(brandList);
       setUnits(unitResult.units);
       setFormats(formatList);
       setOrigins(originList);
@@ -255,6 +303,8 @@ export function ItemCatalogPageContent() {
       setEditingId(null);
       setFormValues(emptyItemCatalogFormValues);
       setActiveTab(DEFAULT_TAB);
+      setVendorCodeDialogOpen(false);
+      setInternationalBarcodDialogOpen(false);
     }
   }
 
@@ -435,7 +485,17 @@ export function ItemCatalogPageContent() {
         </div>
 
         {!editDialogOpen ? (
-          <div className="flex min-h-[calc(100vh-12rem)] flex-col">
+          <div className="flex min-h-[calc(100vh-12rem)] flex-col gap-3">
+            {editingId ? (
+              <ItemCatalogUpdateActions
+                editingId={editingId}
+                disabled={saving}
+                onVendorCodeClick={() => setVendorCodeDialogOpen(true)}
+                onInternationalCodeClick={() =>
+                  setInternationalBarcodDialogOpen(true)
+                }
+              />
+            ) : null}
             <ItemCatalogForm
               formValues={formValues}
               setField={setField}
@@ -448,12 +508,24 @@ export function ItemCatalogPageContent() {
         ) : null}
 
         <Dialog open={editDialogOpen} onOpenChange={handleEditDialogOpenChange}>
-          <DialogContent className="flex max-h-[92vh] w-[98vw] max-w-[84rem] flex-col gap-0 overflow-hidden p-0 sm:max-w-[84rem]">
-            <DialogHeader className="shrink-0 border-b px-6 py-4 text-left">
+          <DialogContent className={itemCatalogEditDialogContentClass}>
+            <DialogHeader className={itemCatalogDialogHeaderClass}>
               <DialogTitle>Edit item</DialogTitle>
               <DialogDescription>{editDialogTitle}</DialogDescription>
             </DialogHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            {editingId ? (
+              <div className="shrink-0 border-b border-neutral-500/70 bg-neutral-400/40 px-6 py-3 dark:border-neutral-600 dark:bg-neutral-800/80">
+                <ItemCatalogUpdateActions
+                  editingId={editingId}
+                  disabled={saving}
+                  onVendorCodeClick={() => setVendorCodeDialogOpen(true)}
+                  onInternationalCodeClick={() =>
+                    setInternationalBarcodDialogOpen(true)
+                  }
+                />
+              </div>
+            ) : null}
+            <div className={itemCatalogDialogBodyClass}>
               <ItemCatalogForm
                 formValues={formValues}
                 setField={setField}
@@ -464,7 +536,7 @@ export function ItemCatalogPageContent() {
                 idPrefix="dialog-"
               />
             </div>
-            <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:justify-end">
+            <DialogFooter className={`${itemCatalogDialogFooterClass} gap-2 sm:justify-end`}>
               <Button
                 type="button"
                 variant="outline"
@@ -484,6 +556,22 @@ export function ItemCatalogPageContent() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <VendorCodeDialog
+          open={vendorCodeDialogOpen}
+          onOpenChange={setVendorCodeDialogOpen}
+          itmId={editingId}
+          itemCode={formValues.itmCode?.trim() || null}
+          token={token}
+        />
+
+        <InternationalBarcodDialog
+          open={internationalBarcodDialogOpen}
+          onOpenChange={setInternationalBarcodDialogOpen}
+          itmId={editingId}
+          itemCode={formValues.itmCode?.trim() || null}
+          token={token}
+        />
 
         <Card>
           <CardHeader>

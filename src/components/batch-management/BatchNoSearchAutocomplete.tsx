@@ -18,6 +18,21 @@ import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
 const LOOKUP_DEBOUNCE_MS = 250;
 const SUGGESTION_LIMIT = 15;
 
+function dedupeSuggestionsByBatchNo(
+  items: BatchNoSearchResult[]
+): BatchNoSearchResult[] {
+  const seen = new Set<string>();
+  const result: BatchNoSearchResult[] = [];
+  for (const item of items) {
+    const key = item.batchNo.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+    if (result.length >= SUGGESTION_LIMIT) break;
+  }
+  return result;
+}
+
 export type BatchNoSearchResult = {
   id: number | null;
   itemCatalogId: number;
@@ -135,7 +150,7 @@ export function BatchNoSearchAutocomplete({
       void listBatchManagement(token, { batchNo: term })
         .then((items) => {
           if (controller.signal.aborted) return;
-          setSuggestions(items.slice(0, SUGGESTION_LIMIT));
+          setSuggestions(dedupeSuggestionsByBatchNo(items));
           setHasSearched(true);
           setHighlight(0);
         })
@@ -226,7 +241,7 @@ export function BatchNoSearchAutocomplete({
               ) : (
                 suggestions.map((batch, index) => (
                   <li
-                    key={`${batch.id ?? "new"}-${batch.batchNo}-${index}`}
+                    key={batch.batchNo}
                     role="option"
                     aria-selected={index === highlight}
                     className={cn(

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ApiError,
@@ -13,6 +14,7 @@ import {
   getMovmentById,
   getNextMovValue,
   getStors,
+  reversePostedPurchaseInvoice,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
@@ -32,9 +34,19 @@ import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-
 import { Toolbar } from "@/components/purchase/Toolbar";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { usePermissions } from "@/components/permissions/permission-provider";
 import {
   FormFieldInlineWrap,
 } from "@/components/ui/form-field-inline";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { resolveMovementForPurchaseHeader } from "@/lib/purchase-movement";
@@ -49,8 +61,17 @@ import type { StorItem } from "@/types/stor";
 /** Purchase transactions use MovParent / MovParientId = 1 */
 const PURCHASE_MOV_PARENT_ID = 1;
 
+function formatReverseAmount(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function PurchasePageContent() {
   const { data: session, status } = useSession();
+  const { canReversePurchase, ready: permissionsReady } = usePermissions();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
   const sessionAuthenticated = status === "authenticated" && !!token;
@@ -73,6 +94,8 @@ export function PurchasePageContent() {
   const [pthIdLoading, setPthIdLoading] = useState(false);
   const [templateDownloading, setTemplateDownloading] = useState(false);
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
+  const [reverseConfirmOpen, setReverseConfirmOpen] = useState(false);
+  const [reversing, setReversing] = useState(false);
   const nextValueAbortRef = useRef<AbortController | null>(null);
   const nextValueRequestRef = useRef(0);
   const movementSyncRequestRef = useRef(0);
@@ -303,6 +326,18 @@ export function PurchasePageContent() {
   const isPosted = form.watch("movStat") === 5;
   const recordId = form.watch("id");
   const documentNumber = form.watch("pthId");
+  const venBillNo = form.watch("venBillNo");
+  const pthNetBill = form.watch("pthNetBill");
+
+  const isReverseButtonVisible = useMemo(
+    () =>
+      permissionsReady &&
+      canReversePurchase() &&
+      hasRecord &&
+      isPosted &&
+      mode === "view",
+    [permissionsReady, canReversePurchase, hasRecord, isPosted, mode]
+  );
 
   const syncMovementFromLoadedHeader = useCallback(async () => {
     if (!token || recordId == null) return;
@@ -359,6 +394,41 @@ export function PurchasePageContent() {
       }
     }
   }, [form, recordId, token]);
+
+  const confirmReverse = useCallback(async () => {
+    if (!token || recordId == null || recordId <= 0) return;
+
+    setReversing(true);
+    try {
+      const result = await reversePostedPurchaseInvoice(token, recordId);
+      toast.success(
+        `Invoice ${venBillNo || result.pthId} reversed. It is now editable so the Vendor can be corrected.`
+      );
+      setReverseConfirmOpen(false);
+      const map = await loadRecord(recordId, itemByCode, catalogItems);
+      if (map && map.size > 0) setItemByCode(map);
+      await syncMovementFromLoadedHeader();
+      setAuditRefreshKey((value) => value + 1);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to reverse the purchase invoice";
+      toast.error(message);
+    } finally {
+      setReversing(false);
+    }
+  }, [
+    catalogItems,
+    itemByCode,
+    loadRecord,
+    recordId,
+    syncMovementFromLoadedHeader,
+    token,
+    venBillNo,
+  ]);
 
   useEffect(() => {
     if (!token || recordId == null) return;
@@ -602,9 +672,11 @@ export function PurchasePageContent() {
           hasRecord={hasRecord}
           isPosted={isPosted}
           isPostButtonVisible={isPostButtonVisible}
+          isReverseButtonVisible={isReverseButtonVisible}
           isTransferButtonVisible={isTransferButtonVisible}
           isBarcodeButtonVisible={isBarcodeButtonVisible}
           barcodeLoading={barcodeLoading}
+          reversing={reversing}
           nav={navState}
           onNew={onNew}
           onSave={() => {
@@ -618,6 +690,7 @@ export function PurchasePageContent() {
               setAuditRefreshKey((value) => value + 1);
             });
           }}
+          onReverse={() => setReverseConfirmOpen(true)}
           onPrintBarcode={() => void handlePrintBarcode()}
           onEdit={handleEdit}
           onDelete={confirmDelete}
@@ -756,6 +829,61 @@ export function PurchasePageContent() {
           onOpenChange={setStockBarcodePrintOpen}
           labels={stockBarcodeLabels}
         />
+
+        <Dialog
+          open={reverseConfirmOpen}
+          onOpenChange={(open) => {
+            if (!reversing && !open) setReverseConfirmOpen(false);
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Reverse Purchase Invoice?</DialogTitle>
+              <DialogDescription asChild>
+                <div className="space-y-3 text-sm">
+                  <div className="space-y-1">
+                    <p>
+                      <span className="text-foreground font-medium">PthId:</span>{" "}
+                      {documentNumber ?? "—"}
+                    </p>
+                    <p>
+                      <span className="text-foreground font-medium">Invoice:</span>{" "}
+                      {venBillNo || documentNumber || "—"}
+                    </p>
+                    <p>
+                      <span className="text-foreground font-medium">Net Bill:</span>{" "}
+                      {formatReverseAmount(pthNetBill)}
+                    </p>
+                  </div>
+                  <p>
+                    This action will create reversing ledger entries, cancel the
+                    accounting effect of this invoice, and make the Purchase
+                    Invoice editable again.
+                  </p>
+                  <p>Continue?</p>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={reversing}
+                onClick={() => setReverseConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={reversing}
+                onClick={() => void confirmReverse()}
+              >
+                <Undo2 className={reversing ? "animate-spin" : undefined} />
+                Reverse Invoice
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </PageGuard>
   );

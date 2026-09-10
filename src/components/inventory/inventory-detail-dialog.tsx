@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import type { StockBatchItem } from "@/types/stock";
 import {
   getInventoryStockStatus,
+  inventoryDisplayAvailableQty,
   inventoryDisplayQty,
   inventoryItemDisplayName,
   inventoryStatusLabel,
@@ -58,8 +59,20 @@ export function InventoryDetailDialog({
           <DetailRow label="Store / location" value={inventoryStoreDisplayName(batch)} />
           <DetailRow label="Expiry date" value={batch.expDate ?? "—"} />
           <DetailRow
-            label="Available quantity"
+            label="Physical quantity"
             value={inventoryDisplayQty(batch).toLocaleString(undefined, {
+              maximumFractionDigits: 4,
+            })}
+          />
+          <DetailRow
+            label="Pending transfer"
+            value={(batch.transferQty ?? 0).toLocaleString(undefined, {
+              maximumFractionDigits: 4,
+            })}
+          />
+          <DetailRow
+            label="Available quantity"
+            value={inventoryDisplayAvailableQty(batch).toLocaleString(undefined, {
               maximumFractionDigits: 4,
             })}
           />

@@ -31,6 +31,8 @@ type ReturnItemStockSearchBoxProps = {
   className?: string;
   /** When set, search and result labels use Arabic or English names. */
   itemLanguage?: ItemStockSearchLanguage;
+  /** Pharmacy transfer: show AvailableQty instead of physical Qty. */
+  preferAvailableQty?: boolean;
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
 };
@@ -48,6 +50,7 @@ export function ReturnItemStockSearchBox({
   disabled = false,
   className,
   itemLanguage,
+  preferAvailableQty = false,
   onItemSelected,
 }: ReturnItemStockSearchBoxProps) {
   const listId = useId();
@@ -243,14 +246,15 @@ export function ReturnItemStockSearchBox({
           </li>
         ) : null}
         {results.map((item, index) => {
+          const displayOpts = { preferAvailableQty };
           const { itemName, expDate, totalQuantity, salesPrice } =
-            getReturnItemStockSearchDisplayParts(item, itemLanguage);
+            getReturnItemStockSearchDisplayParts(item, itemLanguage, displayOpts);
           return (
           <li
             key={`${item.itemCatalogId}-${item.batchNo}-${item.expDate ?? ""}-${item.salesPrice}-${index}`}
             role="option"
             aria-selected={index === highlight}
-            aria-label={formatReturnItemStockSearchLabel(item, itemLanguage)}
+            aria-label={formatReturnItemStockSearchLabel(item, itemLanguage, displayOpts)}
             data-suggestion-index={index}
           >
             <button

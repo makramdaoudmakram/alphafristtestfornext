@@ -18,6 +18,7 @@ export const GRID_MODULE_KEYS = {
   inventoryAdjustmentDetail: "inventory-adjustment",
   inventoryAdjustmentPosting: "inventory-adjustment-posting",
   batchManagement: "batch-management",
+  pharmPurchaseDetail: "pharm-purchase",
 } as const;
 
 export type GridModuleKey = (typeof GRID_MODULE_KEYS)[keyof typeof GRID_MODULE_KEYS];

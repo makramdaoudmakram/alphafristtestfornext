@@ -39,12 +39,14 @@ function formatQuantity(value: number | null) {
 export function usePurchaseInvoiceReversalColumns({
   reversingId,
   onReverse,
+  showReverseAction = true,
 }: {
   reversingId: number | null;
   onReverse: (row: PostedPurchaseInvoiceReversalItem) => void;
+  showReverseAction?: boolean;
 }): ColumnDef<PostedPurchaseInvoiceReversalItem>[] {
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const columns: ColumnDef<PostedPurchaseInvoiceReversalItem>[] = [
       {
         accessorKey: "vendorName",
         header: "Vendor",
@@ -133,7 +135,10 @@ export function usePurchaseInvoiceReversalColumns({
           );
         },
       },
-    ],
-    [onReverse, reversingId]
-  );
+    ];
+
+    return columns.filter(
+      (column) => showReverseAction || column.id !== "action"
+    );
+  }, [onReverse, reversingId, showReverseAction]);
 }

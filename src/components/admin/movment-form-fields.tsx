@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getStors } from "@/lib/api-client";
 import { getChartLeaves } from "@/lib/manual-journal-api";
-import { getMovmentEffectOptions } from "@/lib/movment-enums";
+import { getMovmentEffectOptions, getMovPageOptions } from "@/lib/movment-enums";
 import type { MovmentFormValues } from "@/lib/movment-form";
 
 type MovmentFormFieldsProps = {
@@ -19,6 +19,7 @@ type MovmentFormFieldsProps = {
 };
 
 const movmentEffectOptions = getMovmentEffectOptions();
+const movPageOptions = getMovPageOptions();
 
 const ACCOUNT_ENTRY_FIELDS = [
   ["movAccountEntry1", "MovAccountEntry1"],
@@ -108,6 +109,10 @@ export function MovmentFormFields({
   const stor2Options = useMemo(
     () => mergeOption(storOptions, values.movStor2),
     [storOptions, values.movStor2]
+  );
+  const pageOptions = useMemo(
+    () => mergeOption(movPageOptions, values.movPage),
+    [values.movPage]
   );
   const accountOptionsByField = useMemo(() => {
     const map = {} as Record<(typeof ACCOUNT_ENTRY_FIELDS)[number][0], ComboboxOption[]>;
@@ -249,11 +254,13 @@ export function MovmentFormFields({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}movPage`}>Page</Label>
-        <Input
-          id={`${idPrefix}movPage`}
+        <Label>Page</Label>
+        <SearchableCombobox
           value={values.movPage}
-          onChange={(e) => patch({ movPage: e.target.value })}
+          onValueChange={(value) => patch({ movPage: value })}
+          options={pageOptions}
+          placeholder="Select page (optional)..."
+          searchPlaceholder="Search page..."
         />
       </div>
     </div>

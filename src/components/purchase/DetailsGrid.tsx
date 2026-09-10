@@ -97,6 +97,8 @@ type DetailsGridProps = {
   onCatalogItemApplied?: (item: ItemCatalogItem) => void;
   onAddRow: () => void;
   onRemoveRow: (index: number) => void;
+  /** Hides tax/extra-discount columns for pharmacy purchase. */
+  variant?: "purchase" | "pharm-purchase";
 };
 
 export function DetailsGrid({
@@ -117,6 +119,7 @@ export function DetailsGrid({
   onCatalogItemApplied,
   onAddRow,
   onRemoveRow,
+  variant = "purchase",
 }: DetailsGridProps) {
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
@@ -281,7 +284,7 @@ export function DetailsGrid({
       },
     });
 
-    return [
+    const builtColumns: ColumnDef<PurchaseDetail>[] = [
       {
         id: "line",
         header: "#",
@@ -299,6 +302,7 @@ export function DetailsGrid({
             token={token}
             catalogItems={catalogItems}
             disabled={disabled}
+            useDoubleSpaceWildcard={variant === "pharm-purchase"}
             inputClassName="w-full min-w-0"
             onFocusRow={() => onSelectRow(row.index)}
             onChangeRow={(patch) => onChangeRow(row.index, patch)}
@@ -330,6 +334,7 @@ export function DetailsGrid({
             token={token}
             catalogItems={catalogItems}
             disabled={disabled}
+            useDoubleSpaceWildcard={variant === "pharm-purchase"}
             inputClassName="w-full min-w-0"
             onFocusRow={() => onSelectRow(row.index)}
             onChangeRow={(patch) => onChangeRow(row.index, patch)}
@@ -413,9 +418,48 @@ export function DetailsGrid({
       numberCell("itmTaxTotal", "itmTaxTotal", "Tax"),
       numberCell("itmExtraDis", "itmExtraDis", "Extra disc"),
       numberCell("itmDisPer", "itmDisPer", "Disc %"),
-      numberCell("itmDisMon", "itmDisMon", "Disc amt"),
-      numberCell("itmCost", "itmCost", "Cost"),
-      numberCell("itmNet", "itmNet", "Net"),
+      variant === "pharm-purchase"
+        ? {
+            id: "itmDisMon",
+            header: "Disc amt",
+            cell: ({ row }) => (
+              <Input
+                readOnly
+                disabled
+                value={(row.original.itmDisMon ?? 0).toFixed(2)}
+                className={cn(gridInputClass, "bg-muted/50")}
+              />
+            ),
+          }
+        : numberCell("itmDisMon", "itmDisMon", "Disc amt"),
+      variant === "pharm-purchase"
+        ? {
+            id: "itmCost",
+            header: "Cost",
+            cell: ({ row }) => (
+              <Input
+                readOnly
+                disabled
+                value={(row.original.itmCost ?? 0).toFixed(2)}
+                className={cn(gridInputClass, "bg-muted/50")}
+              />
+            ),
+          }
+        : numberCell("itmCost", "itmCost", "Cost"),
+      variant === "pharm-purchase"
+        ? {
+            id: "itmNet",
+            header: "Net",
+            cell: ({ row }) => (
+              <Input
+                readOnly
+                disabled
+                value={(row.original.itmNet ?? 0).toFixed(2)}
+                className={cn(gridInputClass, "bg-muted/50")}
+              />
+            ),
+          }
+        : numberCell("itmNet", "itmNet", "Net"),
       numberCell("stdItmStock", "stdItmStock", "Std stock"),
       {
         id: "stoId",
@@ -487,6 +531,19 @@ export function DetailsGrid({
         ),
       },
     ];
+
+    if (variant !== "pharm-purchase") {
+      return builtColumns;
+    }
+
+    const hidden = new Set([
+      "taxPercent",
+      "itmTaxPrice",
+      "itmTaxTotal",
+      "itmExtraDis",
+      "stdItmStock",
+    ]);
+    return builtColumns.filter((column) => !hidden.has(String(column.id)));
   }, [
     disabled,
     catalogItems,
@@ -501,6 +558,7 @@ export function DetailsGrid({
     onRemoveRow,
     onSelectRow,
     applyUnitConversionToRow,
+    variant,
   ]);
 
   return (

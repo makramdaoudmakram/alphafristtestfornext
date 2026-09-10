@@ -16,6 +16,11 @@ export function useItemFormatColumns(): ColumnDef<ItemFormatItem>[] {
         ),
       },
       {
+        accessorKey: "groupName",
+        header: "Group",
+        cell: ({ row }) => row.original.groupName?.trim() || "—",
+      },
+      {
         accessorKey: "itfNameAr",
         header: "Arabic name",
         cell: ({ row }) => row.original.itfNameAr?.trim() || "—",

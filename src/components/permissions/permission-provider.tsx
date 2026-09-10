@@ -21,6 +21,7 @@ interface PermissionContextValue {
   error: string | null;
   hasPermission: (code: string) => boolean;
   hasRole: (role: string) => boolean;
+  canReversePurchase: () => boolean;
   refresh: () => Promise<void>;
 }
 
@@ -28,6 +29,14 @@ const PermissionContext = createContext<PermissionContextValue | null>(null);
 
 export function isAdminRole(roles: string[]) {
   return roles.some((role) => role.toLowerCase() === "admin");
+}
+
+/** Admin or Account — required for posted purchase invoice reversal. */
+export function canReversePurchaseInvoice(roles: string[]) {
+  return roles.some((role) => {
+    const normalized = role.toLowerCase();
+    return normalized === "admin" || normalized === "account";
+  });
 }
 
 export function canAccessPermission(
@@ -110,7 +119,8 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       hasRole: (role: string) =>
         role.toLowerCase() === "admin"
           ? isAdminRole(roles)
-          : roles.includes(role),
+          : roles.some((r) => r.toLowerCase() === role.toLowerCase()),
+      canReversePurchase: () => canReversePurchaseInvoice(roles),
       refresh: loadPermissions,
     }),
     [roles, permissions, loading, ready, error, loadPermissions]

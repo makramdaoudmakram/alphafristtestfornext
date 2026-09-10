@@ -20,6 +20,12 @@ export type InventoryAdjustmentDetail = {
 
   itmStockQty: number;
 
+  /** Available unreserved stock in the selected unit (for decrease max). */
+  itmAvailableQty: number;
+
+  /** Pending transfer reservation in the selected unit (display). */
+  itmTransferQty: number;
+
   itmIncresQty: number;
 
   itemShortQty: number;
@@ -43,6 +49,10 @@ export type InventoryAdjustmentDetail = {
   priceQtyNet: number | null;
 
   stdItmStock: number | null;
+  /** Available stock in base units (Stock.AvailableQty). */
+  stdAvailableStock: number | null;
+  /** Transfer reservation in base units (Stock.TransferQty). */
+  stdTransferQty: number | null;
   stockId: number | null;
   storeId: number | null;
   itmCostPrice: number;

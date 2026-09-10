@@ -77,6 +77,8 @@ export function createEmptyInventoryDetailRow(): InventoryAdjustmentDetail {
     expDate: "",
     unitId: null,
     itmStockQty: 0,
+    itmAvailableQty: 0,
+    itmTransferQty: 0,
     itmIncresQty: 0,
     itemShortQty: 0,
     itmQ: 0,
@@ -89,6 +91,8 @@ export function createEmptyInventoryDetailRow(): InventoryAdjustmentDetail {
     baseItmSalPrice: null,
     priceQtyNet: null,
     stdItmStock: null,
+    stdAvailableStock: null,
+    stdTransferQty: null,
     stockId: null,
     storeId: null,
     itmCostPrice: 0,
@@ -159,6 +163,11 @@ export function mapDetailFromApi(raw: Record<string, unknown>): InventoryAdjustm
     expDate: formatDateInput(raw.expDate ?? raw.ExpDate),
     unitId: readNullableNumber(raw, "unitId", "UnitId"),
     itmStockQty,
+    // Persisted InventoryD does not store Available/Transfer; fall back to physical
+    // snapshot until the row is rebuilt from a live stock batch (server remains authoritative).
+    itmAvailableQty:
+      readNullableNumber(raw, "itmAvailableQty", "ItmAvailableQty") ?? itmStockQty,
+    itmTransferQty: readNumber(raw, "itmTransferQty", "ItmTransferQty"),
     itmIncresQty,
     itemShortQty,
     itmQ,
@@ -171,6 +180,12 @@ export function mapDetailFromApi(raw: Record<string, unknown>): InventoryAdjustm
     baseItmSalPrice: itmSalPrice,
     priceQtyNet: 1,
     stdItmStock: readNullableNumber(raw, "stdItmStock", "StdItmStock"),
+    stdAvailableStock: readNullableNumber(
+      raw,
+      "stdAvailableStock",
+      "StdAvailableStock"
+    ),
+    stdTransferQty: readNullableNumber(raw, "stdTransferQty", "StdTransferQty"),
     stockId: readNullableNumber(raw, "stockId", "StockId"),
     storeId: readNullableNumber(raw, "storeId", "StoreId", "storId", "StorId"),
     itmCostPrice: readNumber(raw, "itmCostPrice", "ItmCostPrice", "costPrice", "CostPrice"),

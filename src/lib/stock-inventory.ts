@@ -1,10 +1,18 @@
 import type { StockBatchItem } from "@/types/stock";
 
-/** Display quantity uses Unit3 when available (same as stock table). */
+/** Physical on-hand quantity for inventory browse (Unit3 when available). */
 export function inventoryDisplayQty(row: StockBatchItem): number {
   return row.qtyUnit3 != null && Number.isFinite(row.qtyUnit3)
     ? row.qtyUnit3
     : row.qty;
+}
+
+/** Unreserved available quantity for display when the API triad is present. */
+export function inventoryDisplayAvailableQty(row: StockBatchItem): number {
+  if (Number.isFinite(row.availableQty)) return row.availableQty;
+  const physical = inventoryDisplayQty(row);
+  const reserved = Number.isFinite(row.transferQty) ? row.transferQty : 0;
+  return physical - reserved;
 }
 
 export type InventoryStockStatus = "in_stock" | "low_stock" | "out_of_stock";
@@ -16,6 +24,7 @@ export function getInventoryStockStatus(
   row: StockBatchItem,
   lowThreshold = INVENTORY_LOW_STOCK_THRESHOLD
 ): InventoryStockStatus {
+  // Browse status remains based on physical on-hand (Phase 4A does not retarget browse ops).
   const qty = inventoryDisplayQty(row);
   if (qty <= 0) return "out_of_stock";
   if (qty <= lowThreshold) return "low_stock";

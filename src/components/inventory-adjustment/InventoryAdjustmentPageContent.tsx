@@ -290,6 +290,30 @@ export function InventoryAdjustmentPageContent() {
         return null;
       }
 
+      const factor =
+        priceInfo.conversionValue != null &&
+        Number.isFinite(priceInfo.conversionValue) &&
+        priceInfo.conversionValue > 0
+          ? priceInfo.conversionValue
+          : priceInfo.quantityNet != null &&
+              Number.isFinite(priceInfo.quantityNet) &&
+              priceInfo.quantityNet > 0
+            ? priceInfo.quantityNet
+            : batch.qty > 0 && currentQty > 0
+              ? batch.qty / currentQty
+              : 1;
+      const toSelectedUnit = (baseQty: number) =>
+        factor > 0 ? baseQty / factor : baseQty;
+
+      const availableBase = Number.isFinite(batch.availableQty)
+        ? batch.availableQty
+        : batch.qty - (batch.transferQty ?? 0);
+      const transferBase = Number.isFinite(batch.transferQty)
+        ? batch.transferQty
+        : 0;
+      const availableQty = toSelectedUnit(availableBase);
+      const transferQty = toSelectedUnit(transferBase);
+
       const { baseItmPPrice, baseItmSalPrice } = resolveInventoryBatchBasePrices(
         item,
         batch
@@ -316,10 +340,14 @@ export function InventoryAdjustmentPageContent() {
         expDate: batch.expDate?.slice(0, 10) ?? "",
         unitId,
         itmStockQty: currentQty,
+        itmAvailableQty: availableQty,
+        itmTransferQty: transferQty,
         itmIncresQty: 0,
         itemShortQty: 0,
         itmQ: currentQty,
         stdItmStock: batch.qty,
+        stdAvailableStock: availableBase,
+        stdTransferQty: transferBase,
         stockId: batch.id,
         storeId: batch.storeId,
         itmCostPrice: batch.costPrice * (priceFields.priceQtyNet ?? 1),
@@ -422,6 +450,8 @@ export function InventoryAdjustmentPageContent() {
       if (!row || !token) return;
 
       const baseQty = row.stdItmStock ?? 0;
+      const baseAvailable = row.stdAvailableStock ?? row.itmAvailableQty;
+      const baseTransfer = row.stdTransferQty ?? row.itmTransferQty;
       const converted = await convertBaseStockQtyToUnit(
         token,
         row.itmCode,
@@ -441,10 +471,20 @@ export function InventoryAdjustmentPageContent() {
           : 1;
       const newIncresQty = row.itmIncresQty * scale;
       const newShortQty = row.itemShortQty * scale;
+      const factor =
+        baseQty > 0 && newStockQty > 0 ? baseQty / newStockQty : scale > 0 ? 1 / scale : 1;
+      const toSelectedUnit = (base: number) =>
+        Number.isFinite(base) && factor > 0 ? base / factor : base * scale;
 
       const scaledRow = {
         ...row,
         itmStockQty: newStockQty,
+        itmAvailableQty: toSelectedUnit(
+          Number.isFinite(baseAvailable) ? baseAvailable : 0
+        ),
+        itmTransferQty: toSelectedUnit(
+          Number.isFinite(baseTransfer) ? baseTransfer : 0
+        ),
         itmIncresQty: newIncresQty,
         itemShortQty: newShortQty,
       };

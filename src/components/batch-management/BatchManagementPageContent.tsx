@@ -337,16 +337,18 @@ export function BatchManagementPageContent() {
       setLoading(true);
       setLoadError(null);
       try {
-        const items = await listBatchManagement(token, { batchNo: batchNo.trim() });
-        const match =
-          items.find((row) => row.batchNo === batchNo.trim()) ?? items[0];
-        if (!match) {
+        const trimmed = batchNo.trim();
+        const items = await listBatchManagement(token, { batchNo: trimmed });
+        const matches = items.filter(
+          (row) => row.batchNo.trim() === trimmed
+        );
+        if (matches.length === 0) {
           setRows([]);
           setSavedSnapshot("[]");
           setLoadError("No batch found for this Batch No.");
           return;
         }
-        const nextRows = [mapApiRow(match)];
+        const nextRows = matches.map((row) => mapApiRow(row));
         setRows(nextRows);
         setSavedSnapshot(snapshotKey(nextRows));
       } catch (error) {
@@ -709,7 +711,7 @@ export function BatchManagementPageContent() {
                           className="text-muted-foreground h-24 whitespace-normal text-center"
                         >
                           {searchMode === "batch"
-                            ? "No batch found for this Batch No."
+                            ? "No stock rows found for this Batch No."
                             : selectedItem
                               ? "No batches found for this item."
                               : "Search an item or Batch No to load batches."}

@@ -27,14 +27,6 @@ export function PurchaseTab({
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="min-w-0 space-y-3">
-        <FormFieldInline
-          id={`${idPrefix}itmDefPharmPrice-purchase`}
-          label="Purchase price"
-          type="number"
-          step="0.01"
-          value={formValues.itmDefPharmPrice}
-          onChange={(event) => setField("itmDefPharmPrice", event.target.value)}
-        />
         <FormFieldInlineWrap
           id={`${idPrefix}itmPurchaseUnit`}
           label="Purchase unit"

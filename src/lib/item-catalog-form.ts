@@ -20,7 +20,6 @@ export type ItemCatalogFormValues = {
   itmDefPharmPrice: string;
   itmDefTax: string;
   itmHasExpire: boolean;
-  itmIsmedicine: boolean;
   itmActive: boolean;
   itmStopSell: boolean;
   itmSrvc: boolean;
@@ -28,7 +27,8 @@ export type ItemCatalogFormValues = {
   itmPrintBarcode: boolean;
   itmAllowDiscount: boolean;
   itmFreez: boolean;
-  comId: string;
+  stopTransfer: boolean;
+  brandId: string;
   itmOrigin: string;
   itmGroup: string;
   itemForm: string;
@@ -40,7 +40,6 @@ export type ItemCatalogFormValues = {
   itmUnit3: string;
   itmUnit1Unit2: string;
   itmUnit1Unit3: string;
-  itmComCode: string;
   itmLocation: string;
   itmRequestLimit: string;
   itmMaxLimit: string;
@@ -77,7 +76,6 @@ export const emptyItemCatalogFormValues: ItemCatalogFormValues = {
   itmDefPharmPrice: "",
   itmDefTax: "",
   itmHasExpire: false,
-  itmIsmedicine: false,
   itmActive: true,
   itmStopSell: false,
   itmSrvc: false,
@@ -85,7 +83,8 @@ export const emptyItemCatalogFormValues: ItemCatalogFormValues = {
   itmPrintBarcode: true,
   itmAllowDiscount: true,
   itmFreez: false,
-  comId: "",
+  stopTransfer: false,
+  brandId: "",
   itmOrigin: "",
   itmGroup: "",
   itemForm: "",
@@ -97,7 +96,6 @@ export const emptyItemCatalogFormValues: ItemCatalogFormValues = {
   itmUnit3: "",
   itmUnit1Unit2: "",
   itmUnit1Unit3: "",
-  itmComCode: "",
   itmLocation: "",
   itmRequestLimit: "",
   itmMaxLimit: "",
@@ -162,7 +160,6 @@ export function itemCatalogToFormValues(item: ItemCatalogItem): ItemCatalogFormV
     itmDefPharmPrice: toInput(item.itmDefPharmPrice),
     itmDefTax: toInput(item.itmDefTax),
     itmHasExpire: item.itmHasExpire ?? false,
-    itmIsmedicine: item.itmIsmedicine,
     itmActive: item.itmActive,
     itmStopSell: item.itmStopSell,
     itmSrvc: item.itmSrvc,
@@ -170,7 +167,8 @@ export function itemCatalogToFormValues(item: ItemCatalogItem): ItemCatalogFormV
     itmPrintBarcode: item.itmPrintBarcode,
     itmAllowDiscount: item.itmAllowDiscount,
     itmFreez: item.itmFreez,
-    comId: toInput(item.comId),
+    stopTransfer: item.stopTransfer,
+    brandId: toInput(item.brandId),
     itmOrigin: toInput(item.itmOrigin),
     itmGroup: toInput(item.itmGroup),
     itemForm: toInput(item.itemForm),
@@ -182,7 +180,6 @@ export function itemCatalogToFormValues(item: ItemCatalogItem): ItemCatalogFormV
     itmUnit3: toInput(item.itmUnit3),
     itmUnit1Unit2: toInput(item.itmUnit1Unit2),
     itmUnit1Unit3: toInput(item.itmUnit1Unit3),
-    itmComCode: toInput(child?.itmComCode),
     itmLocation: toInput(child?.itmLocation),
     itmRequestLimit: toInput(child?.itmRequestLimit),
     itmMaxLimit: toInput(child?.itmMaxLimit),
@@ -221,7 +218,6 @@ export function formValuesToUpsertRequest(
   values: ItemCatalogFormValues
 ): ItemCatalogUpsertRequest {
   const hasChildData =
-    values.itmComCode.trim() ||
     values.itmLocation.trim() ||
     values.itmRequestLimit.trim() ||
     values.itmMaxLimit.trim() ||
@@ -258,7 +254,6 @@ export function formValuesToUpsertRequest(
       itmDefTax: parseOptionalFloat(values.itmDefTax),
       itmDefPharmPrice: parseOptionalFloat(values.itmDefPharmPrice),
       itmHasExpire: values.itmHasExpire,
-      itmIsmedicine: values.itmIsmedicine,
       itmActive: values.itmActive,
       itmStopSell: values.itmStopSell,
       itmSrvc: values.itmSrvc,
@@ -266,7 +261,8 @@ export function formValuesToUpsertRequest(
       itmPrintBarcode: values.itmPrintBarcode,
       itmAllowDiscount: values.itmAllowDiscount,
       itmFreez: values.itmFreez,
-      comId: parseOptionalInt(values.comId),
+      stopTransfer: values.stopTransfer,
+      brandId: parseOptionalInt(values.brandId),
       itmOrigin: parseOptionalShort(values.itmOrigin),
       itmGroup: parseOptionalInt(values.itmGroup),
       itemForm: parseOptionalInt(values.itemForm),
@@ -281,7 +277,6 @@ export function formValuesToUpsertRequest(
     },
     child: hasChildData
       ? {
-          itmComCode: values.itmComCode.trim() || null,
           itmLocation: values.itmLocation.trim() || null,
           itmRequestLimit: parseOptionalFloat(values.itmRequestLimit),
           itmMaxLimit: parseOptionalFloat(values.itmMaxLimit),

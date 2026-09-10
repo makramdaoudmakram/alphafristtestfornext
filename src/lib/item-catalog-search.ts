@@ -5,9 +5,20 @@ import {
   resolveUnitIdForItem,
 } from "@/lib/item-unit-options";
 
+import {
+  doubleSpacesToLikePattern,
+  hasSearchableCatalogQuery,
+  likePatternToRegExp,
+} from "@/lib/item-catalog-wildcard";
+
 export const ITEM_AUTOCOMPLETE_LIMIT = 15;
 
 export type ItemCatalogSearchField = "code" | "nameAr" | "nameEn";
+
+export {
+  doubleSpacesToLikePattern,
+  hasSearchableCatalogQuery,
+} from "@/lib/item-catalog-wildcard";
 
 function norm(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -94,6 +105,37 @@ export function searchItemCatalog(
     const hay = fieldText(item, field);
     if (!hay) continue;
     if (hay.includes(q)) {
+      matches.push(item);
+      if (matches.length >= limit) break;
+    }
+  }
+  return matches;
+}
+
+/**
+ * Local fallback for the two-space → '%' PurchDetail search.
+ * Queries without double spaces keep contains matching.
+ */
+export function searchItemCatalogWithDoubleSpaceWildcard(
+  items: ItemCatalogItem[],
+  field: ItemCatalogSearchField,
+  query: string,
+  limit = ITEM_AUTOCOMPLETE_LIMIT
+): ItemCatalogItem[] {
+  if (!hasSearchableCatalogQuery(query)) return [];
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const converted = doubleSpacesToLikePattern(query);
+  const pattern = converted.includes("%")
+    ? converted
+    : `%${converted.trim()}%`;
+  const regex = likePatternToRegExp(pattern);
+
+  const matches: ItemCatalogItem[] = [];
+  for (const item of items) {
+    const hay = fieldText(item, field);
+    if (!hay) continue;
+    if (regex.test(hay)) {
       matches.push(item);
       if (matches.length >= limit) break;
     }

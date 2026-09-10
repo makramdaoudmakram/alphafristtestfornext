@@ -158,7 +158,7 @@ export function MasterDetailGrid<TData extends RowData>({
   return (
     <div className={cn("space-y-2", className)}>
       {toolbar ? <div className="flex items-center justify-end gap-2">{toolbar}</div> : null}
-      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+      {hint ? <div className="text-muted-foreground text-xs">{hint}</div> : null}
       <div
         ref={containerRef}
         tabIndex={0}

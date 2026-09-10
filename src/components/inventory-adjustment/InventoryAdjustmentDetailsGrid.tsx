@@ -26,8 +26,8 @@ import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
 import type { UnitItem } from "@/types/unit";
 import {
-  DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE,
-  isDecreaseGreaterThanCurrentQty,
+  decreaseExceedsAvailableMessage,
+  isDecreaseGreaterThanAvailableQty,
 } from "@/validation/inventory-adjustment.schema";
 
 const gridInputClass = cn("h-8 w-full min-w-0 tabular-nums", formControlFocusClass);
@@ -128,12 +128,32 @@ export function InventoryAdjustmentDetailsGrid({
       },
       {
         id: "itmStockQty",
-        header: "Current Stock",
-        cell: ({ row }) => (
-          <span className="tabular-nums text-sm font-medium">
-            {formatQty(row.original.itmStockQty)}
-          </span>
-        ),
+        header: "Stock",
+        cell: ({ row }) => {
+          const physical = Number.isFinite(row.original.itmStockQty)
+            ? row.original.itmStockQty
+            : 0;
+          const pending = Number.isFinite(row.original.itmTransferQty)
+            ? row.original.itmTransferQty
+            : 0;
+          const available = Number.isFinite(row.original.itmAvailableQty)
+            ? row.original.itmAvailableQty
+            : physical;
+          return (
+            <div className="flex flex-col gap-0.5 text-xs leading-tight">
+              <span className="tabular-nums">
+                Physical: <span className="font-medium">{formatQty(physical)}</span>
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                Pending transfer: {formatQty(pending)}
+              </span>
+              <span className="tabular-nums text-foreground">
+                Available:{" "}
+                <span className="font-medium">{formatQty(available)}</span>
+              </span>
+            </div>
+          );
+        },
       },
       {
         id: "itmIncresQty",
@@ -165,16 +185,19 @@ export function InventoryAdjustmentDetailsGrid({
         header: "Decrease",
         meta: { editable: true },
         cell: ({ row }) => {
-          const currentQty = Number.isFinite(row.original.itmStockQty)
-            ? row.original.itmStockQty
-            : 0;
+          const availableQty = Number.isFinite(row.original.itmAvailableQty)
+            ? row.original.itmAvailableQty
+            : Number.isFinite(row.original.itmStockQty)
+              ? row.original.itmStockQty
+              : 0;
           const decreaseQty = Number.isFinite(row.original.itemShortQty)
             ? row.original.itemShortQty
             : 0;
-          const decreaseInvalid = isDecreaseGreaterThanCurrentQty(
+          const decreaseInvalid = isDecreaseGreaterThanAvailableQty(
             decreaseQty,
-            currentQty
+            availableQty
           );
+          const invalidMessage = decreaseExceedsAvailableMessage(availableQty);
 
           return (
             <Input
@@ -183,16 +206,16 @@ export function InventoryAdjustmentDetailsGrid({
               type="number"
               step="any"
               min={0}
-              max={currentQty}
+              max={availableQty}
               disabled={disabled}
               aria-invalid={decreaseInvalid}
-              title={decreaseInvalid ? DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE : undefined}
+              title={decreaseInvalid ? invalidMessage : undefined}
               value={decreaseQty}
               onFocus={() => onSelectRow(row.index)}
               onChange={(e) => {
                 const next = parseQtyInput(e.target.value);
-                if (isDecreaseGreaterThanCurrentQty(next, currentQty)) {
-                  toast.error(DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE, {
+                if (isDecreaseGreaterThanAvailableQty(next, availableQty)) {
+                  toast.error(invalidMessage, {
                     id: "inventory-adjustment-decrease-qty",
                   });
                   return;

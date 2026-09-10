@@ -135,7 +135,7 @@ export const PLACEHOLDER_USER_PAGE_PERMISSIONS: PermissionModuleGroups = [
     module: "Product Setting",
     permissions: [
       { id: 14001, name: "Units", actions: createEmptyActions() },
-      { id: 14002, name: "Item Formats", actions: createEmptyActions() },
+      { id: 14002, name: "Dosage Form", actions: createEmptyActions() },
       { id: 14003, name: "Item Origins", actions: createEmptyActions() },
       {
         id: 14004,
@@ -161,6 +161,11 @@ export const PLACEHOLDER_USER_PAGE_PERMISSIONS: PermissionModuleGroups = [
         actions: createEmptyActions({ insert: true, update: true, save: true }),
       },
       { id: 16002, name: "Pharm", actions: createEmptyActions() },
+      {
+        id: 16005,
+        name: "Employee Info",
+        actions: createEmptyActions({ insert: true, update: true, delete: true }),
+      },
       { id: 16003, name: "Branch", actions: createEmptyActions() },
       { id: 16004, name: "Fiscal Year", actions: createEmptyActions() },
     ],

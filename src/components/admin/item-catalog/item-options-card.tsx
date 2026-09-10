@@ -13,14 +13,14 @@ type ItemOptionsCardProps = {
 
 const OPTION_FIELDS = [
   { key: "itmActive", label: "Active" },
-  { key: "itmIsmedicine", label: "Medicine" },
   { key: "itmHasExpire", label: "Has expiry" },
   { key: "itmSrvc", label: "Service item" },
   { key: "itmStopSell", label: "Stop sell" },
   { key: "itmStopPur", label: "Stop purchase" },
   { key: "itmPrintBarcode", label: "Print barcode" },
   { key: "itmAllowDiscount", label: "Allow discount" },
-  { key: "itmFreez", label: "Frozen" },
+  { key: "itmFreez", label: "Refrigerator" },
+  { key: "stopTransfer", label: "Stop transfer" },
 ] as const satisfies ReadonlyArray<{
   key: keyof ItemCatalogFormValues;
   label: string;

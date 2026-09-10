@@ -19,14 +19,14 @@ export function ItemFormatsPageContent() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold">Item Formats</h2>
+            <h2 className="text-lg font-semibold">Dosage Form</h2>
             <p className="text-muted-foreground text-sm">
               Requires <Badge variant="outline">ItemFormat.View</Badge>
             </p>
           </div>
           <ActionGuard permission={PERMISSIONS.itemFormat.create}>
-            <Button onClick={() => toast.success("Create item format (demo)")}>
-              + New Item Format
+            <Button onClick={() => toast.success("Create dosage form (demo)")}>
+              + New Dosage Form
             </Button>
           </ActionGuard>
         </div>

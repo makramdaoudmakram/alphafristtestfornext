@@ -69,17 +69,25 @@ export function resolveItemStockSearchDisplayName(
 /** Four display parts — itemName is catalog name only (no qty/price). */
 export function getReturnItemStockSearchDisplayParts(
   item: ReturnItemStockSearchItem,
-  language?: ItemStockSearchLanguage
+  language?: ItemStockSearchLanguage,
+  options?: { preferAvailableQty?: boolean }
 ): {
   itemName: string;
   expDate: string;
   totalQuantity: string;
   salesPrice: string;
 } {
+  const qty =
+    options?.preferAvailableQty &&
+    item.availableQty != null &&
+    Number.isFinite(item.availableQty)
+      ? item.availableQty
+      : item.totalQuantity;
+
   return {
     itemName: resolveItemStockSearchDisplayName(item, language),
     expDate: formatReturnItemStockSearchExpDate(item.expDate),
-    totalQuantity: formatDisplayNumber(item.totalQuantity),
+    totalQuantity: formatDisplayNumber(qty),
     salesPrice: formatDisplayNumber(item.salesPrice),
   };
 }
@@ -87,10 +95,11 @@ export function getReturnItemStockSearchDisplayParts(
 /** Single-line display: Item Name / ExpDate / Qty / Sales Price. */
 export function formatReturnItemStockSearchLabel(
   item: ReturnItemStockSearchItem,
-  language?: ItemStockSearchLanguage
+  language?: ItemStockSearchLanguage,
+  options?: { preferAvailableQty?: boolean }
 ): string {
   const { itemName, expDate, totalQuantity, salesPrice } =
-    getReturnItemStockSearchDisplayParts(item, language);
+    getReturnItemStockSearchDisplayParts(item, language, options);
   return `${itemName} / ${expDate} / ${totalQuantity} / ${salesPrice}`;
 }
 

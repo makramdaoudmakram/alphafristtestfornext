@@ -84,7 +84,7 @@ export const SIDEBAR_NAV: NavItem[] = [
             permission: PERMISSIONS.unit.view,
           },
           {
-            title: "Item Formats",
+            title: "Dosage Form",
             href: "/dashboard/item-formats",
             permission: PERMISSIONS.itemFormat.view,
           },
@@ -102,6 +102,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             title: "Groups",
             href: "/dashboard/groups",
             permission: PERMISSIONS.group.view,
+          },
+          {
+            title: "Brands",
+            href: "/dashboard/brands",
+            permission: PERMISSIONS.brand.view,
           },
         ],
       },
@@ -165,6 +170,10 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/cost-centers",
           },
           {
+            title: "Employee Info",
+            href: "/dashboard/employ-info",
+          },
+          {
             title: "Stores",
             href: "/dashboard/stores",
           },
@@ -182,7 +191,34 @@ export const SIDEBAR_NAV: NavItem[] = [
     ],
   },
   {
-    title: "Transaction",
+    title: "Store Management",
+    groups: [
+      {
+        title: "Pharmacy",
+        items: [
+          {
+            title: "Pharmacy Purchase",
+            href: "/dashboard/pharm/transactions/pharmacy-purchase",
+            permission: PERMISSIONS.sales.view,
+          },
+          {
+            title: "Pharmacy Acceptance",
+            href: "/dashboard/pharm/transactions/pharmacy-acceptance",
+            permission: PERMISSIONS.sales.view,
+          },
+          {
+            title: "Store-to-Pharm",
+            href: "/dashboard/pharm/transactions/stor-to-pharm",
+            permission: PERMISSIONS.sales.view,
+          },
+          {
+            title: "Pharmacy Transfer",
+            href: "/dashboard/pharm/transactions/pharmacy-transfer",
+            permission: PERMISSIONS.sales.view,
+          },
+        ],
+      },
+    ],
     items: [
       {
         title: "Purchase",
@@ -220,6 +256,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.stock.view,
       },
       {
+        title: "Batch Traceability",
+        href: "/dashboard/batch-traceability",
+        permission: PERMISSIONS.batchTraceability.view,
+      },
+      {
         title: "Inventory Adjustment",
         href: "/dashboard/transactions/inventory-adjustment",
         permission: PERMISSIONS.stock.view,
@@ -245,11 +286,15 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/customers": "Customers",
-  "/dashboard/item-formats": "Item Formats",
+  "/dashboard/item-formats": "Dosage Form",
   "/dashboard/item-origins": "Item Origins",
   "/dashboard/units": "Units",
   "/dashboard/companies": "Company",
   "/dashboard/pharm": "Pharm",
+  "/dashboard/pharm/transactions/pharmacy-purchase": "Pharmacy Purchase",
+  "/dashboard/pharm/transactions/pharmacy-acceptance": "Pharmacy Acceptance",
+  "/dashboard/pharm/transactions/stor-to-pharm": "Store-to-Pharm",
+  "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",
   "/dashboard/payment-voucher": "Payment Voucher",
@@ -258,10 +303,12 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/journal": "Journal",
   "/dashboard/ledger": "Ledger",
   "/dashboard/cost-centers": "Cost Centers",
+  "/dashboard/employ-info": "Employee Info",
   "/dashboard/stores": "Stores",
   "/dashboard/vendors": "Vendors",
   "/dashboard/item-catalog": "Item Catalog",
   "/dashboard/groups": "Groups",
+  "/dashboard/brands": "Brands",
   "/dashboard/transactions/purchase": "Purchase",
   "/dashboard/transactions/purchase/reversal": "Purchase Invoice Reversal",
   "/dashboard/transactions/purchase/invoice-draft": "Invoice Draft",
@@ -271,6 +318,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/transactions/purchase/import": "Import Purchase Excel",
   "/dashboard/inventory": "Inventory",
   "/dashboard/batch-management": "Batch Management",
+  "/dashboard/batch-traceability": "Batch Traceability",
   "/dashboard/stock": "Inventory",
   "/dashboard/transactions/inventory-adjustment": "Inventory Adjustment",
   "/dashboard/transactions/inventory-adjustment/posting":

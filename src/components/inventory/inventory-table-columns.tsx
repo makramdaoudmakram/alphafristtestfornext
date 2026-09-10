@@ -102,7 +102,7 @@ export function useInventoryColumns(
       },
       {
         id: "availableQty",
-        header: "Available qty",
+        header: "Physical qty",
         cell: ({ row }) => formatQty(inventoryDisplayQty(row.original)),
       },
       {

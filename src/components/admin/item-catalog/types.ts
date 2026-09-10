@@ -7,7 +7,7 @@ export type ItemCatalogSetField = <K extends keyof ItemCatalogFormValues>(
 ) => void;
 
 export type ItemCatalogLookupOptions = {
-  companyOptions: ComboboxOption[];
+  brandOptions: ComboboxOption[];
   unitOptions: ComboboxOption[];
   formatOptions: ComboboxOption[];
   originOptions: ComboboxOption[];

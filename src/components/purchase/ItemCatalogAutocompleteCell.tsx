@@ -11,12 +11,14 @@ import {
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
-import { lookupItemCatalog } from "@/lib/api-client";
+import { lookupItemCatalog, lookupItemCatalogBySegment } from "@/lib/api-client";
 import {
   ITEM_AUTOCOMPLETE_LIMIT,
+  hasSearchableCatalogQuery,
   patchDetailFromCatalogItem,
   resolveCatalogItemOnEnter,
   searchItemCatalog,
+  searchItemCatalogWithDoubleSpaceWildcard,
   suggestionPrimaryLabel,
   suggestionSecondaryLabel,
   type ItemCatalogSearchField,
@@ -42,6 +44,8 @@ type ItemCatalogAutocompleteCellProps = {
   onChangeRow: (patch: PurchaseDetailPatch) => void;
   onAfterApply?: () => void;
   onItemApplied?: (item: ItemCatalogItem) => void;
+  /** Pharmacy Purchase: two consecutive spaces → '%' via lookup-segment. */
+  useDoubleSpaceWildcard?: boolean;
 };
 
 type MenuPosition = {
@@ -63,6 +67,7 @@ export function ItemCatalogAutocompleteCell({
   onChangeRow,
   onAfterApply,
   onItemApplied,
+  useDoubleSpaceWildcard = false,
 }: ItemCatalogAutocompleteCellProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -74,10 +79,14 @@ export function ItemCatalogAutocompleteCell({
   const [suggestions, setSuggestions] = useState<ItemCatalogItem[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
 
+  const hasQuery = useDoubleSpaceWildcard
+    ? hasSearchableCatalogQuery(value)
+    : value.trim().length > 0;
+
   const showList =
     wantList &&
     !disabled &&
-    value.trim().length > 0 &&
+    hasQuery &&
     (suggestions.length > 0 || lookupLoading);
 
   const syncMenuPosition = useCallback(() => {
@@ -93,8 +102,11 @@ export function ItemCatalogAutocompleteCell({
 
   // Server-side full-table lookup (debounced). Falls back to in-memory filter if offline.
   useEffect(() => {
-    const q = value.trim();
-    if (!wantList || disabled || !q) {
+    const q = useDoubleSpaceWildcard ? value : value.trim();
+    const canSearch = useDoubleSpaceWildcard
+      ? hasSearchableCatalogQuery(value)
+      : q.length > 0;
+    if (!wantList || disabled || !canSearch) {
       setSuggestions([]);
       setLookupLoading(false);
       return;
@@ -104,7 +116,14 @@ export function ItemCatalogAutocompleteCell({
     const timer = window.setTimeout(async () => {
       if (!token) {
         setSuggestions(
-          searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
+          useDoubleSpaceWildcard
+            ? searchItemCatalogWithDoubleSpaceWildcard(
+                catalogItems,
+                field,
+                q,
+                ITEM_AUTOCOMPLETE_LIMIT
+              )
+            : searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
         );
         setLookupLoading(false);
         return;
@@ -112,17 +131,29 @@ export function ItemCatalogAutocompleteCell({
 
       setLookupLoading(true);
       try {
-        const results = await lookupItemCatalog(token, q, {
-          take: ITEM_AUTOCOMPLETE_LIMIT,
-          signal: controller.signal,
-        });
+        const results = useDoubleSpaceWildcard
+          ? await lookupItemCatalogBySegment(token, q, field, {
+              take: ITEM_AUTOCOMPLETE_LIMIT,
+              signal: controller.signal,
+              doubleSpaceWildcard: true,
+            })
+          : await lookupItemCatalog(token, q, {
+              take: ITEM_AUTOCOMPLETE_LIMIT,
+              signal: controller.signal,
+            });
         if (controller.signal.aborted) return;
         setSuggestions(results);
       } catch {
         if (controller.signal.aborted) return;
-        // Network/API failure — best-effort local contains search
         setSuggestions(
-          searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
+          useDoubleSpaceWildcard
+            ? searchItemCatalogWithDoubleSpaceWildcard(
+                catalogItems,
+                field,
+                q,
+                ITEM_AUTOCOMPLETE_LIMIT
+              )
+            : searchItemCatalog(catalogItems, field, q, ITEM_AUTOCOMPLETE_LIMIT)
         );
       } finally {
         if (!controller.signal.aborted) setLookupLoading(false);
@@ -133,7 +164,15 @@ export function ItemCatalogAutocompleteCell({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [value, field, token, wantList, disabled, catalogItems]);
+  }, [
+    value,
+    field,
+    token,
+    wantList,
+    disabled,
+    catalogItems,
+    useDoubleSpaceWildcard,
+  ]);
 
   useEffect(() => {
     setHighlight(0);
@@ -224,20 +263,25 @@ export function ItemCatalogAutocompleteCell({
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
+      const fallbackItems =
+        suggestions.length > 0 ? suggestions : catalogItems;
       const item =
         showList && suggestions.length > 0
           ? suggestions[highlight]
-          : resolveCatalogItemOnEnter(
-              suggestions.length > 0 ? suggestions : catalogItems,
-              field,
-              value
-            );
+          : useDoubleSpaceWildcard
+            ? searchItemCatalogWithDoubleSpaceWildcard(
+                fallbackItems,
+                field,
+                value,
+                1
+              )[0] ?? null
+            : resolveCatalogItemOnEnter(fallbackItems, field, value);
       if (item) applyItem(item);
       return;
     }
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      if (!value.trim() || suggestions.length === 0) return;
+      if (!hasQuery || suggestions.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
       setWantList(true);
@@ -331,7 +375,9 @@ export function ItemCatalogAutocompleteCell({
         autoComplete="off"
         onFocus={() => {
           onFocusRow();
-          if (value.trim()) setWantList(true);
+          if (useDoubleSpaceWildcard ? hasSearchableCatalogQuery(value) : value.trim()) {
+            setWantList(true);
+          }
         }}
         onChange={(e) => onInputChange(e.target.value)}
         onKeyDown={onKeyDown}

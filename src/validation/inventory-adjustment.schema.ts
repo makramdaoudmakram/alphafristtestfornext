@@ -1,15 +1,32 @@
 import { z } from "zod";
 
-export const DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE =
-  "Decrease quantity cannot be greater than current quantity.";
+export const DECREASE_EXCEEDS_AVAILABLE_QTY_MESSAGE =
+  "Quantity cannot exceed available stock.";
 
-export function isDecreaseGreaterThanCurrentQty(
+export function decreaseExceedsAvailableMessage(availableQty: number): string {
+  const available = Number.isFinite(availableQty) ? availableQty : 0;
+  return `Quantity cannot exceed available stock of ${available}.`;
+}
+
+/** @deprecated Use DECREASE_EXCEEDS_AVAILABLE_QTY_MESSAGE */
+export const DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE =
+  DECREASE_EXCEEDS_AVAILABLE_QTY_MESSAGE;
+
+export function isDecreaseGreaterThanAvailableQty(
   decreaseQty: number,
-  currentQty: number
+  availableQty: number
 ): boolean {
   const decrease = Number.isFinite(decreaseQty) ? decreaseQty : 0;
-  const current = Number.isFinite(currentQty) ? currentQty : 0;
-  return decrease > current;
+  const available = Number.isFinite(availableQty) ? availableQty : 0;
+  return decrease > available;
+}
+
+/** @deprecated Use isDecreaseGreaterThanAvailableQty */
+export function isDecreaseGreaterThanCurrentQty(
+  decreaseQty: number,
+  availableQty: number
+): boolean {
+  return isDecreaseGreaterThanAvailableQty(decreaseQty, availableQty);
 }
 
 export const inventoryAdjustmentHeaderSchema = z.object({
@@ -37,6 +54,7 @@ export const inventoryAdjustmentDetailSchema = z.object({
   batchNo: z.string().trim().min(1, "Batch is required."),
   unitId: z.number().min(1, "Unit is required."),
   itmStockQty: z.number().finite(),
+  itmAvailableQty: z.number().finite(),
   itmIncresQty: z.number().finite().min(0, "Increase must be non-negative."),
   itemShortQty: z.number().finite().min(0, "Decrease must be non-negative."),
 });
@@ -47,6 +65,7 @@ export function validateInventoryDetails(
     batchNo: string;
     unitId: number | null;
     itmStockQty: number;
+    itmAvailableQty: number;
     itmIncresQty: number;
     itemShortQty: number;
   }>
@@ -67,8 +86,8 @@ export function validateInventoryDetails(
       return `Row ${index + 1}: Increase and Decrease cannot both have a value.`;
     }
 
-    if (isDecreaseGreaterThanCurrentQty(row.itemShortQty, row.itmStockQty)) {
-      return `Row ${index + 1}: ${DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE}`;
+    if (isDecreaseGreaterThanAvailableQty(row.itemShortQty, row.itmAvailableQty)) {
+      return `Row ${index + 1}: ${decreaseExceedsAvailableMessage(row.itmAvailableQty)}`;
     }
   }
 

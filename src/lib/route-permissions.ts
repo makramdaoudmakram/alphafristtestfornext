@@ -28,11 +28,18 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/stock": "Stock.View",
   "/dashboard/inventory": "Stock.View",
   "/dashboard/batch-management": "Stock.View",
+  "/dashboard/batch-traceability": "BatchTraceability.View",
   "/dashboard/transactions/inventory-adjustment": "Stock.View",
   "/dashboard/transactions/inventory-adjustment/posting": "Stock.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
+  "/dashboard/brands": "Brand.View",
+  "/dashboard/employ-info": null,
   "/dashboard/transactions/purchase": null,
+  "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
+  "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
+  "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
+  "/dashboard/pharm/transactions/pharmacy-transfer": "Sales.View",
   "/dashboard/transactions/purchase/reversal": null,
   "/dashboard/transactions/purchase/invoice-draft": null,
   "/dashboard/transactions/return": null,
@@ -86,6 +93,9 @@ export const PERMISSIONS = {
   stock: {
     view: "Stock.View",
   },
+  batchTraceability: {
+    view: "BatchTraceability.View",
+  },
   itemCatalog: {
     view: "ItemCatalog.View",
     create: "ItemCatalog.Create",
@@ -99,6 +109,18 @@ export const PERMISSIONS = {
     create: "Group.Create",
     edit: "Group.Edit",
     delete: "Group.Delete",
+  },
+  brand: {
+    view: "Brand.View",
+    create: "Brand.Create",
+    edit: "Brand.Edit",
+    delete: "Brand.Delete",
+  },
+  employInfo: {
+    view: "EmployInfo.View",
+    create: "EmployInfo.Create",
+    edit: "EmployInfo.Edit",
+    delete: "EmployInfo.Delete",
   },
   purchase: {
     /** Set when PurTransH RBAC is seeded on Alfa API */
@@ -183,7 +205,7 @@ export const NAV_LINKS = [
   },
   {
     href: "/dashboard/item-formats",
-    label: "Item Formats",
+    label: "Dosage Form",
     permission: PERMISSIONS.itemFormat.view,
   },
   {
@@ -210,6 +232,11 @@ export const NAV_LINKS = [
     href: "/dashboard/groups",
     label: "Groups",
     permission: PERMISSIONS.group.view,
+  },
+  {
+    href: "/dashboard/brands",
+    label: "Brands",
+    permission: PERMISSIONS.brand.view,
   },
   {
     href: "/dashboard/item-transactions",

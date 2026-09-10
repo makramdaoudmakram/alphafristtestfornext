@@ -14,6 +14,7 @@ type HeaderFormProps = {
   form: UseFormReturn<PurchaseHeaderFormValues, unknown, PurchaseHeaderFormValues>;
   disabled: boolean;
   totalDesMon?: number;
+  hideVendorBillFields?: boolean;
 };
 
 /** Half of default inline label column (9.5rem → ~4.75rem) */
@@ -66,7 +67,11 @@ function ReadonlyCount({
 }
 
 /** PthId, VenBillNo, VenBillDate, PhtDate — top of page */
-export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
+export function HeaderPrimaryFields({
+  form,
+  disabled,
+  hideVendorBillFields = false,
+}: HeaderFormProps) {
   const {
     register,
     formState: { errors },
@@ -149,37 +154,46 @@ export function HeaderPrimaryFields({ form, disabled }: HeaderFormProps) {
           </p>
         ) : null}
       </div>
-      <div className="space-y-1">
-        <FormFieldInline
-          id="venBillNo"
-          label="VenBillNo"
-          disabled={disabled}
-          aria-invalid={!!errors.venBillNo}
-          {...fieldProps}
-          {...register("venBillNo")}
-        />
-        {errors.venBillNo ? (
-          <p className={cn("text-destructive text-sm", headerErrorOffset)}>
-            {errors.venBillNo.message}
-          </p>
-        ) : null}
-      </div>
-      <div className="space-y-1">
-        <FormFieldInline
-          id="venBillDate"
-          label="VenBillDate"
-          type="date"
-          disabled={disabled}
-          aria-invalid={!!errors.venBillDate}
-          {...fieldProps}
-          {...register("venBillDate")}
-        />
-        {errors.venBillDate ? (
-          <p className={cn("text-destructive text-sm", headerErrorOffset)}>
-            {errors.venBillDate.message}
-          </p>
-        ) : null}
-      </div>
+      {hideVendorBillFields ? (
+        <div className="hidden">
+          <input type="hidden" {...register("venBillNo")} />
+          <input type="hidden" {...register("venBillDate")} />
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1">
+            <FormFieldInline
+              id="venBillNo"
+              label="VenBillNo"
+              disabled={disabled}
+              aria-invalid={!!errors.venBillNo}
+              {...fieldProps}
+              {...register("venBillNo")}
+            />
+            {errors.venBillNo ? (
+              <p className={cn("text-destructive text-sm", headerErrorOffset)}>
+                {errors.venBillNo.message}
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1">
+            <FormFieldInline
+              id="venBillDate"
+              label="VenBillDate"
+              type="date"
+              disabled={disabled}
+              aria-invalid={!!errors.venBillDate}
+              {...fieldProps}
+              {...register("venBillDate")}
+            />
+            {errors.venBillDate ? (
+              <p className={cn("text-destructive text-sm", headerErrorOffset)}>
+                {errors.venBillDate.message}
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
       <div className="space-y-1">
         <FormFieldInline
           id="phtDate"

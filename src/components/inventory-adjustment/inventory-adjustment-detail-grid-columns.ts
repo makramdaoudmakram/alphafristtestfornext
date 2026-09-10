@@ -17,8 +17,8 @@ export const INVENTORY_ADJUSTMENT_DETAIL_GRID_COLUMNS: readonly GridColumnDefini
     { key: "itemName", title: "Item Name", required: true, defaultWidth: 160 },
     {
       key: "itmStockQty",
-      title: "Current Stock",
-      defaultWidth: 96,
+      title: "Stock",
+      defaultWidth: 140,
       defaultVisible: true,
     },
     { key: "itmIncresQty", title: "Increase", defaultWidth: 88 },

@@ -32,7 +32,7 @@ import { isInventoryAdjustmentPosted } from "@/types/inventory-adjustment";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { MovmentLookupItem } from "@/types/movment";
 import {
-  DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE,
+  decreaseExceedsAvailableMessage,
   inventoryAdjustmentHeaderSchema,
   isDecreaseGreaterThanCurrentQty,
   validateInventoryDetails,
@@ -151,16 +151,21 @@ export function useInventoryAdjustment(token: string | undefined) {
   const updateDetailRow = useCallback(
     (clientRowId: string, patch: Partial<InventoryAdjustmentDetail>) => {
       let rejectedDecrease = false;
+      let rejectedAvailableQty = 0;
       setDetails((prev) => {
         const row = prev.find((item) => item.clientRowId === clientRowId);
         if (!row) return prev;
 
         const qtyPatch = applyIncreaseDecreasePatch(row, patch);
         const merged = { ...row, ...patch, ...qtyPatch };
+        const availableQty = Number.isFinite(merged.itmAvailableQty)
+          ? merged.itmAvailableQty
+          : merged.itmStockQty;
         if (
-          isDecreaseGreaterThanCurrentQty(merged.itemShortQty, merged.itmStockQty)
+          isDecreaseGreaterThanCurrentQty(merged.itemShortQty, availableQty)
         ) {
           rejectedDecrease = true;
+          rejectedAvailableQty = availableQty;
           return prev;
         }
 
@@ -170,6 +175,7 @@ export function useInventoryAdjustment(token: string | undefined) {
             "itmIncresQty" in patch ||
             "itemShortQty" in patch ||
             "itmStockQty" in patch ||
+            "itmAvailableQty" in patch ||
             "itmPPrice" in patch ||
             "itmSalPrice" in patch ||
             "unitId" in patch
@@ -183,7 +189,7 @@ export function useInventoryAdjustment(token: string | undefined) {
         });
       });
       if (rejectedDecrease) {
-        toast.error(DECREASE_EXCEEDS_CURRENT_QTY_MESSAGE, {
+        toast.error(decreaseExceedsAvailableMessage(rejectedAvailableQty), {
           id: "inventory-adjustment-decrease-qty",
         });
       }

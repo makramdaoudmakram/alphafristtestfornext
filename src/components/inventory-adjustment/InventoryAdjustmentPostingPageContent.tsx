@@ -477,7 +477,8 @@ export function InventoryAdjustmentPostingPageContent() {
                                             <TableHead>Item Name</TableHead>
                                             <TableHead>Batch No</TableHead>
                                             <TableHead>Exp</TableHead>
-                                            <TableHead>Current Stock</TableHead>
+                                            <TableHead>Physical</TableHead>
+                                            <TableHead>Available</TableHead>
                                             <TableHead>Increase</TableHead>
                                             <TableHead>Decrease</TableHead>
                                             <TableHead>
@@ -508,6 +509,15 @@ export function InventoryAdjustmentPostingPageContent() {
                                               <TableCell className="tabular-nums">
                                                 {formatQuantity(
                                                   detail.itmStockQty
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="tabular-nums">
+                                                {formatQuantity(
+                                                  Number.isFinite(
+                                                    detail.itmAvailableQty
+                                                  )
+                                                    ? detail.itmAvailableQty
+                                                    : detail.itmStockQty
                                                 )}
                                               </TableCell>
                                               <TableCell className="tabular-nums text-emerald-600">

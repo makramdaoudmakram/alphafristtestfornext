@@ -7,7 +7,12 @@ export interface StockBatchItem {
   storeId: number;
   storeName: string | null;
   expDate: string | null;
+  /** Physical on-hand quantity (base units from API). */
   qty: number;
+  /** Pending outgoing pharmacy-transfer reservation (base units). */
+  transferQty: number;
+  /** Authoritative available = qty - transferQty (base units from API). */
+  availableQty: number;
   /** Qty in Unit 3 (base qty / Itm_Unit1_Unit3). */
   qtyUnit3: number | null;
   purshPrice: number;
@@ -35,7 +40,15 @@ export interface ReturnItemStockSearchItem {
   itemName: string;
   storeId: number;
   totalQuantity: number;
+  /** Pending outgoing transfer reservation for the group (Unit1 display units). */
+  transferQty?: number;
+  /** Available unreserved quantity for the group (Unit1 display units). */
+  availableQty?: number;
   salesPrice: number;
+  /** Stock unit cost for the batch (CostPrice, else PurshPrice from API). */
+  costPrice: number;
+  /** Representative Stock.Id for the batch group. */
+  stockId: number | null;
   expDate: string | null;
   batchNo: string;
 }

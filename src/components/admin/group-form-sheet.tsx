@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { GroupItem } from "@/types/group";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  SearchableCombobox,
-  type ComboboxOption,
-} from "@/components/ui/searchable-combobox";
 import {
   Sheet,
   SheetContent,
@@ -17,25 +13,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { getGroupLabel } from "@/lib/group-tree";
 
 export type GroupFormValues = {
   gNameAr: string;
   gNameEn: string;
-  gParent: string;
 };
 
 const emptyValues: GroupFormValues = {
   gNameAr: "",
   gNameEn: "",
-  gParent: "",
 };
 
 function toFormValues(group: GroupItem): GroupFormValues {
   return {
     gNameAr: group.gNameAr ?? "",
     gNameEn: group.gNameEn ?? "",
-    gParent: group.gParent != null ? String(group.gParent) : "",
   };
 }
 
@@ -43,29 +35,16 @@ export function GroupFormSheet({
   open,
   onOpenChange,
   group,
-  groups,
   saving,
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   group: GroupItem | null;
-  groups: GroupItem[];
   saving?: boolean;
   onSubmit: (values: GroupFormValues) => Promise<void>;
 }) {
   const [values, setValues] = useState<GroupFormValues>(emptyValues);
-
-  const parentOptions = useMemo<ComboboxOption[]>(
-    () =>
-      groups
-        .filter((item) => item.id !== group?.id)
-        .map((item) => ({
-          value: String(item.id),
-          label: `${getGroupLabel(item)} (#${item.id})`,
-        })),
-    [groups, group?.id]
-  );
 
   useEffect(() => {
     if (open && group) {
@@ -84,8 +63,7 @@ export function GroupFormSheet({
         <SheetHeader>
           <SheetTitle>Update group</SheetTitle>
           <SheetDescription>
-            Change names or move this group under another parent. A group cannot
-            become its own parent or child.
+            Edit group names. Groups linked to item catalog records cannot be deleted.
           </SheetDescription>
         </SheetHeader>
 
@@ -122,18 +100,6 @@ export function GroupFormSheet({
                     gNameEn: event.target.value,
                   }))
                 }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sheet-gParent">Parent group</Label>
-              <SearchableCombobox
-                value={values.gParent}
-                onValueChange={(value) =>
-                  setValues((current) => ({ ...current, gParent: value }))
-                }
-                options={parentOptions}
-                placeholder="Root level (no parent)"
               />
             </div>
 

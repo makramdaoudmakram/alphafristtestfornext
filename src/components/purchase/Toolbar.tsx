@@ -38,13 +38,16 @@ type ToolbarProps = {
   hasRecord: boolean;
   isPosted: boolean;
   isPostButtonVisible: boolean;
+  isReverseButtonVisible?: boolean;
   isTransferButtonVisible: boolean;
   isBarcodeButtonVisible: boolean;
   barcodeLoading?: boolean;
+  reversing?: boolean;
   nav: { atFirst: boolean; atLast: boolean; hasRecords: boolean };
   onNew: () => void;
   onSave: () => void;
   onPost: () => void;
+  onReverse?: () => void;
   onTransfer: () => void;
   onPrintBarcode: () => void;
   onEdit: () => void;
@@ -162,13 +165,16 @@ export function Toolbar({
   hasRecord,
   isPosted,
   isPostButtonVisible,
+  isReverseButtonVisible = false,
   isTransferButtonVisible,
   isBarcodeButtonVisible,
   barcodeLoading,
+  reversing,
   nav,
   onNew,
   onSave,
   onPost,
+  onReverse,
   onTransfer,
   onPrintBarcode,
   onEdit,
@@ -260,6 +266,20 @@ export function Toolbar({
                 "border-transparent bg-violet-600 text-white shadow-sm",
                 "hover:bg-violet-700 hover:text-white",
                 "focus-visible:ring-violet-600/40",
+                "disabled:opacity-50"
+              )}
+            />
+          ) : null}
+          {isReverseButtonVisible ? (
+            <ToolbarTextButton
+              label="Reverse"
+              onClick={() => onReverse?.()}
+              disabled={saving || posting || loading || reversing}
+              loading={reversing}
+              className={cn(
+                "border-transparent bg-orange-600 text-white shadow-sm",
+                "hover:bg-orange-700 hover:text-white",
+                "focus-visible:ring-orange-600/40",
                 "disabled:opacity-50"
               )}
             />

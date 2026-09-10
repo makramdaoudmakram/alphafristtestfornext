@@ -3,7 +3,9 @@
 import {
   FormFieldInline,
   FormFieldInlineWrap,
+  formControlFocusClass,
 } from "@/components/ui/form-field-inline";
+import { Input } from "@/components/ui/input";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import type { ItemCatalogFormValues } from "@/lib/item-catalog-form";
 import type {
@@ -18,6 +20,59 @@ type GeneralInformationTabProps = {
   compact?: boolean;
   idPrefix?: string;
 };
+
+const unitConversionInputClass =
+  "h-9 w-14 shrink-0 px-2 text-center sm:w-16";
+
+function UnitRow({
+  unitId,
+  unitLabel,
+  unitValue,
+  onUnitChange,
+  unitOptions,
+  conversionId,
+  conversionValue,
+  onConversionChange,
+  showConversion,
+}: {
+  unitId: string;
+  unitLabel: string;
+  unitValue: string;
+  onUnitChange: (value: string) => void;
+  unitOptions: ItemCatalogLookupOptions["unitOptions"];
+  conversionId?: string;
+  conversionValue?: string;
+  onConversionChange?: (value: string) => void;
+  showConversion: boolean;
+}) {
+  return (
+    <FormFieldInlineWrap id={unitId} label={unitLabel}>
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <SearchableCombobox
+            value={unitValue}
+            onValueChange={onUnitChange}
+            options={unitOptions}
+            placeholder="Select unit"
+          />
+        </div>
+        {showConversion && conversionId && onConversionChange ? (
+          <Input
+            id={conversionId}
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            aria-label={`${unitLabel} conversion factor`}
+            className={`${formControlFocusClass} ${unitConversionInputClass}`}
+            value={conversionValue ?? ""}
+            onChange={(event) => onConversionChange(event.target.value)}
+          />
+        ) : null}
+      </div>
+    </FormFieldInlineWrap>
+  );
+}
 
 export function GeneralInformationTab({
   formValues,
@@ -47,20 +102,7 @@ export function GeneralInformationTab({
           value={formValues.itmIntCode}
           onChange={(event) => setField("itmIntCode", event.target.value)}
         />
-        <FormFieldInline
-          id={`${idPrefix}itmComCode`}
-          label="Company item code"
-          value={formValues.itmComCode}
-          onChange={(event) => setField("itmComCode", event.target.value)}
-        />
-        <FormFieldInlineWrap id={`${idPrefix}comId`} label="Company">
-          <SearchableCombobox
-            value={formValues.comId}
-            onValueChange={(value) => setField("comId", value)}
-            options={lookups.companyOptions}
-            placeholder="Select company"
-          />
-        </FormFieldInlineWrap>
+
         <FormFieldInlineWrap id={`${idPrefix}itmGroup`} label="Group">
           <SearchableCombobox
             value={formValues.itmGroup}
@@ -69,28 +111,31 @@ export function GeneralInformationTab({
             placeholder="Select group"
           />
         </FormFieldInlineWrap>
-        <FormFieldInlineWrap id={`${idPrefix}itemForm`} label="Item format">
+        <FormFieldInlineWrap id={`${idPrefix}itemForm`} label="Dosage Format">
           <SearchableCombobox
             value={formValues.itemForm}
             onValueChange={(value) => setField("itemForm", value)}
             options={lookups.formatOptions}
-            placeholder="Select format"
+            placeholder="Select dosage format"
           />
         </FormFieldInlineWrap>
-        <FormFieldInlineWrap id={`${idPrefix}itmOrigin`} label="Item origin">
+        <FormFieldInlineWrap id={`${idPrefix}brandId`} label="Brand">
+          <SearchableCombobox
+            value={formValues.brandId}
+            onValueChange={(value) => setField("brandId", value)}
+            options={lookups.brandOptions}
+            placeholder="Select brand"
+          />
+        </FormFieldInlineWrap>
+        <FormFieldInlineWrap
+          id={`${idPrefix}itmOrigin`}
+          label="Item Organization"
+        >
           <SearchableCombobox
             value={formValues.itmOrigin}
             onValueChange={(value) => setField("itmOrigin", value)}
             options={lookups.originOptions}
-            placeholder="Select origin"
-          />
-        </FormFieldInlineWrap>
-        <FormFieldInlineWrap id={`${idPrefix}itmUnit1`} label="Unit 1">
-          <SearchableCombobox
-            value={formValues.itmUnit1}
-            onValueChange={(value) => setField("itmUnit1", value)}
-            options={lookups.unitOptions}
-            placeholder="Select unit"
+            placeholder="Select item organization"
           />
         </FormFieldInlineWrap>
       </div>
@@ -104,54 +149,38 @@ export function GeneralInformationTab({
           value={formValues.itmDefSellPrice}
           onChange={(event) => setField("itmDefSellPrice", event.target.value)}
         />
-        <FormFieldInline
-          id={`${idPrefix}itmDefPharmPrice`}
-          label="Purchase price"
-          type="number"
-          step="0.01"
-          value={formValues.itmDefPharmPrice}
-          onChange={(event) => setField("itmDefPharmPrice", event.target.value)}
+
+        <UnitRow
+          unitId={`${idPrefix}itmUnit1`}
+          unitLabel="Unit 1"
+          unitValue={formValues.itmUnit1}
+          onUnitChange={(value) => setField("itmUnit1", value)}
+          unitOptions={lookups.unitOptions}
+          showConversion={false}
         />
-        <FormFieldInline
-          id={`${idPrefix}itmDefTax`}
-          label="Default tax"
-          type="number"
-          step="0.01"
-          value={formValues.itmDefTax}
-          onChange={(event) => setField("itmDefTax", event.target.value)}
+        <UnitRow
+          unitId={`${idPrefix}itmUnit2`}
+          unitLabel="Unit 2"
+          unitValue={formValues.itmUnit2}
+          onUnitChange={(value) => setField("itmUnit2", value)}
+          unitOptions={lookups.unitOptions}
+          conversionId={`${idPrefix}itmUnit1Unit2`}
+          conversionValue={formValues.itmUnit1Unit2}
+          onConversionChange={(value) => setField("itmUnit1Unit2", value)}
+          showConversion
         />
-        <FormFieldInlineWrap id={`${idPrefix}itmUnit2`} label="Unit 2">
-          <SearchableCombobox
-            value={formValues.itmUnit2}
-            onValueChange={(value) => setField("itmUnit2", value)}
-            options={lookups.unitOptions}
-            placeholder="Select unit"
-          />
-        </FormFieldInlineWrap>
-        <FormFieldInlineWrap id={`${idPrefix}itmUnit3`} label="Unit 3">
-          <SearchableCombobox
-            value={formValues.itmUnit3}
-            onValueChange={(value) => setField("itmUnit3", value)}
-            options={lookups.unitOptions}
-            placeholder="Select unit"
-          />
-        </FormFieldInlineWrap>
-        <FormFieldInline
-          id={`${idPrefix}itmUnit1Unit2`}
-          label="Unit 1 / Unit 2"
-          type="number"
-          step="0.01"
-          value={formValues.itmUnit1Unit2}
-          onChange={(event) => setField("itmUnit1Unit2", event.target.value)}
+        <UnitRow
+          unitId={`${idPrefix}itmUnit3`}
+          unitLabel="Unit 3"
+          unitValue={formValues.itmUnit3}
+          onUnitChange={(value) => setField("itmUnit3", value)}
+          unitOptions={lookups.unitOptions}
+          conversionId={`${idPrefix}itmUnit1Unit3`}
+          conversionValue={formValues.itmUnit1Unit3}
+          onConversionChange={(value) => setField("itmUnit1Unit3", value)}
+          showConversion
         />
-        <FormFieldInline
-          id={`${idPrefix}itmUnit1Unit3`}
-          label="Unit 1 / Unit 3"
-          type="number"
-          step="0.01"
-          value={formValues.itmUnit1Unit3}
-          onChange={(event) => setField("itmUnit1Unit3", event.target.value)}
-        />
+
         <FormFieldInline
           id={`${idPrefix}itmNotes`}
           label="Notes"

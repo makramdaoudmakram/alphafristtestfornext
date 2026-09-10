@@ -33,6 +33,18 @@ import type {
   MovmentLookupItem,
   MovmentUpsertRequest,
 } from "@/types/movment";
+import type { BrandItem, CreateBrandRequest, UpdateBrandRequest } from "@/types/brand";
+import type {
+  CreateEmployInfoRequest,
+  EmployInfoCreateResult,
+  EmployInfoItem,
+  UpdateEmployInfoRequest,
+} from "@/types/employ-info";
+import type {
+  InternationalBarcodeItem,
+  InternationalBarcodeWriteRequest,
+} from "@/types/international-barcode";
+import type { VendorCodeItem, VendorCodeWriteRequest } from "@/types/vendor-code";
 import type {
   CompanyItem,
   CreateCompanyRequest,
@@ -92,6 +104,11 @@ import type {
   StockSearchFilters,
 } from "@/types/stock";
 import type {
+  BatchTraceabilityCreatorSource,
+  BatchTraceabilityResult,
+  BatchTraceabilityTimelineEntry,
+} from "@/types/batch-traceability";
+import type {
   ExcelEntityMetadata,
   ExcelImportCommitResponse,
   ExcelImportError,
@@ -115,6 +132,7 @@ import type {
   PurTransDExcelPreviewRow,
 } from "@/types/purchase";
 import { parseUnitCode } from "@/lib/unit-code";
+import { hasSearchableCatalogQuery } from "@/lib/item-catalog-wildcard";
 import {
   excelImportJobStatusFromApiValue,
   excelImportModeFromApiValue,
@@ -304,10 +322,23 @@ function normalizeUnitItem(item: Record<string, unknown>): UnitItem {
 }
 
 function normalizeItemFormatItem(item: Record<string, unknown>): ItemFormatItem {
+  const group = item.group ?? item.Group;
+  const groupRecord =
+    group && typeof group === "object"
+      ? (group as Record<string, unknown>)
+      : null;
+  const groupNameFromNav = groupRecord
+    ? readString(groupRecord, "gNameEn", "GNameEn") ||
+      readString(groupRecord, "gNameAr", "GNameAr")
+    : "";
+
   return {
     itfCode: readNumber(item, "itfCode", "ItfCode"),
     itfNameAr: readString(item, "itfNameAr", "ItfNameAr", "itf_Name_Ar"),
     itfNameEn: readString(item, "itfNameEn", "ItfNameEn", "itf_Name_En"),
+    groupId: readNumber(item, "groupId", "GroupId", "Group_Id", "group_Id"),
+    groupName:
+      readString(item, "groupName", "GroupName") || groupNameFromNav || null,
   };
 }
 
@@ -512,7 +543,6 @@ function normalizeGroupItem(item: Record<string, unknown>): GroupItem {
     id: readNumber(item, "id", "Id"),
     gNameAr: readString(item, "gNameAr", "GNameAr") || null,
     gNameEn: readString(item, "gNameEn", "GNameEn") || null,
-    gParent: readNullableNumber(item, "gParent", "GParent"),
   };
 }
 
@@ -584,7 +614,6 @@ function normalizeItemCatalogChild(
   return {
     itemCChId: readNumber(item, "item_C_ch_id", "Item_C_ch_id"),
     itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
-    itmComCode: readString(item, "itmComCode", "ItmComCode") || null,
     itmLocation: readString(item, "itmLocation", "ItmLocation") || null,
     itmRequestLimit: readNullableNumber(item, "itmRequestLimit", "ItmRequestLimit"),
     itmMaxLimit: readNullableNumber(item, "itmMaxLimit", "ItmMaxLimit"),
@@ -667,7 +696,6 @@ function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogIte
       "hasExpire",
       "HasExpire"
     ),
-    itmIsmedicine: readBoolean(item, "itmIsmedicine", "Itm_Ismedicine"),
     itmActive: readBoolean(item, "itmActive", "Itm_Active"),
     itmStopSell: readBoolean(item, "itmStopSell", "Itm_Stop_Sell"),
     itmSrvc: readBoolean(item, "itmSrvc", "Itm_Srvc"),
@@ -675,10 +703,15 @@ function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogIte
     itmPrintBarcode: readBoolean(item, "itmPrintBarcode", "Itm_PrintBarcode"),
     itmAllowDiscount: readBoolean(item, "itmAllowDiscount", "Itm_Allow_Discount"),
     itmFreez: readBoolean(item, "itmFreez", "ItmFreez"),
-    comId: readNullableNumber(item, "comId", "Com_Id"),
-    itmOrigin: readNullableNumber(item, "itmOrigin", "Itm_Origin"),
+    stopTransfer: readBoolean(item, "stopTransfer", "StopTransfer"),
+    brandId: readNullableNumber(item, "brandId", "BrandId", "Brand_Id"),
+    brandName: readString(item, "brandName", "BrandName") || null,
     itmGroup: readNullableNumber(item, "itmGroup", "Itm_Group"),
+    groupName: readString(item, "groupName", "GroupName") || null,
     itemForm: readNullableNumber(item, "itemForm", "item_Form"),
+    itemFormName: readString(item, "itemFormatName", "ItemFormatName") || null,
+    itmOrigin: readNullableNumber(item, "itmOrigin", "Itm_Origin"),
+    itemOriginName: readString(item, "itemOriginName", "ItemOriginName") || null,
     itmNotes: readString(item, "itmNotes", "Itm_Notes") || null,
     itmMaxDiscPer: readNullableNumber(item, "itmMaxDiscPer", "Itm_MaxDisc_Per"),
     itmMaxDiscVal: readNullableNumber(item, "itmMaxDiscVal", "Itm_MaxDisc_Val"),
@@ -705,7 +738,6 @@ function buildItemCatalogPayload(data: ItemCatalogUpsertRequest) {
       Itm_Def_Tax: data.catalog.itmDefTax,
       Itm_DefPharm_Price: data.catalog.itmDefPharmPrice,
       Itm_Has_Expire: data.catalog.itmHasExpire,
-      Itm_Ismedicine: data.catalog.itmIsmedicine,
       Itm_Active: data.catalog.itmActive,
       Itm_Stop_Sell: data.catalog.itmStopSell,
       Itm_Srvc: data.catalog.itmSrvc,
@@ -713,10 +745,11 @@ function buildItemCatalogPayload(data: ItemCatalogUpsertRequest) {
       Itm_PrintBarcode: data.catalog.itmPrintBarcode,
       Itm_Allow_Discount: data.catalog.itmAllowDiscount,
       ItmFreez: data.catalog.itmFreez,
-      Com_Id: data.catalog.comId,
-      Itm_Origin: data.catalog.itmOrigin,
+      StopTransfer: data.catalog.stopTransfer,
+      BrandId: data.catalog.brandId,
       Itm_Group: data.catalog.itmGroup,
       item_Form: data.catalog.itemForm,
+      Itm_Origin: data.catalog.itmOrigin,
       Itm_Notes: data.catalog.itmNotes,
       Itm_MaxDisc_Per: data.catalog.itmMaxDiscPer,
       Itm_MaxDisc_Val: data.catalog.itmMaxDiscVal,
@@ -728,7 +761,6 @@ function buildItemCatalogPayload(data: ItemCatalogUpsertRequest) {
     },
     Child: data.child
       ? {
-          ItmComCode: data.child.itmComCode,
           ItmLocation: data.child.itmLocation,
           ItmRequestLimit: data.child.itmRequestLimit,
           ItmMaxLimit: data.child.itmMaxLimit,
@@ -1324,9 +1356,9 @@ export function createItemFormat(data: CreateItemFormatRequest, token: string) {
     {
       method: "POST",
       body: JSON.stringify({
-        ItfCode: 0,
         ItfNameAr: data.itfNameAr,
         ItfNameEn: data.itfNameEn,
+        GroupId: data.groupId,
       }),
     },
     token
@@ -1343,6 +1375,7 @@ export function updateItemFormat(
     body: JSON.stringify({
       ItfNameAr: data.itfNameAr,
       ItfNameEn: data.itfNameEn,
+      GroupId: data.groupId,
     }),
   }, token);
 }
@@ -1517,6 +1550,265 @@ export function getNextMovValue(
   });
 }
 
+export function getBrands(token: string) {
+  return fetchAllPaged("Brand", token, normalizeBrandItem);
+}
+
+export function createBrand(data: CreateBrandRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "Brand",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        BrandName_ar: data.brandNameAr,
+        BrandName_En: data.brandNameEn,
+      }),
+    },
+    token
+  ).then((item) => normalizeBrandItem(item));
+}
+
+export function updateBrand(id: number, data: UpdateBrandRequest, token: string) {
+  return apiFetch<void>(`Brand/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      BrandName_ar: data.brandNameAr,
+      BrandName_En: data.brandNameEn,
+    }),
+  }, token);
+}
+
+export function deleteBrand(id: number, token: string) {
+  return apiFetch<void>(`Brand/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeEmployInfoItem(item: Record<string, unknown>): EmployInfoItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    name:
+      readString(item, "name", "Name") ||
+      readString(item, "empployName", "EmpployName") ||
+      null,
+    code:
+      readString(item, "code", "Code") ||
+      readString(item, "employCode", "EmployCode") ||
+      null,
+    pharm: readNumber(item, "pharm", "Pharm"),
+    costCenterName:
+      readString(item, "costCenterName", "CostCenterName") || null,
+    employType: readNumber(item, "employType", "EmployType"),
+    employTypeName:
+      readString(item, "employTypeName", "EmployTypeName") || null,
+    active: readBoolean(item, "active", "Active"),
+    password:
+      readString(item, "password", "Password") ||
+      readString(item, "passwordPlain", "PasswordPlain") ||
+      null,
+  };
+}
+
+function employInfoRequestBody(
+  data: CreateEmployInfoRequest | UpdateEmployInfoRequest
+) {
+  const body: Record<string, unknown> = {
+    Name: data.name,
+    Code: data.code,
+    Pharm: data.pharm,
+    EmployType: data.employType,
+    Active: data.active,
+  };
+
+  if ("previewPassword" in data) {
+    body.PreviewPassword = data.previewPassword ?? null;
+  }
+
+  return body;
+}
+
+function normalizeEmployInfoCreateResult(
+  data: Record<string, unknown>
+): EmployInfoCreateResult {
+  const employeeRaw =
+    (data.employee as Record<string, unknown> | undefined)
+    ?? (data.Employee as Record<string, unknown> | undefined)
+    ?? data;
+
+  return {
+    employee: normalizeEmployInfoItem(employeeRaw),
+    generatedPassword:
+      readString(data, "generatedPassword", "GeneratedPassword") || "",
+  };
+}
+
+export function generateEmployInfoPassword(token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "EmployInfo/generate-password",
+    {},
+    token
+  ).then((data) => readString(data, "password", "Password"));
+}
+
+export function getEmployInfos(token: string) {
+  return fetchAllPaged("EmployInfo", token, normalizeEmployInfoItem);
+}
+
+export function getEmployInfoById(id: number, token: string) {
+  return apiFetch<Record<string, unknown>>(`EmployInfo/${id}`, {}, token).then(
+    (item) => normalizeEmployInfoItem(item)
+  );
+}
+
+export function createEmployInfo(data: CreateEmployInfoRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "EmployInfo",
+    {
+      method: "POST",
+      body: JSON.stringify(employInfoRequestBody(data)),
+    },
+    token
+  ).then((item) => normalizeEmployInfoCreateResult(item));
+}
+
+export function updateEmployInfo(
+  id: number,
+  data: UpdateEmployInfoRequest,
+  token: string
+) {
+  return apiFetch<void>(`EmployInfo/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(employInfoRequestBody(data)),
+  }, token);
+}
+
+export function deleteEmployInfo(id: number, token: string) {
+  return apiFetch<void>(`EmployInfo/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeVendorCodeItem(item: Record<string, unknown>): VendorCodeItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    itmId: readNumber(item, "itmId", "ItmId"),
+    vendorId: readNumber(item, "vendorId", "VendorId"),
+    itemCode: readString(item, "item_code", "itemCode", "Item_code") || null,
+    vendorCode: readString(item, "vendorCode", "VendorCode") || null,
+  };
+}
+
+export function getVendorCodesByItemId(itmId: number, token: string) {
+  return apiFetch<unknown[]>(`VendorCode/item/${itmId}`, {}, token).then(
+    (items) =>
+      Array.isArray(items)
+        ? items.map((item) =>
+            normalizeVendorCodeItem(item as Record<string, unknown>)
+          )
+        : []
+  );
+}
+
+export function createVendorCode(data: VendorCodeWriteRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "VendorCode",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ItmId: data.itmId,
+        VendorId: data.vendorId,
+        item_code: data.itemCode ?? null,
+        VendorCode: data.vendorCode,
+      }),
+    },
+    token
+  ).then((item) => normalizeVendorCodeItem(item));
+}
+
+export function updateVendorCode(
+  id: number,
+  data: VendorCodeWriteRequest,
+  token: string
+) {
+  return apiFetch<void>(`VendorCode/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ItmId: data.itmId,
+      VendorId: data.vendorId,
+      item_code: data.itemCode ?? null,
+      VendorCode: data.vendorCode,
+    }),
+  }, token);
+}
+
+export function deleteVendorCode(id: number, token: string) {
+  return apiFetch<void>(`VendorCode/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeInternationalBarcodeItem(
+  item: Record<string, unknown>
+): InternationalBarcodeItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    itmId: readNumber(item, "itmId", "ItmId"),
+    itemCode: readString(item, "item_code", "itemCode", "Item_code") || null,
+    interBarcode:
+      readString(item, "interBracode", "interBarcode", "InterBracode") || null,
+  };
+}
+
+export function getInternationalBarcodesByItemId(itmId: number, token: string) {
+  return apiFetch<unknown[]>(`InternationalBarcod/item/${itmId}`, {}, token).then(
+    (items) =>
+      Array.isArray(items)
+        ? items.map((item) =>
+            normalizeInternationalBarcodeItem(item as Record<string, unknown>)
+          )
+        : []
+  );
+}
+
+export function createInternationalBarcode(
+  data: InternationalBarcodeWriteRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "InternationalBarcod",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ItmId: data.itmId,
+        Item_code: data.itemCode ?? null,
+        interBracode: data.interBarcode,
+      }),
+    },
+    token
+  ).then((item) => normalizeInternationalBarcodeItem(item));
+}
+
+export function updateInternationalBarcode(
+  id: number,
+  data: InternationalBarcodeWriteRequest,
+  token: string
+) {
+  return apiFetch<void>(`InternationalBarcod/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      ItmId: data.itmId,
+      Item_code: data.itemCode ?? null,
+      interBracode: data.interBarcode,
+    }),
+  }, token);
+}
+
+export function deleteInternationalBarcode(id: number, token: string) {
+  return apiFetch<void>(`InternationalBarcod/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeBrandItem(item: Record<string, unknown>): BrandItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    brandNameAr: readString(item, "brandNameAr", "BrandName_ar") || null,
+    brandNameEn: readString(item, "brandNameEn", "BrandName_En") || null,
+  };
+}
+
 export function getCompanies(token: string) {
   return fetchAllPaged("Company", token, normalizeCompanyItem);
 }
@@ -1647,6 +1939,16 @@ export function deletePharm(parmId: number, token: string) {
 }
 
 function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem {
+  const qty = readNumber(item, "qty", "Qty");
+  const transferQty = readNumber(item, "transferQty", "TransferQty");
+  // Prefer API AvailableQty (SQL computed). Fallback only when the field is absent
+  // from older payloads so consumers still see a coherent triad.
+  const availableRaw = readNullableNumber(item, "availableQty", "AvailableQty");
+  const availableQty =
+    availableRaw != null && Number.isFinite(availableRaw)
+      ? availableRaw
+      : qty - transferQty;
+
   return {
     id: readNumber(item, "id", "Id"),
     batchNo: readString(item, "batchNo", "BatchNo"),
@@ -1656,7 +1958,9 @@ function normalizeStockBatchItem(item: Record<string, unknown>): StockBatchItem 
     storeId: readNumber(item, "storeId", "StoreId"),
     storeName: readNullableString(item, "storeName", "StoreName"),
     expDate: readNullableString(item, "expDate", "ExpDate"),
-    qty: readNumber(item, "qty", "Qty"),
+    qty,
+    transferQty,
+    availableQty,
     qtyUnit3: readNullableNumber(item, "qtyUnit3", "QtyUnit3"),
     purshPrice: readNumber(item, "purshPrice", "PurshPrice"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
@@ -1692,7 +1996,11 @@ function normalizeReturnItemStockSearchItem(
     itemName: readString(item, "itemName", "ItemName"),
     storeId: readNumber(item, "storeId", "StoreId"),
     totalQuantity: readNumber(item, "totalQuantity", "TotalQuantity"),
+    transferQty: readNumber(item, "transferQty", "TransferQty"),
+    availableQty: readNumber(item, "availableQty", "AvailableQty"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+    costPrice: readNumber(item, "costPrice", "CostPrice"),
+    stockId: readNullableNumber(item, "stockId", "StockId"),
     expDate: readNullableString(item, "expDate", "ExpDate"),
     batchNo: readString(item, "batchNo", "BatchNo"),
   };
@@ -1733,6 +2041,108 @@ export function searchStockBatches(token: string, filters: StockSearchFilters = 
   const query = params.toString();
   return apiFetch<unknown>(`Stock${query ? `?${query}` : ""}`, {}, token).then(
     normalizeStockPagedResult
+  );
+}
+
+function normalizeBatchTraceabilityTimelineEntry(
+  raw: unknown
+): BatchTraceabilityTimelineEntry {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    transactionType: readString(obj, "transactionType", "TransactionType"),
+    detailId: readNumber(obj, "detailId", "DetailId"),
+    lineNo: readNumber(obj, "lineNo", "LineNo"),
+    headerId: readNumber(obj, "headerId", "HeaderId"),
+    documentDisplayNo: readNullableString(
+      obj,
+      "documentDisplayNo",
+      "DocumentDisplayNo"
+    ),
+    eventDate: readNullableString(obj, "eventDate", "EventDate"),
+    userId: readNullableString(obj, "userId", "UserId"),
+    userName: readNullableString(obj, "userName", "UserName"),
+    storeId: readNullableString(obj, "storeId", "StoreId"),
+    storeCode: readNullableString(obj, "storeCode", "StoreCode"),
+    storeName: readNullableString(obj, "storeName", "StoreName"),
+    quantityDelta: readNumber(obj, "quantityDelta", "QuantityDelta"),
+    quantityAfter:
+      obj.quantityAfter != null || obj.QuantityAfter != null
+        ? readNumber(obj, "quantityAfter", "QuantityAfter")
+        : null,
+    documentLabel: readNullableString(obj, "documentLabel", "DocumentLabel"),
+    deepLinkRoute: readNullableString(obj, "deepLinkRoute", "DeepLinkRoute"),
+  };
+}
+
+function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const batch = (obj.batch ?? obj.Batch ?? {}) as Record<string, unknown>;
+  const creator = (obj.creator ?? obj.Creator ?? {}) as Record<string, unknown>;
+  const currentStock = (obj.currentStock ??
+    obj.CurrentStock ??
+    {}) as Record<string, unknown>;
+  const locationsRaw = currentStock.locations ?? currentStock.Locations ?? [];
+
+  const sourceRaw = readString(creator, "source", "Source");
+  const source: BatchTraceabilityCreatorSource =
+    sourceRaw === "Purchase" || sourceRaw === "Audit" || sourceRaw === "Unknown"
+      ? sourceRaw
+      : "Unknown";
+
+  return {
+    batch: {
+      batchNo: readString(batch, "batchNo", "BatchNo"),
+      stockId: readNumber(batch, "stockId", "StockId"),
+      itemId: readNumber(batch, "itemId", "ItemId"),
+      itemCode: readNullableString(batch, "itemCode", "ItemCode"),
+      itemNameAr: readNullableString(batch, "itemNameAr", "ItemNameAr"),
+      itemNameEn: readNullableString(batch, "itemNameEn", "ItemNameEn"),
+      storeId: readNumber(batch, "storeId", "StoreId"),
+      storeName: readNullableString(batch, "storeName", "StoreName"),
+      expDate: readNullableString(batch, "expDate", "ExpDate"),
+      purchasePrice: readNumber(batch, "purchasePrice", "PurchasePrice"),
+      salesPrice: readNumber(batch, "salesPrice", "SalesPrice"),
+      costPrice: readNumber(batch, "costPrice", "CostPrice"),
+      currentQty: readNumber(batch, "currentQty", "CurrentQty"),
+    },
+    creator: {
+      userId: readNullableString(creator, "userId", "UserId"),
+      userName: readNullableString(creator, "userName", "UserName"),
+      createdAt: readNullableString(creator, "createdAt", "CreatedAt"),
+      source,
+    },
+    currentStock: {
+      locations: Array.isArray(locationsRaw)
+        ? locationsRaw.map((row) => {
+            const loc = (row ?? {}) as Record<string, unknown>;
+            return {
+              storeId: readNumber(loc, "storeId", "StoreId"),
+              storeName: readNullableString(loc, "storeName", "StoreName"),
+              qty: readNumber(loc, "qty", "Qty"),
+            };
+          })
+        : [],
+      totalCurrentQty: readNumber(
+        currentStock,
+        "totalCurrentQty",
+        "TotalCurrentQty"
+      ),
+    },
+    timeline: Array.isArray(obj.timeline ?? obj.Timeline)
+      ? ((obj.timeline ?? obj.Timeline) as unknown[]).map(
+          (entry) =>
+            normalizeBatchTraceabilityTimelineEntry(
+              (entry ?? {}) as Record<string, unknown>
+            )
+        )
+      : [],
+  };
+}
+
+export function getBatchTraceability(token: string, batchNo: string) {
+  const encoded = encodeURIComponent(batchNo.trim());
+  return apiFetch<unknown>(`BatchTraceability/${encoded}`, {}, token).then(
+    normalizeBatchTraceabilityResult
   );
 }
 
@@ -2247,7 +2657,6 @@ export function createGroup(data: CreateGroupRequest, token: string) {
       body: JSON.stringify({
         GNameAr: data.gNameAr,
         GNameEn: data.gNameEn,
-        GParent: data.gParent,
       }),
     },
     token
@@ -2260,7 +2669,6 @@ export function updateGroup(id: number, data: UpdateGroupRequest, token: string)
     body: JSON.stringify({
       GNameAr: data.gNameAr,
       GNameEn: data.gNameEn,
-      GParent: data.gParent,
     }),
   }, token);
 }
@@ -3286,16 +3694,27 @@ export async function lookupItemCatalogBySegment(
   token: string,
   search: string,
   field: "code" | "nameAr" | "nameEn",
-  options?: { take?: number; signal?: AbortSignal }
+  options?: {
+    take?: number;
+    signal?: AbortSignal;
+    /** PurchDetail: two consecutive spaces → '%' without trimming. */
+    doubleSpaceWildcard?: boolean;
+  }
 ): Promise<ItemCatalogItem[]> {
-  const term = search.trim();
-  if (!term) return [];
+  const doubleSpaceWildcard = options?.doubleSpaceWildcard === true;
+  const term = doubleSpaceWildcard ? search : search.trim();
+  if (doubleSpaceWildcard) {
+    if (!hasSearchableCatalogQuery(term)) return [];
+  } else if (!term) {
+    return [];
+  }
 
   const take = String(options?.take ?? 20);
   const params = new URLSearchParams();
   params.set("search", term);
   params.set("field", field);
   params.set("take", take);
+  if (doubleSpaceWildcard) params.set("doubleSpaceWildcard", "true");
 
   const mapRows = (data: unknown): ItemCatalogItem[] => {
     if (!Array.isArray(data)) return [];
@@ -3422,7 +3841,6 @@ function normalizeItemCatalogLookupItem(
       "ItmDefPharmPrice"
     ),
     itmHasExpire: null,
-    itmIsmedicine: false,
     itmActive: true,
     itmStopSell: false,
     itmSrvc: false,
@@ -3430,10 +3848,15 @@ function normalizeItemCatalogLookupItem(
     itmPrintBarcode: false,
     itmAllowDiscount: false,
     itmFreez: false,
-    comId: null,
-    itmOrigin: null,
+    stopTransfer: false,
+    brandId: null,
+    brandName: null,
     itmGroup: null,
+    groupName: null,
     itemForm: null,
+    itemFormName: null,
+    itmOrigin: null,
+    itemOriginName: null,
     itmNotes: null,
     itmMaxDiscPer: null,
     itmMaxDiscVal: null,

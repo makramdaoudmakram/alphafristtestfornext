@@ -15,6 +15,15 @@ export const ActivityType = {
   Act11: 11011,
 } as const;
 
+/** Mirrors Alfa.service.PharmPurchase.PharmPurchaseMovementMatcher.MovPageKey */
+export const MOV_PAGE_PHARMACY_PURCHASE = "PharmacyPurchase";
+
+export function getMovPageOptions(): ComboboxOption[] {
+  return [
+    { value: MOV_PAGE_PHARMACY_PURCHASE, label: "Pharmacy Purchase" },
+  ];
+}
+
 /** Mirrors Alfa.Models.MovmentEffect */
 export const MovmentEffect = {
   Increse: 1,

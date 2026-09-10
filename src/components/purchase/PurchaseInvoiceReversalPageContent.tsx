@@ -13,6 +13,7 @@ import { RefreshCw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePurchaseInvoiceReversalColumns } from "@/components/purchase/purchase-invoice-reversal-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { usePermissions } from "@/components/permissions/permission-provider";
 import { DataTablePagination } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,6 +70,7 @@ function formatAmount(value: number | null) {
 
 export function PurchaseInvoiceReversalPageContent() {
   const { data: session, status } = useSession();
+  const { canReversePurchase, ready: permissionsReady } = usePermissions();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
 
@@ -174,6 +176,7 @@ export function PurchaseInvoiceReversalPageContent() {
   const columns = usePurchaseInvoiceReversalColumns({
     reversingId,
     onReverse: handleReverseClick,
+    showReverseAction: permissionsReady && canReversePurchase(),
   });
 
   const table = useReactTable({
