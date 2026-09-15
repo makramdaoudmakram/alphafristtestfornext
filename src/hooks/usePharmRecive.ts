@@ -21,7 +21,7 @@ import {
   mergeSavedDetailsWithPrior,
   PHARM_RECIVE_INITIAL_ROW_ID,
 } from "@/lib/pharm-recive.mapper";
-import { ensureCatalogItemsForDetails } from "@/lib/item-unit-options";
+import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import {
   createPharmReciveService,
   PharmReciveRepositoryError,
@@ -177,13 +177,24 @@ export function usePharmRecive(token: string | undefined) {
       setLoading(true);
       try {
         const doc = await service.loadById(id);
-        let enriched = doc.details;
-        if (itemByCode && itemByCode.size > 0) {
-          enriched = mergeSavedDetailsWithPrior(doc.details, doc.details, itemByCode);
+        let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+        if (token) {
+          catalogMap = await ensureCatalogItemsForItmCodes(
+            doc.details,
+            catalogMap,
+            catalogItems,
+            token
+          );
         } else if (catalogItems && catalogItems.length > 0) {
-          const map = new Map(catalogItems.map((i) => [i.itmCode?.toLowerCase() ?? "", i]));
-          enriched = mergeSavedDetailsWithPrior(doc.details, doc.details, map);
+          catalogMap = new Map(
+            catalogItems.map((i) => [i.itmCode?.toLowerCase() ?? "", i])
+          );
         }
+        const enriched = mergeSavedDetailsWithPrior(
+          doc.details,
+          doc.details,
+          catalogMap
+        );
         applyDocument(doc.header, enriched);
         setMode("view");
         await refreshNavIds();
@@ -193,7 +204,7 @@ export function usePharmRecive(token: string | undefined) {
         setLoading(false);
       }
     },
-    [applyDocument, refreshNavIds, service]
+    [applyDocument, refreshNavIds, service, token]
   );
 
   const handleNew = useCallback(() => {

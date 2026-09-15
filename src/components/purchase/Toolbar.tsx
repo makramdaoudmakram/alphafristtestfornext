@@ -63,6 +63,8 @@ type ToolbarProps = {
   excelTemplateDisabled?: boolean;
   excelTemplateLoading?: boolean;
   excelImportHref: string;
+  /** When false, hides Create template + Import Excel. Default true. */
+  showExcelActions?: boolean;
 };
 
 function ToolbarTextButton({
@@ -190,6 +192,7 @@ export function Toolbar({
   excelTemplateDisabled,
   excelTemplateLoading,
   excelImportHref,
+  showExcelActions = true,
 }: ToolbarProps) {
   const canSave = mode === "new" || mode === "edit";
 
@@ -308,28 +311,32 @@ export function Toolbar({
               loading={barcodeLoading}
             />
           ) : null}
-          <ToolbarButton
-            label="Create template"
-            icon={FileSpreadsheet}
-            onClick={onCreateExcelTemplate}
-            disabled={excelTemplateDisabled}
-            loading={excelTemplateLoading}
-            className={cn(
-              "border-transparent bg-emerald-600 text-white shadow-sm",
-              "hover:bg-emerald-700 hover:text-white",
-              "focus-visible:ring-emerald-600/40"
-            )}
-          />
-          <ToolbarButton
-            label="Import Excel"
-            icon={Upload}
-            href={excelImportHref}
-            className={cn(
-              "border-transparent bg-sky-600 text-white shadow-sm",
-              "hover:bg-sky-700 hover:text-white",
-              "focus-visible:ring-sky-600/40"
-            )}
-          />
+          {showExcelActions ? (
+            <>
+              <ToolbarButton
+                label="Create template"
+                icon={FileSpreadsheet}
+                onClick={onCreateExcelTemplate}
+                disabled={excelTemplateDisabled}
+                loading={excelTemplateLoading}
+                className={cn(
+                  "border-transparent bg-emerald-600 text-white shadow-sm",
+                  "hover:bg-emerald-700 hover:text-white",
+                  "focus-visible:ring-emerald-600/40"
+                )}
+              />
+              <ToolbarButton
+                label="Import Excel"
+                icon={Upload}
+                href={excelImportHref}
+                className={cn(
+                  "border-transparent bg-sky-600 text-white shadow-sm",
+                  "hover:bg-sky-700 hover:text-white",
+                  "focus-visible:ring-sky-600/40"
+                )}
+              />
+            </>
+          ) : null}
         </div>
       </div>
     </TooltipProvider>

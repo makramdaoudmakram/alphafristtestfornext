@@ -112,9 +112,12 @@ export function DetailsGrid({
             rowIndex={row.index}
             dataCol="itemName"
             value={
-              itemLanguage === "ar"
+              (itemLanguage === "ar"
                 ? row.original.itmNameAr
                 : row.original.itmNameEn
+              )?.trim() ||
+              row.original.itmId?.trim() ||
+              ""
             }
             token={token}
             catalogItems={catalogItems}

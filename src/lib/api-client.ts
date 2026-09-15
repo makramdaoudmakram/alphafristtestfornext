@@ -33,6 +33,34 @@ import type {
   MovmentLookupItem,
   MovmentUpsertRequest,
 } from "@/types/movment";
+import type {
+  SalesMovementParent,
+  SalesmovmentDetail,
+  SalesmovmentUpsertRequest,
+} from "@/types/sales-movment";
+import type {
+  CreateSalesPayMethodRequest,
+  SalesPayMethodCompoItem,
+  SalesPayMethodItem,
+  UpdateSalesPayMethodRequest,
+} from "@/types/sales-pay-method";
+import type {
+  CreateSalesServiceRequest,
+  SalesServiceCompoItem,
+  SalesServiceItem,
+  UpdateSalesServiceRequest,
+} from "@/types/sales-service";
+import type {
+  CreateSalesServiceAssignmentRequest,
+  SalesServiceAssignmentCurrentPharmacyItem,
+  SalesServiceAssignmentItem,
+  UpdateSalesServiceAssignmentRequest,
+} from "@/types/sales-service-assignment";
+import type {
+  CreateSalesPaymentAssimentRequest,
+  SalesPaymentAssimentItem,
+  UpdateSalesPaymentAssimentRequest,
+} from "@/types/sales-payment-assiment";
 import type { BrandItem, CreateBrandRequest, UpdateBrandRequest } from "@/types/brand";
 import type {
   CreateEmployInfoRequest,
@@ -1455,6 +1483,333 @@ export function deleteMovParient(movParientId: number, token: string) {
   return apiFetch<void>(`MovParient/${movParientId}`, { method: "DELETE" }, token);
 }
 
+function normalizeSalesPayMethodItem(
+  item: Record<string, unknown>
+): SalesPayMethodItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    paymentName: readString(item, "paymentName", "PaymentName"),
+    affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
+    accountCode: readString(item, "accountCode", "AccountCode"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+function normalizeSalesPayMethodCompoItem(
+  item: Record<string, unknown>
+): SalesPayMethodCompoItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    paymentName: readString(item, "paymentName", "PaymentName"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+export function getSalesPayMethods(token: string) {
+  return fetchAllPaged("SalesPayMethod", token, normalizeSalesPayMethodItem);
+}
+
+export function getSalesPayMethodCompo(token: string, activeOnly?: boolean) {
+  return fetchAllPaged(
+    "SalesPayMethod/for-comp",
+    token,
+    normalizeSalesPayMethodCompoItem,
+    activeOnly === undefined
+      ? undefined
+      : { activeOnly: activeOnly ? "true" : "false" }
+  );
+}
+
+export function createSalesPayMethod(
+  data: CreateSalesPayMethodRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesPayMethod",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        PaymentName: data.paymentName,
+        AffectsCash: data.affectsCash,
+        AccountCode: data.accountCode || null,
+        Active: data.active,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesPayMethodItem(item));
+}
+
+export function updateSalesPayMethod(
+  id: number,
+  data: UpdateSalesPayMethodRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesPayMethod/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        PaymentName: data.paymentName,
+        AffectsCash: data.affectsCash,
+        AccountCode: data.accountCode || null,
+        Active: data.active,
+      }),
+    },
+    token
+  );
+}
+
+export function deactivateSalesPayMethod(id: number, token: string) {
+  return apiFetch<void>(`SalesPayMethod/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesServiceItem(
+  item: Record<string, unknown>
+): SalesServiceItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    serviceName: readString(item, "serviceName", "ServiceName"),
+    serviceType: readString(item, "serviceType", "ServiceType"),
+    cost: readNumber(item, "cost", "Cost"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+function normalizeSalesServiceCompoItem(
+  item: Record<string, unknown>
+): SalesServiceCompoItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    serviceName: readString(item, "serviceName", "ServiceName"),
+    serviceType: readString(item, "serviceType", "ServiceType"),
+    cost: readNumber(item, "cost", "Cost"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+export function getSalesServices(token: string) {
+  return fetchAllPaged("SalesService", token, normalizeSalesServiceItem);
+}
+
+export function getSalesServiceCompo(token: string, activeOnly?: boolean) {
+  return fetchAllPaged(
+    "SalesService/for-comp",
+    token,
+    normalizeSalesServiceCompoItem,
+    activeOnly === undefined
+      ? undefined
+      : { activeOnly: activeOnly ? "true" : "false" }
+  );
+}
+
+export function createSalesService(
+  data: CreateSalesServiceRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesService",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ServiceName: data.serviceName,
+        ServiceType: data.serviceType || null,
+        Cost: data.cost,
+        Active: data.active,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesServiceItem(item));
+}
+
+export function updateSalesService(
+  id: number,
+  data: UpdateSalesServiceRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesService/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        ServiceName: data.serviceName,
+        ServiceType: data.serviceType || null,
+        Cost: data.cost,
+        Active: data.active,
+      }),
+    },
+    token
+  );
+}
+
+export function deactivateSalesService(id: number, token: string) {
+  return apiFetch<void>(`SalesService/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesServiceAssignmentItem(
+  item: Record<string, unknown>
+): SalesServiceAssignmentItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    pharmId: readNumber(item, "pharmId", "PharmId"),
+    pharmName: readString(item, "pharmName", "PharmName"),
+    salesServiceId: readNumber(item, "salesServiceId", "SalesServiceId"),
+    serviceName: readString(item, "serviceName", "ServiceName"),
+    serviceType: readString(item, "serviceType", "ServiceType"),
+    cost: readNumber(item, "cost", "Cost"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+function normalizeSalesServiceAssignmentCurrentPharmacyItem(
+  item: Record<string, unknown>
+): SalesServiceAssignmentCurrentPharmacyItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    serviceName: readString(item, "serviceName", "ServiceName"),
+    serviceType: readString(item, "serviceType", "ServiceType"),
+    cost: readNumber(item, "cost", "Cost"),
+  };
+}
+
+export function getSalesServiceAssignments(
+  token: string,
+  filters?: { pharmId?: number }
+) {
+  return fetchAllPaged(
+    "SalesServiceAssignment",
+    token,
+    normalizeSalesServiceAssignmentItem,
+    filters?.pharmId != null && filters.pharmId > 0
+      ? { pharmId: String(filters.pharmId) }
+      : undefined
+  );
+}
+
+export function getSalesServicesForCurrentPharmacy(token: string) {
+  return apiFetch<unknown>("SalesServiceAssignment/for-current-pharmacy", {}, token).then(
+    (data) => {
+      const list = Array.isArray(data) ? data : [];
+      return list.map((row) =>
+        normalizeSalesServiceAssignmentCurrentPharmacyItem(
+          row as Record<string, unknown>
+        )
+      );
+    }
+  );
+}
+
+export function createSalesServiceAssignment(
+  data: CreateSalesServiceAssignmentRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesServiceAssignment",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SalesServiceId: data.salesServiceId,
+        Active: data.active,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesServiceAssignmentItem(item));
+}
+
+export function updateSalesServiceAssignment(
+  id: number,
+  data: UpdateSalesServiceAssignmentRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesServiceAssignment/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SalesServiceId: data.salesServiceId,
+        Active: data.active,
+      }),
+    },
+    token
+  );
+}
+
+export function deactivateSalesServiceAssignment(id: number, token: string) {
+  return apiFetch<void>(
+    `SalesServiceAssignment/${id}`,
+    { method: "DELETE" },
+    token
+  );
+}
+
+function normalizeSalesPaymentAssimentItem(
+  item: Record<string, unknown>
+): SalesPaymentAssimentItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    pharmId: readString(item, "pharmId", "PharmId"),
+    pharmName: readString(item, "pharmName", "PharmName"),
+    spmId: readNumber(item, "spm_Id", "SPM_Id", "spmId", "sPM_Id"),
+    paymentName: readString(item, "paymentName", "PaymentName"),
+  };
+}
+
+export function getSalesPaymentAssimments(
+  token: string,
+  options?: { pharmId?: string }
+) {
+  return fetchAllPaged(
+    "SalesPaymentAssiment",
+    token,
+    normalizeSalesPaymentAssimentItem,
+    options?.pharmId ? { pharmId: options.pharmId } : undefined
+  );
+}
+
+export function createSalesPaymentAssiment(
+  data: CreateSalesPaymentAssimentRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesPaymentAssiment",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SPM_Id: data.spmId,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesPaymentAssimentItem(item));
+}
+
+export function updateSalesPaymentAssiment(
+  id: number,
+  data: UpdateSalesPaymentAssimentRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesPaymentAssiment/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SPM_Id: data.spmId,
+      }),
+    },
+    token
+  );
+}
+
+export function deleteSalesPaymentAssiment(id: number, token: string) {
+  return apiFetch<void>(
+    `SalesPaymentAssiment/${id}`,
+    { method: "DELETE" },
+    token
+  );
+}
+
 export function getMovments(token: string, movParientId?: number) {
   return fetchAllPaged(
     "Movment",
@@ -1521,6 +1876,138 @@ export function updateMovment(
 
 export function deleteMovment(id: number, token: string) {
   return apiFetch<void>(`Movment/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesmovmentDetail(
+  item: Record<string, unknown>
+): SalesmovmentDetail {
+  return {
+    id: readNumber(item, "id", "Id"),
+    movId: readNullableNumber(item, "movId", "MovId"),
+    movName: readNullableString(item, "movName", "MovName"),
+    movParint: readNullableNumber(item, "movParint", "MovParint"),
+    pharmId: readNullableNumber(item, "pharmId", "PharmId"),
+    store1: readNullableNumber(item, "store1", "Store1"),
+    store2: readNullableNumber(item, "store2", "Store2"),
+    cashDebit: readNullableString(item, "cashDebit", "CashDebit"),
+    creditCardDebit: readNullableString(item, "creditCardDebit", "CreditCardDebit"),
+    creditCardMachinNo: readNullableString(
+      item,
+      "creditCardMachinNo",
+      "CreditCardMachinNo"
+    ),
+    discountEmployeesDebit: readNullableString(
+      item,
+      "discountEmployeesDebit",
+      "DiscountEmployeesDebit"
+    ),
+    discountMedicalDebit: readNullableString(
+      item,
+      "discountMedicalDebit",
+      "DiscountMedicalDebit"
+    ),
+    medicinesSalesCredit: readNullableString(
+      item,
+      "medicinesSalesCredit",
+      "MedicinesSalesCredit"
+    ),
+    accesSalesCredit: readNullableString(item, "accesSalesCredit", "AccesSalesCredit"),
+    salesTaxCredit: readNullableString(item, "salesTaxCredit", "SalesTaxCredit"),
+    salesCostDebit: readNullableString(item, "salesCostDebit", "SalesCostDebit"),
+    accessCostDebit: readNullableString(item, "accessCostDebit", "AccessCostDebit"),
+    pharmStorCredit: readNullableString(item, "pharmStorCredit", "PharmStorCredit"),
+    extraordinaryPurchasesDebit: readNullableString(
+      item,
+      "extraordinaryPurchasesDebit",
+      "ExtraordinaryPurchasesDebit"
+    ),
+    extraordinaryPurchasesCredit: readNullableString(
+      item,
+      "extraordinaryPurchasesCredit",
+      "ExtraordinaryPurchasesCredit"
+    ),
+    expensesDebit: readNullableString(item, "expensesDebit", "ExpensesDebit"),
+    expensesCredit: readNullableString(item, "expensesCredit", "ExpensesCredit"),
+    transferDebit: readNullableString(item, "transferDebit", "TransferDebit"),
+    transferCredit: readNullableString(item, "transferCredit", "TransferCredit"),
+    postMedicalDebit: readNullableString(item, "postMedicalDebit", "PostMedicalDebit"),
+    postEmployeesDebit: readNullableString(
+      item,
+      "postEmployeesDebit",
+      "PostEmployeesDebit"
+    ),
+    excessDeficitdept: readNullableString(
+      item,
+      "excessDeficitdept",
+      "ExcessDeficitdept"
+    ),
+    excessDeficitcredit: readNullableString(
+      item,
+      "excessDeficitcredit",
+      "ExcessDeficitcredit"
+    ),
+    cashdiscount: readNullableString(item, "cashdiscount", "Cashdiscount"),
+    otheraRevinue: readNullableString(item, "otheraRevinue", "OtheraRevinue"),
+  };
+}
+
+function buildSalesmovmentPayload(data: SalesmovmentUpsertRequest) {
+  return {
+    MovId: data.movId,
+    MovName: data.movName,
+    MovParint: data.movParint,
+    PharmId: data.pharmId,
+    Store1: data.store1,
+    Store2: data.store2,
+    CashDebit: data.cashDebit,
+    CreditCardDebit: data.creditCardDebit,
+    CreditCardMachinNo: data.creditCardMachinNo,
+    DiscountEmployeesDebit: data.discountEmployeesDebit,
+    DiscountMedicalDebit: data.discountMedicalDebit,
+    MedicinesSalesCredit: data.medicinesSalesCredit,
+    AccesSalesCredit: data.accesSalesCredit,
+    SalesTaxCredit: data.salesTaxCredit,
+    SalesCostDebit: data.salesCostDebit,
+    AccessCostDebit: data.accessCostDebit,
+    PharmStorCredit: data.pharmStorCredit,
+    ExtraordinaryPurchasesDebit: data.extraordinaryPurchasesDebit,
+    ExtraordinaryPurchasesCredit: data.extraordinaryPurchasesCredit,
+    ExpensesDebit: data.expensesDebit,
+    ExpensesCredit: data.expensesCredit,
+    TransferDebit: data.transferDebit,
+    TransferCredit: data.transferCredit,
+    PostMedicalDebit: data.postMedicalDebit,
+    PostEmployeesDebit: data.postEmployeesDebit,
+    ExcessDeficitdept: data.excessDeficitdept,
+    ExcessDeficitcredit: data.excessDeficitcredit,
+    Cashdiscount: data.cashdiscount,
+    OtheraRevinue: data.otheraRevinue,
+  };
+}
+
+export function getSalesmovmentByParent(
+  movParint: SalesMovementParent,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    `Salesmovment/by-parent/${movParint}`,
+    {},
+    token
+  ).then((item) => normalizeSalesmovmentDetail(item));
+}
+
+export function upsertSalesmovment(
+  data: SalesmovmentUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "Salesmovment",
+    {
+      method: "PUT",
+      body: JSON.stringify(buildSalesmovmentPayload(data)),
+    },
+    token
+  ).then((item) => normalizeSalesmovmentDetail(item));
 }
 
 export type MovValueNextResult = {
@@ -4386,4 +4873,597 @@ export async function waitForExcelImportJob(
 function errorsOnlyMessage(data: Record<string, unknown>): boolean {
   const errors = data.errors ?? data.Errors;
   return !Array.isArray(errors) || errors.length === 0;
+}
+
+function mapSalesPaymentMethodOption(
+  item: Record<string, unknown>
+): import("@/types/sales-payment").SalesPaymentMethodOption {
+  return {
+    paymentMethodId: readNumber(item, "paymentMethodId", "PaymentMethodId"),
+    paymentName: readNullableString(item, "paymentName", "PaymentName"),
+    affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+function mapSalesPaymentLine(
+  item: Record<string, unknown>
+): import("@/types/sales-payment").SalesPaymentLine {
+  return {
+    paymentMethodId: readNumber(item, "paymentMethodId", "PaymentMethodId"),
+    paymentName: readNullableString(item, "paymentName", "PaymentName"),
+    amount: readNumber(item, "amount", "Amount"),
+    accountCode: readNullableString(item, "accountCode", "AccountCode"),
+  };
+}
+
+function mapSalesPaymentContext(
+  data: Record<string, unknown>
+): import("@/types/sales-payment").SalesPaymentContext {
+  const existingRaw = data.existingPayments ?? data.ExistingPayments;
+  const methodsRaw = data.availablePaymentMethods ?? data.AvailablePaymentMethods;
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    paymentStatus: readString(data, "paymentStatus", "PaymentStatus"),
+    totalBill: (() => {
+      const v = data.totalBill ?? data.TotalBill;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    totalBillAfterDisc: (() => {
+      const v = data.totalBillAfterDisc ?? data.TotalBillAfterDisc;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    totalBillNet: (() => {
+      const v = data.totalBillNet ?? data.TotalBillNet;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    finalPayableAmount: readNumber(data, "finalPayableAmount", "FinalPayableAmount"),
+    pharmId: readNullableString(data, "pharmId", "PharmId"),
+    scId: (() => {
+      const v = data.sc_Id ?? data.Sc_Id ?? data.scId ?? data.ScId;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    existingPayments: Array.isArray(existingRaw)
+      ? existingRaw.map((row) => mapSalesPaymentLine(row as Record<string, unknown>))
+      : [],
+    availablePaymentMethods: Array.isArray(methodsRaw)
+      ? methodsRaw.map((row) =>
+          mapSalesPaymentMethodOption(row as Record<string, unknown>)
+        )
+      : [],
+  };
+}
+
+export async function getSalePaymentMethods(token: string) {
+  const data = await apiFetch<unknown>("SalesPayment/methods", {}, token);
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) =>
+    mapSalesPaymentMethodOption(row as Record<string, unknown>)
+  );
+}
+
+export async function getSalesServerTime(token: string): Promise<{
+  utcNow: string;
+  egyptLocalDisplay: string;
+  timeZoneId: string;
+} | null> {
+  try {
+    const data = await apiFetch<Record<string, unknown>>(
+      "Sales/server-time",
+      {},
+      token
+    );
+    return {
+      utcNow: readString(data, "utcNow", "UtcNow"),
+      egyptLocalDisplay: readString(data, "egyptLocalDisplay", "EgyptLocalDisplay"),
+      timeZoneId: readString(data, "timeZoneId", "TimeZoneId"),
+    };
+  } catch {
+    // Soft-fail: missing/restarted API must not block Sales UI.
+    return null;
+  }
+}
+
+export async function searchSalesItems(
+  token: string,
+  params: {
+    searchType:
+      | "ArabicName"
+      | "EnglishName"
+      | "Barcode"
+      | "ItemCode"
+      | "General";
+    stockScope: import("@/types/sales-workspace").SalesStockScope;
+    search: string;
+    take?: number;
+  }
+) {
+  const q = new URLSearchParams({
+    searchType: params.searchType,
+    stockScope: params.stockScope,
+    search: params.search,
+    take: String(params.take ?? 40),
+  });
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesItemSearch?${q.toString()}`,
+    {},
+    token
+  );
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+  return {
+    parmId: readNumber(data, "parmId", "ParmId"),
+    pharmacyName: readString(data, "pharmacyName", "PharmacyName"),
+    storId: readNumber(data, "storId", "StorId"),
+    items: items.map((row) => {
+      const r = row as Record<string, unknown>;
+      const stocksRaw = r.stocks ?? r.Stocks;
+      const stocks = Array.isArray(stocksRaw) ? stocksRaw : [];
+      return {
+        itemCatalogId: readNumber(r, "itemCatalogId", "ItemCatalogId"),
+        itmCode: readString(r, "itmCode", "ItmCode"),
+        itmNameAr: readString(r, "itmNameAr", "ItmNameAr"),
+        itmNameEn: readString(r, "itmNameEn", "ItmNameEn"),
+        defSellPrice: readNullableNumber(r, "defSellPrice", "DefSellPrice"),
+        defPharmPrice: readNullableNumber(r, "defPharmPrice", "DefPharmPrice"),
+        unit1: readNullableNumber(r, "unit1", "Unit1"),
+        unit2: readNullableNumber(r, "unit2", "Unit2"),
+        unit3: readNullableNumber(r, "unit3", "Unit3"),
+        unit1Unit2: readNullableNumber(r, "unit1Unit2", "Unit1Unit2"),
+        unit1Unit3: readNullableNumber(r, "unit1Unit3", "Unit1Unit3"),
+        stocks: stocks.map((s) => {
+          const st = s as Record<string, unknown>;
+          return {
+            stockId: readNumber(st, "stockId", "StockId"),
+            batchNo: readString(st, "batchNo", "BatchNo"),
+            expDate: readNullableString(st, "expDate", "ExpDate"),
+            availableQty: readNumber(st, "availableQty", "AvailableQty"),
+            salesPrice: readNumber(st, "salesPrice", "SalesPrice"),
+            storId: readNumber(st, "storId", "StorId"),
+            storName: readNullableString(st, "storName", "StorName"),
+            parmId: readNullableNumber(st, "parmId", "ParmId"),
+            pharmacyName: readNullableString(st, "pharmacyName", "PharmacyName"),
+          };
+        }),
+      } satisfies import("@/types/sales-workspace").SalesItemSearchHit;
+    }),
+  };
+}
+
+export async function createSale(
+  token: string,
+  request: import("@/types/sales-workspace").CreateSaleRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "Sales",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        EmpId: request.empId,
+        CustId: request.custId,
+        CustomerName: request.customerName,
+        CustomerTel: request.customerTel,
+        CustomerAddress: request.customerAddress,
+        GlobalDiscountMode: request.globalDiscountMode,
+        GlobalDiscountPercent: request.globalDiscountPercent,
+        GlobalDiscountValue: request.globalDiscountValue,
+        SalesServiceId: request.salesServiceId,
+        DeliveryCodeOrPassword: request.deliveryCodeOrPassword,
+        Lines: request.lines.map((l) => ({
+          ItemCatalogId: l.itemCatalogId,
+          StockId: l.stockId,
+          Quantity: l.quantity,
+          UnitId: l.unitId,
+          UnitSellPrice: l.unitSellPrice,
+          DiscountMode: l.discountMode,
+          DiscountPercent: l.discountPercent,
+          DiscountValue: l.discountValue,
+        })),
+        Payments: request.payments?.map((p) => ({
+          PaymentMethodId: p.paymentMethodId,
+          Amount: p.amount,
+        })),
+      }),
+    },
+    token
+  );
+
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId"),
+    headerId: readNumber(data, "headerId", "HeaderId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    totalBill: readNumber(data, "totalBill", "TotalBill"),
+    totalBillAfterDisc: readNumber(data, "totalBillAfterDisc", "TotalBillAfterDisc"),
+    totalBillNet: readNumber(data, "totalBillNet", "TotalBillNet"),
+    serviceCost: readNumber(data, "serviceCost", "ServiceCost"),
+    payable: readNumber(data, "payable", "Payable"),
+    secInsertDateUtc: readString(data, "secInsertDateUtc", "SecInsertDateUtc"),
+    egyptLocalDisplay: readString(data, "egyptLocalDisplay", "EgyptLocalDisplay"),
+  } satisfies import("@/types/sales-workspace").CreateSaleResponse;
+}
+
+export async function lookupSalesManByCode(token: string, code: string) {
+  const params = new URLSearchParams({
+    code: code.trim(),
+    employType: "1",
+  });
+  try {
+    const data = await apiFetch<Record<string, unknown>>(
+      `EmployInfo/lookup-by-code?${params.toString()}`,
+      {},
+      token
+    );
+    return {
+      id: readNumber(data, "id", "Id"),
+      code: readNullableString(data, "code", "Code"),
+      name: readNullableString(data, "name", "Name"),
+      employType: readNumber(data, "employType", "EmployType"),
+    };
+  } catch (err) {
+    // Match Pharmacy Transfer: 404 = not found
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function lookupSalesManByPassword(token: string, password: string) {
+  try {
+    const data = await apiFetch<Record<string, unknown>>(
+      "EmployInfo/lookup-by-password",
+      {
+        method: "POST",
+        // Same body shape as Pharmacy Transfer employee password lookup
+        body: JSON.stringify({ password: password.trim() }),
+      },
+      token
+    );
+    return {
+      id: readNumber(data, "id", "Id"),
+      code: readNullableString(data, "code", "Code"),
+      name: readNullableString(data, "name", "Name"),
+      employType: readNumber(data, "employType", "EmployType"),
+    };
+  } catch (err) {
+    // Match Pharmacy Transfer: 404 = not found
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function getSaleDeliveryServices(token: string) {
+  const data = await apiFetch<unknown>("SalesDelivery/services", {}, token);
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      salesServiceId: readNumber(r, "salesServiceId", "SalesServiceId"),
+      serviceName: readString(r, "serviceName", "ServiceName"),
+      serviceType: readString(r, "serviceType", "ServiceType"),
+      cost: readNumber(r, "cost", "Cost"),
+      requiresDeliveryEmployee: readBoolean(
+        r,
+        "requiresDeliveryEmployee",
+        "RequiresDeliveryEmployee"
+      ),
+    };
+  });
+}
+
+export async function getSalePaymentContext(token: string, sthId: number) {
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesPayment/${sthId}`,
+    {},
+    token
+  );
+  return mapSalesPaymentContext(data);
+}
+
+export async function finalizeSalePayment(
+  token: string,
+  request: import("@/types/sales-payment").FinalizeSalePaymentRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesPayment/finalize",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        Sth_Id: request.sthId,
+        Payments: request.payments.map((p) => ({
+          PaymentMethodId: p.paymentMethodId,
+          Amount: p.amount,
+        })),
+      }),
+    },
+    token
+  );
+
+  const detailsRaw = data.paymentDetails ?? data.PaymentDetails;
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    paymentStatus: readString(data, "paymentStatus", "PaymentStatus"),
+    finalSaleTotal: readNumber(data, "finalSaleTotal", "FinalSaleTotal"),
+    paymentTotal: readNumber(data, "paymentTotal", "PaymentTotal"),
+    paymentDetails: Array.isArray(detailsRaw)
+      ? detailsRaw.map((row) => mapSalesPaymentLine(row as Record<string, unknown>))
+      : [],
+  } satisfies import("@/types/sales-payment").FinalizeSalePaymentResponse;
+}
+
+function mapSalesServiceOption(
+  item: Record<string, unknown>
+): import("@/types/sales-delivery").SalesServiceOption {
+  return {
+    salesServiceId: readNumber(item, "salesServiceId", "SalesServiceId"),
+    serviceName: readString(item, "serviceName", "ServiceName"),
+    serviceType: readString(item, "serviceType", "ServiceType"),
+    cost: readNumber(item, "cost", "Cost"),
+    requiresDeliveryEmployee: readBoolean(
+      item,
+      "requiresDeliveryEmployee",
+      "RequiresDeliveryEmployee"
+    ),
+  };
+}
+
+function mapSalesDeliveryInfo(
+  item: Record<string, unknown> | null | undefined
+): import("@/types/sales-delivery").SalesDeliveryInfo | null {
+  if (!item) return null;
+  const idRaw = item.id ?? item.Id;
+  return {
+    id: idRaw == null || idRaw === "" ? null : Number(idRaw),
+    sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    custId: (() => {
+      const v = item.cust_Id ?? item.Cust_Id ?? item.custId ?? item.CustId;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    customerName: readNullableString(item, "customerName", "CustomerName"),
+    tel: readNullableString(item, "tel", "Tel"),
+    address: readNullableString(item, "address", "Address"),
+    salesServiceId: (() => {
+      const v = item.salesServiceId ?? item.SalesServiceId;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    serviceName: readNullableString(item, "serviceName", "ServiceName"),
+    serviceType: readNullableString(item, "serviceType", "ServiceType"),
+    serviceCost: (() => {
+      const v = item.serviceCost ?? item.ServiceCost;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    delivEmpId: (() => {
+      const v = item.delivEmpId ?? item.DelivEmpId;
+      return v == null || v === "" ? null : Number(v);
+    })(),
+    deliveryEmployeeName: readNullableString(
+      item,
+      "deliveryEmployeeName",
+      "DeliveryEmployeeName"
+    ),
+    requiresDeliveryEmployee: readBoolean(
+      item,
+      "requiresDeliveryEmployee",
+      "RequiresDeliveryEmployee"
+    ),
+  };
+}
+
+export async function getSaleDeliveryContext(token: string, sthId: number) {
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesDelivery/${sthId}`,
+    {},
+    token
+  );
+  const deliveryRaw = data.delivery ?? data.Delivery;
+  const servicesRaw = data.availableServices ?? data.AvailableServices;
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    pharmId: readNullableString(data, "pharmId", "PharmId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    delivery: mapSalesDeliveryInfo(
+      deliveryRaw && typeof deliveryRaw === "object"
+        ? (deliveryRaw as Record<string, unknown>)
+        : null
+    ),
+    availableServices: Array.isArray(servicesRaw)
+      ? servicesRaw.map((row) =>
+          mapSalesServiceOption(row as Record<string, unknown>)
+        )
+      : [],
+  } satisfies import("@/types/sales-delivery").SalesDeliveryContext;
+}
+
+export async function searchSaleDeliveryEmployees(
+  token: string,
+  search: string,
+  take = 20
+) {
+  const q = new URLSearchParams({
+    search: search.trim(),
+    take: String(take),
+  });
+  const data = await apiFetch<unknown>(
+    `SalesDelivery/employees?${q.toString()}`,
+    {},
+    token
+  );
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      employInfoId: readNumber(r, "employInfoId", "EmployInfoId"),
+      delivEmpId: readNumber(r, "delivEmpId", "DelivEmpId"),
+      code: readNullableString(r, "code", "Code"),
+      name: readNullableString(r, "name", "Name"),
+    } satisfies import("@/types/sales-delivery").SalesDeliveryEmployee;
+  });
+}
+
+export async function resolveSaleDeliveryEmployee(
+  token: string,
+  codeOrPassword: string
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesDelivery/resolve-employee",
+    {
+      method: "POST",
+      body: JSON.stringify({ CodeOrPassword: codeOrPassword }),
+    },
+    token
+  );
+  return {
+    employInfoId: readNumber(data, "employInfoId", "EmployInfoId"),
+    delivEmpId: readNumber(data, "delivEmpId", "DelivEmpId"),
+    code: readNullableString(data, "code", "Code"),
+    name: readNullableString(data, "name", "Name"),
+  } satisfies import("@/types/sales-delivery").SalesDeliveryEmployee;
+}
+
+export async function upsertSaleDelivery(
+  token: string,
+  request: import("@/types/sales-delivery").UpsertSalesDeliveryRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesDelivery",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        Sth_Id: request.sthId,
+        Cust_Id: request.custId,
+        CustomerName: request.customerName,
+        Tel: request.tel,
+        Address: request.address,
+        SalesServiceId: request.salesServiceId,
+        DeliveryCodeOrPassword: request.deliveryCodeOrPassword,
+      }),
+    },
+    token
+  );
+  return mapSalesDeliveryInfo(data)!;
+}
+
+function mapShiftStatus(data: Record<string, unknown>): import("@/types/shift").ShiftStatus {
+  const parmRaw = data.parmId ?? data.ParmId;
+  const scRaw = data.sc_Id ?? data.Sc_Id ?? data.scId ?? data.ScId;
+  const balanceRaw = data.openingBalance ?? data.OpeningBalance;
+  const moveRaw =
+    data.move_Id ?? data.Move_Id ?? data.moveId ?? data.MovId ?? data.movId;
+  return {
+    parmId: parmRaw == null || parmRaw === "" ? null : Number(parmRaw),
+    pharmacyName: readNullableString(data, "pharmacyName", "PharmacyName"),
+    hasOpenShift: readBoolean(data, "hasOpenShift", "HasOpenShift"),
+    status: readString(data, "status", "Status"),
+    scId: scRaw == null || scRaw === "" ? null : Number(scRaw),
+    openedAt: readNullableString(data, "openedAt", "OpenedAt"),
+    openingBalance:
+      balanceRaw == null || balanceRaw === "" ? null : Number(balanceRaw),
+    openedBy: readNullableString(data, "openedBy", "OpenedBy"),
+    cashier: readNullableString(data, "cashier", "Cashier"),
+    notes: readNullableString(data, "notes", "Notes"),
+    moveId: moveRaw == null || moveRaw === "" ? null : Number(moveRaw),
+    movName: readNullableString(data, "movName", "MovName"),
+  };
+}
+
+function mapShiftMovementOption(
+  data: Record<string, unknown>
+): import("@/types/shift").ShiftMovementOption {
+  return {
+    id: readNumber(data, "id", "Id"),
+    movId: readNumber(data, "movId", "MovId"),
+    movName: readNullableString(data, "movName", "MovName"),
+    movParint: readNullableNumber(data, "movParint", "MovParint"),
+  };
+}
+
+export async function getCurrentOpenShift(token: string) {
+  const data = await apiFetch<Record<string, unknown>>("Shift/current", {}, token);
+  return mapShiftStatus(data);
+}
+
+/**
+ * Prefer Shift/movements. If that endpoint is missing (older API), fall back to
+ * Salesmovment/by-parent for Sale (1) and Return Sale (2).
+ */
+export async function getShiftMovements(token: string) {
+  try {
+    const data = await apiFetch<unknown>("Shift/movements", {}, token);
+    if (Array.isArray(data)) {
+      return data.map((row) =>
+        mapShiftMovementOption(row as Record<string, unknown>)
+      );
+    }
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) {
+      throw error;
+    }
+  }
+
+  const [sale, ret] = await Promise.all([
+    getSalesmovmentByParent(1, token),
+    getSalesmovmentByParent(2, token),
+  ]);
+
+  const options: import("@/types/shift").ShiftMovementOption[] = [];
+  for (const row of [sale, ret]) {
+    if (row.movId != null && row.movId > 0) {
+      options.push({
+        id: row.id,
+        movId: row.movId,
+        movName: row.movName,
+        movParint: row.movParint,
+      });
+    }
+  }
+
+  const seen = new Set<number>();
+  return options.filter((row) => {
+    if (seen.has(row.movId)) return false;
+    seen.add(row.movId);
+    return true;
+  });
+}
+
+export async function openShift(
+  token: string,
+  request: import("@/types/shift").OpenShiftRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "Shift/open",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        OpeningBalance: request.openingBalance ?? 0,
+        Notes: request.notes,
+        MovId: request.movId,
+      }),
+    },
+    token
+  );
+  return mapShiftStatus(data);
+}
+
+/** Persist missing sales items (SalesNotExistItem) for the current open shift. */
+export async function createSalesNotExistItems(
+  token: string,
+  request: import("@/types/sales-not-exist-item").CreateSalesNotExistItemsRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesNotExistItem",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ItemCatalogIds: request.itemCatalogIds,
+        CustId: request.custId ?? null,
+      }),
+    },
+    token
+  );
+  return {
+    savedCount: readNumber(data, "savedCount", "SavedCount"),
+    shId: readNumber(data, "shId", "Sh_Id", "ShId"),
+    movId: readNumber(data, "movId", "MovId"),
+    pharmId: readString(data, "pharmId", "PharmId"),
+  } satisfies import("@/types/sales-not-exist-item").CreateSalesNotExistItemsResponse;
 }

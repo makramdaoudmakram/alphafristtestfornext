@@ -15,6 +15,8 @@ type HeaderFormProps = {
   disabled: boolean;
   totalDesMon?: number;
   hideVendorBillFields?: boolean;
+  /** When true, PhtDate is always read-only (e.g. pharmacy purchase). */
+  phtDateReadOnly?: boolean;
 };
 
 /** Half of default inline label column (9.5rem → ~4.75rem) */
@@ -71,6 +73,7 @@ export function HeaderPrimaryFields({
   form,
   disabled,
   hideVendorBillFields = false,
+  phtDateReadOnly = false,
 }: HeaderFormProps) {
   const {
     register,
@@ -81,6 +84,7 @@ export function HeaderPrimaryFields({
     className: headerFieldGrid,
     labelClassName: headerLabelClass,
   };
+  const phtDateDisabled = disabled || phtDateReadOnly;
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -199,7 +203,11 @@ export function HeaderPrimaryFields({
           id="phtDate"
           label="PhtDate"
           type="date"
-          disabled={disabled}
+          disabled={phtDateDisabled}
+          readOnly={phtDateReadOnly}
+          inputClassName={
+            phtDateReadOnly ? "bg-muted/50 font-medium tabular-nums opacity-90" : undefined
+          }
           aria-invalid={!!errors.phtDate}
           {...fieldProps}
           {...register("phtDate")}

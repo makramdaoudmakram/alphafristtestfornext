@@ -78,6 +78,7 @@ export function MovParientFormSheet({
                     movParientAname: e.target.value,
                   }))
                 }
+                maxLength={70}
                 required
               />
             </div>
@@ -92,6 +93,7 @@ export function MovParientFormSheet({
                     movParientEname: e.target.value,
                   }))
                 }
+                maxLength={70}
                 required
               />
             </div>

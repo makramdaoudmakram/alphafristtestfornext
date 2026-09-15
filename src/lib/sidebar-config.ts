@@ -30,8 +30,13 @@ export const SIDEBAR_NAV: NavItem[] = [
     permission: null,
   },
   {
-    title: "Sales Test",
-    href: "/dashboard/sales-test",
+    title: "Shift Management",
+    href: "/dashboard/shift",
+    permission: PERMISSIONS.sales.view,
+  },
+  {
+    title: "Sales",
+    href: "/dashboard/sales",
     permission: PERMISSIONS.sales.view,
   },
   {
@@ -123,6 +128,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/movement-setting",
             permission: PERMISSIONS.movment.view,
           },
+          {
+            title: "Sales Movement Setting",
+            href: "/dashboard/sales-movement-setting",
+            permission: PERMISSIONS.salesMovment.view,
+          },
         ],
       },
       {
@@ -185,6 +195,26 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Vendors",
             href: "/dashboard/vendors",
+          },
+          {
+            title: "Sales Payment Method",
+            href: "/dashboard/sales-pay-method",
+            permission: PERMISSIONS.salesPayMethod.view,
+          },
+          {
+            title: "Sales Payment Assignment",
+            href: "/dashboard/sales-payment-assiment",
+            permission: PERMISSIONS.salesPaymentAssiment.view,
+          },
+          {
+            title: "Sales Service",
+            href: "/dashboard/sales-service",
+            permission: PERMISSIONS.salesService.view,
+          },
+          {
+            title: "Sales Service Assignment",
+            href: "/dashboard/sales-service-assignment",
+            permission: PERMISSIONS.salesServiceAssignment.view,
           },
         ],
       },
@@ -283,6 +313,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/admin/user-roles": "Assign User Roles",
   "/dashboard/admin/user-permissions": "User Permissions",
   "/dashboard/permissions": "Role Permissions",
+  "/dashboard/shift": "Shift Management",
+  "/dashboard/sales": "Sales",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/customers": "Customers",
@@ -325,4 +357,9 @@ export const PAGE_TITLES: Record<string, string> = {
     "Inventory Adjustment Posting",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",
+  "/dashboard/sales-movement-setting": "Sales Movement Setting",
+  "/dashboard/sales-pay-method": "Sales Payment Method",
+  "/dashboard/sales-payment-assiment": "Sales Payment Assignment",
+  "/dashboard/sales-service": "Sales Service",
+  "/dashboard/sales-service-assignment": "Sales Service Assignment",
 };

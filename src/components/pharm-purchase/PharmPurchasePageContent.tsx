@@ -58,7 +58,6 @@ export function PharmPurchasePageContent() {
     loading: pharmLoading,
     saving,
     posting,
-    isPostButtonVisible,
     isEditable: pharmEditable,
     searchOpen,
     setSearchOpen,
@@ -66,7 +65,6 @@ export function PharmPurchasePageContent() {
     handleNew,
     handleEdit,
     handleSave: savePharmPurchase,
-    handlePost,
     handleDelete,
     handleRefresh,
     navigate,
@@ -367,7 +365,7 @@ export function PharmPurchasePageContent() {
           loading={loading}
           hasRecord={hasRecord}
           isPosted={isPosted}
-          isPostButtonVisible={isPostButtonVisible}
+          isPostButtonVisible={false}
           isTransferButtonVisible={false}
           isBarcodeButtonVisible={false}
           barcodeLoading={false}
@@ -375,11 +373,7 @@ export function PharmPurchasePageContent() {
           onNew={handleNew}
           onSave={handleSave}
           onTransfer={() => undefined}
-          onPost={() => {
-            void handlePost(itemByCode, catalogItems).then(() => {
-              setAuditRefreshKey((v) => v + 1);
-            });
-          }}
+          onPost={() => undefined}
           onPrintBarcode={() => undefined}
           onEdit={handleEdit}
           onDelete={confirmDelete}
@@ -394,9 +388,9 @@ export function PharmPurchasePageContent() {
           onNext={() => void navigate("next", itemByCode, catalogItems)}
           onLast={() => void navigate("last", itemByCode, catalogItems)}
           onSearch={() => setSearchOpen(true)}
-          onCreateExcelTemplate={() => toast.message("Excel import is not available for Pharmacy Purchase.")}
-          excelTemplateDisabled
+          onCreateExcelTemplate={() => undefined}
           excelImportHref="#"
+          showExcelActions={false}
         />
 
         <Card>
@@ -473,6 +467,7 @@ export function PharmPurchasePageContent() {
                     form={form}
                     disabled={!isEditable}
                     hideVendorBillFields
+                    phtDateReadOnly
                   />
                   <PharmPurchaseHeaderTotals
                     form={form}

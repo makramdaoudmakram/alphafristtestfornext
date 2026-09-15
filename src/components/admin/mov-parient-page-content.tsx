@@ -204,6 +204,7 @@ export function MovParientPageContent() {
                     placeholder="وارد"
                     value={movParientAname}
                     onChange={(e) => setMovParientAname(e.target.value)}
+                    maxLength={70}
                     required
                   />
                 </div>
@@ -214,6 +215,7 @@ export function MovParientPageContent() {
                     placeholder="In"
                     value={movParientEname}
                     onChange={(e) => setMovParientEname(e.target.value)}
+                    maxLength={70}
                     required
                   />
                 </div>

@@ -25,6 +25,10 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/cost-centers": null,
   "/dashboard/stores": null,
   "/dashboard/vendors": null,
+  "/dashboard/sales-pay-method": "SalesPayMethod.View",
+  "/dashboard/sales-service": "SalesService.View",
+  "/dashboard/sales-service-assignment": "SalesServiceAssignment.View",
+  "/dashboard/sales-payment-assiment": "SalesPaymentAssiment.View",
   "/dashboard/stock": "Stock.View",
   "/dashboard/inventory": "Stock.View",
   "/dashboard/batch-management": "Stock.View",
@@ -45,6 +49,9 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/transactions/return": null,
   "/dashboard/item-transactions": null,
   "/dashboard/movement-setting": null,
+  "/dashboard/sales-movement-setting": null,
+  "/dashboard/sales": "Sales.View",
+  "/dashboard/shift": "Sales.View",
 };
 
 export const PERMISSIONS = {
@@ -116,6 +123,30 @@ export const PERMISSIONS = {
     edit: "Brand.Edit",
     delete: "Brand.Delete",
   },
+  salesPayMethod: {
+    view: "SalesPayMethod.View",
+    create: "SalesPayMethod.Create",
+    edit: "SalesPayMethod.Edit",
+    delete: "SalesPayMethod.Delete",
+  },
+  salesService: {
+    view: "SalesService.View",
+    create: "SalesService.Create",
+    edit: "SalesService.Edit",
+    delete: "SalesService.Delete",
+  },
+  salesServiceAssignment: {
+    view: "SalesServiceAssignment.View",
+    create: "SalesServiceAssignment.Create",
+    edit: "SalesServiceAssignment.Edit",
+    delete: "SalesServiceAssignment.Delete",
+  },
+  salesPaymentAssiment: {
+    view: "SalesPaymentAssiment.View",
+    create: "SalesPaymentAssiment.Create",
+    edit: "SalesPaymentAssiment.Edit",
+    delete: "SalesPaymentAssiment.Delete",
+  },
   employInfo: {
     view: "EmployInfo.View",
     create: "EmployInfo.Create",
@@ -138,6 +169,10 @@ export const PERMISSIONS = {
     create: null as string | null,
     edit: null as string | null,
     delete: null as string | null,
+  },
+  salesMovment: {
+    view: null as string | null,
+    edit: null as string | null,
   },
   permissions: {
     manage: "Permissions.Manage",
@@ -194,6 +229,26 @@ export const NAV_LINKS = [
     permission: null,
   },
   {
+    href: "/dashboard/sales-pay-method",
+    label: "Sales Payment Method",
+    permission: PERMISSIONS.salesPayMethod.view,
+  },
+  {
+    href: "/dashboard/sales-service",
+    label: "Sales Service",
+    permission: PERMISSIONS.salesService.view,
+  },
+  {
+    href: "/dashboard/sales-service-assignment",
+    label: "Sales Service Assignment",
+    permission: PERMISSIONS.salesServiceAssignment.view,
+  },
+  {
+    href: "/dashboard/sales-payment-assiment",
+    label: "Sales Payment Assignment",
+    permission: PERMISSIONS.salesPaymentAssiment.view,
+  },
+  {
     href: "/dashboard/customers",
     label: "Customers",
     permission: PERMISSIONS.customer.view,
@@ -247,6 +302,11 @@ export const NAV_LINKS = [
     href: "/dashboard/movement-setting",
     label: "Movement Setting",
     permission: PERMISSIONS.movment.view,
+  },
+  {
+    href: "/dashboard/sales-movement-setting",
+    label: "Sales Movement Setting",
+    permission: PERMISSIONS.salesMovment.view,
   },
 ] as const;
 

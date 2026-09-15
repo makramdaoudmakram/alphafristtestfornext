@@ -21,6 +21,8 @@ import {
   Network,
   Receipt,
   Pill,
+  CreditCard,
+  WalletCards,
 } from "lucide-react";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -44,6 +46,9 @@ const ICONS: Record<string, ElementType> = {
   Pharm: Pill,
   Pharmacy: Pill,
   Customers: Users,
+  Vendors: Building2,
+  "Sales Payment Method": CreditCard,
+  "Sales Payment Assignment": WalletCards,
   "Dosage Form": Package,
   "Item Origins": Globe,
   "Item Catalog": Package,
