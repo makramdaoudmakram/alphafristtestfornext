@@ -5,14 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  fetchAllItemCatalogItems,
-  getItemCatalogPage,
   getNextMovValue,
   getStors,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
-import { mergeCatalogItemWithCache } from "@/lib/item-unit-options";
 import { createUnitService } from "@/services/unit.service";
 import { DetailsGrid } from "@/components/purchase/DetailsGrid";
 import { HeaderPrimaryFields } from "@/components/purchase/HeaderForm";
@@ -143,20 +140,10 @@ export function PharmPurchasePageContent() {
   }, [loadContext, activePharmacyId]);
 
   const loadItemCatalog = useCallback(async () => {
-    if (!token) return;
-    setCatalogLoading(true);
-    setCatalogLoaded(false);
-    try {
-      const firstPage = await getItemCatalogPage(token, {
-        page: 1,
-        pageSize: 100,
-        sortBy: "itmCode",
-        sortDesc: false,
-      });
-      setCatalogItems(firstPage.items);
-      setCatalogLoaded(true);
-      void fetchAllItemCatalogItems(token).then(setCatalogItems);
-    } finally {
+    if (!token) {
+      setCatalogItems([]);
+      setItemByCode(new Map());
+      setCatalogLoaded(false);
       setCatalogLoading(false);
     }
   }, [token]);

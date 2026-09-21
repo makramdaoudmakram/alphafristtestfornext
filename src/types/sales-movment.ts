@@ -6,8 +6,11 @@ export type SalesmovmentDetail = {
   movName: string | null;
   movParint: number | null;
   pharmId: number | null;
+  pharmacyName: string | null;
   store1: number | null;
+  store1Name: string | null;
   store2: number | null;
+  store2Name: string | null;
   cashDebit: string | null;
   creditCardDebit: string | null;
   creditCardMachinNo: string | null;

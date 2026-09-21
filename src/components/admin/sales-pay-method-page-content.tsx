@@ -6,10 +6,12 @@ import { toast } from "sonner";
 import {
   createSalesPayMethod,
   deactivateSalesPayMethod,
+  getSalesKindCompo,
   getSalesPayMethods,
   updateSalesPayMethod,
 } from "@/lib/api-client";
 import { getChartLeaves } from "@/lib/manual-journal-api";
+import type { SalesKindCompoItem } from "@/types/sales-kind";
 import type { SalesPayMethodItem } from "@/types/sales-pay-method";
 import type { ComboboxOption } from "@/components/ui/searchable-combobox";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -51,8 +53,23 @@ function toAccountOptions(
     );
 }
 
+function toSalesKindOptions(kinds: SalesKindCompoItem[]): ComboboxOption[] {
+  return kinds
+    .map((kind) => ({
+      value: String(kind.id),
+      label: kind.salesKindName?.trim() || `Sales kind #${kind.id}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function withClear(options: ComboboxOption[]): ComboboxOption[] {
   return [{ value: "", label: "— None —" }, ...options];
+}
+
+function parseSalesKindId(raw: string): number | null {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return id;
 }
 
 export function SalesPayMethodPageContent() {
@@ -72,13 +89,23 @@ export function SalesPayMethodPageContent() {
     null
   );
   const [accountOptions, setAccountOptions] = useState<ComboboxOption[]>([]);
+  const [salesKinds, setSalesKinds] = useState<SalesKindCompoItem[]>([]);
 
   const [paymentName, setPaymentName] = useState("");
   const [affectsCash, setAffectsCash] = useState(true);
+  const [salesKindId, setSalesKindId] = useState("");
   const [accountCode, setAccountCode] = useState("");
   const [active, setActive] = useState(true);
 
-  const columns = useSalesPayMethodColumns(accountOptions);
+  const salesKindOptions = useMemo(
+    () => toSalesKindOptions(salesKinds),
+    [salesKinds]
+  );
+  const activeSalesKindOptions = useMemo(
+    () => toSalesKindOptions(salesKinds.filter((kind) => kind.isActive)),
+    [salesKinds]
+  );
+  const columns = useSalesPayMethodColumns(accountOptions, salesKindOptions);
   const canCreate = hasPermission(PERMISSIONS.salesPayMethod.create);
   const canEdit = hasPermission(PERMISSIONS.salesPayMethod.edit);
   const canDelete = hasPermission(PERMISSIONS.salesPayMethod.delete);
@@ -91,16 +118,22 @@ export function SalesPayMethodPageContent() {
   const loadLookups = useCallback(async () => {
     if (!token) {
       setAccountOptions([]);
+      setSalesKinds([]);
       return;
     }
 
     setLookupsLoading(true);
     try {
-      const accounts = await getChartLeaves(token);
+      const [accounts, kinds] = await Promise.all([
+        getChartLeaves(token),
+        getSalesKindCompo(token),
+      ]);
       setAccountOptions(toAccountOptions(accounts));
+      setSalesKinds(kinds);
     } catch {
       setAccountOptions([]);
-      toast.error("Failed to load Accounts Chart.");
+      setSalesKinds([]);
+      toast.error("Failed to load lookup data.");
     } finally {
       setLookupsLoading(false);
     }
@@ -139,6 +172,17 @@ export function SalesPayMethodPageContent() {
     e.preventDefault();
     if (!token) return;
 
+    const parsedSalesKindId = parseSalesKindId(salesKindId);
+    if (parsedSalesKindId == null) {
+      toast.error("Select a sales kind.");
+      return;
+    }
+
+    if (!activeSalesKindOptions.some((option) => option.value === salesKindId)) {
+      toast.error("Select a valid active sales kind.");
+      return;
+    }
+
     if (accountCode.trim()) {
       const exists = accountOptions.some(
         (option) => option.value === accountCode.trim()
@@ -155,6 +199,7 @@ export function SalesPayMethodPageContent() {
         {
           paymentName: paymentName.trim(),
           affectsCash,
+          salesKindId: parsedSalesKindId,
           accountCode: accountCode.trim(),
           active,
         },
@@ -163,6 +208,7 @@ export function SalesPayMethodPageContent() {
       toast.success("Payment method created");
       setPaymentName("");
       setAffectsCash(true);
+      setSalesKindId("");
       setAccountCode("");
       setActive(true);
       await loadItems();
@@ -185,11 +231,28 @@ export function SalesPayMethodPageContent() {
   async function handleSheetSubmit(values: SalesPayMethodFormValues) {
     if (!token || !editingItem) return;
 
+    const parsedSalesKindId = parseSalesKindId(values.salesKindId);
+    if (parsedSalesKindId == null) {
+      toast.error("Select a sales kind.");
+      return;
+    }
+
+    const inKindList = salesKindOptions.some(
+      (option) => option.value === values.salesKindId
+    );
+    const isCurrentSaved =
+      editingItem.salesKindId > 0 &&
+      String(editingItem.salesKindId) === values.salesKindId;
+    if (!inKindList && !isCurrentSaved) {
+      toast.error("Select a valid sales kind.");
+      return;
+    }
+
     if (values.accountCode.trim()) {
       const code = values.accountCode.trim();
       const inList = accountOptions.some((option) => option.value === code);
-      const isCurrentSaved = editingItem.accountCode?.trim() === code;
-      if (!inList && !isCurrentSaved) {
+      const isCurrentSavedAccount = editingItem.accountCode?.trim() === code;
+      if (!inList && !isCurrentSavedAccount) {
         toast.error("Select an account from Accounts Chart.");
         return;
       }
@@ -202,6 +265,7 @@ export function SalesPayMethodPageContent() {
         {
           paymentName: values.paymentName.trim(),
           affectsCash: values.affectsCash,
+          salesKindId: parsedSalesKindId,
           accountCode: values.accountCode.trim(),
           active: values.active,
         },
@@ -267,8 +331,8 @@ export function SalesPayMethodPageContent() {
             <CardHeader>
               <CardTitle>New payment method</CardTitle>
               <CardDescription>
-                Example: Cash, Visa, Transfer. Names must be unique. Account
-                comes from Accounts Chart.
+                Example: Cash, Visa, Transfer. Names must be unique. Each method
+                belongs to a sales kind.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -281,6 +345,22 @@ export function SalesPayMethodPageContent() {
                     onChange={(e) => setPaymentName(e.target.value)}
                     maxLength={50}
                     required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sales kind</Label>
+                  <SearchableCombobox
+                    value={salesKindId}
+                    onValueChange={setSalesKindId}
+                    options={activeSalesKindOptions}
+                    placeholder={
+                      lookupsLoading
+                        ? "Loading sales kinds..."
+                        : "Select sales kind"
+                    }
+                    searchPlaceholder="Search sales kind..."
+                    emptyMessage="No sales kinds found."
+                    disabled={lookupsLoading || saving}
                   />
                 </div>
                 <div className="space-y-2">
@@ -358,6 +438,7 @@ export function SalesPayMethodPageContent() {
           item={editingItem}
           saving={sheetSaving}
           accountOptions={accountOptions}
+          salesKindOptions={salesKindOptions}
           lookupsLoading={lookupsLoading}
           onSubmit={handleSheetSubmit}
         />

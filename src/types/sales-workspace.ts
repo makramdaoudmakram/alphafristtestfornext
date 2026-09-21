@@ -28,6 +28,23 @@ export type SalesItemSearchHit = {
   unit3: number | null;
   unit1Unit2: number | null;
   unit1Unit3: number | null;
+  itmMaxDiscPer: number | null;
+  groupNameEn: string;
+  groupNameAr: string;
+  stocks: SalesItemSearchStock[];
+};
+
+export type SalesItemPharmacyStockResponse = {
+  itemCatalogId: number;
+  itmCode: string;
+  itmNameAr: string;
+  itmNameEn: string;
+  unit1: number | null;
+  unit2: number | null;
+  unit3: number | null;
+  currentStorId: number;
+  currentParmId: number;
+  currentPharmacyName: string;
   stocks: SalesItemSearchStock[];
 };
 
@@ -52,6 +69,9 @@ export type SalesWorkspaceLine = {
   unit3: number | null;
   unit1Unit2: number | null;
   unit1Unit3: number | null;
+  itmMaxDiscPer: number | null;
+  groupNameEn: string;
+  groupNameAr: string;
   unitId: number;
   quantity: number;
   /** Stock.SalesPrice in base Unit1 — never overwrite with converted display price. */
@@ -104,6 +124,8 @@ export type SalesWorkspaceTab = {
   deliveryEmployeeId: number | null;
   deliveryCode: string;
   deliveryEmployeeName: string;
+  /** Selected SalesKind for pharmacy-scoped payment methods. */
+  salesKindId: number | null;
   payments: Record<number, string>;
 };
 
@@ -116,6 +138,8 @@ export type CreateSaleRequest = {
   globalDiscountMode: string | null;
   globalDiscountPercent: number;
   globalDiscountValue: number;
+  /** Selected SalesKind; used when DeliveryMandatory must be enforced on create. */
+  salesKindId: number | null;
   salesServiceId: number | null;
   deliveryCodeOrPassword: string | null;
   lines: Array<{
@@ -127,6 +151,8 @@ export type CreateSaleRequest = {
     discountMode: string | null;
     discountPercent: number;
     discountValue: number;
+    /** SalesTransD.SalerCom (decimal). Omitted on save defaults to 0. */
+    salerCom?: number;
   }>;
   payments: Array<{ paymentMethodId: number; amount: number }> | null;
 };

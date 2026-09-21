@@ -6,9 +6,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   ApiError,
-  fetchAllItemCatalogItems,
   getItemCatalog,
-  getItemCatalogPage,
   getMovmentById,
   getNextMovValue,
   getStors,
@@ -113,60 +111,6 @@ export function PharmRecivePageContent() {
       setCatalogItems([]);
       setItemByCode(new Map());
       setCatalogLoaded(false);
-      setCatalogLoading(false);
-      return;
-    }
-
-    setCatalogLoading(true);
-    setCatalogLoaded(false);
-
-    const applyCatalog = (items: ItemCatalogItem[]) => {
-      setCatalogItems(items);
-      setItemByCode((prev) => {
-        const map = new Map(prev);
-        for (const item of items) {
-          const code = item.itmCode?.trim();
-          if (!code) continue;
-          const key = code.toLowerCase();
-          const existing = map.get(key);
-          map.set(
-            key,
-            existing ? mergeCatalogItemWithCache(item, map, items) : item
-          );
-        }
-        return map;
-      });
-    };
-
-    try {
-      const firstPage = await getItemCatalogPage(token, {
-        page: 1,
-        pageSize: 100,
-        sortBy: "itmCode",
-        sortDesc: false,
-      });
-      applyCatalog(firstPage.items);
-      setCatalogLoaded(true);
-
-      if (firstPage.totalCount > firstPage.items.length) {
-        try {
-          const all = await fetchAllItemCatalogItems(token);
-          if (all.length > 0) applyCatalog(all);
-        } catch {
-          // Keep first page
-        }
-      }
-    } catch {
-      try {
-        const all = await fetchAllItemCatalogItems(token);
-        applyCatalog(all);
-        setCatalogLoaded(true);
-      } catch {
-        setCatalogItems([]);
-        setItemByCode(new Map());
-        setCatalogLoaded(true);
-      }
-    } finally {
       setCatalogLoading(false);
     }
   }, [token]);

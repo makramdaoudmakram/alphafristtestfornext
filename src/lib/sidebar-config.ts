@@ -36,8 +36,19 @@ export const SIDEBAR_NAV: NavItem[] = [
   },
   {
     title: "Sales",
-    href: "/dashboard/sales",
     permission: PERMISSIONS.sales.view,
+    items: [
+      {
+        title: "Sales",
+        href: "/dashboard/sales",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
+        title: "Pharm Expenses",
+        href: "/dashboard/sales/pharm-expenses",
+        permission: PERMISSIONS.sales.view,
+      },
+    ],
   },
   {
     title: "System Audit Center",
@@ -129,9 +140,13 @@ export const SIDEBAR_NAV: NavItem[] = [
             permission: PERMISSIONS.movment.view,
           },
           {
-            title: "Sales Movement Setting",
+            title: "Sales Movement",
             href: "/dashboard/sales-movement-setting",
             permission: PERMISSIONS.salesMovment.view,
+          },
+          {
+            title: "Sales Push List",
+            href: "/dashboard/settings/sales-push-list",
           },
         ],
       },
@@ -197,6 +212,15 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/vendors",
           },
           {
+            title: "Sales Kind",
+            href: "/dashboard/sales-kind",
+          },
+          {
+            title: "Sales Kind Assignment",
+            href: "/dashboard/sales-kind-assignment",
+            permission: PERMISSIONS.salesKindAssignment.view,
+          },
+          {
             title: "Sales Payment Method",
             href: "/dashboard/sales-pay-method",
             permission: PERMISSIONS.salesPayMethod.view,
@@ -253,6 +277,11 @@ export const SIDEBAR_NAV: NavItem[] = [
       {
         title: "Purchase",
         href: "/dashboard/transactions/purchase",
+        permission: null,
+      },
+      {
+        title: "MongoDB Test",
+        href: "/dashboard/reporting/mongo-test",
         permission: null,
       },
       {
@@ -315,6 +344,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/permissions": "Role Permissions",
   "/dashboard/shift": "Shift Management",
   "/dashboard/sales": "Sales",
+  "/dashboard/sales/pharm-expenses": "Pharm Expenses",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/customers": "Customers",
@@ -342,6 +372,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/groups": "Groups",
   "/dashboard/brands": "Brands",
   "/dashboard/transactions/purchase": "Purchase",
+  "/dashboard/reporting/mongo-test": "MongoDB Test",
   "/dashboard/transactions/purchase/reversal": "Purchase Invoice Reversal",
   "/dashboard/transactions/purchase/invoice-draft": "Invoice Draft",
   "/dashboard/transactions/return": "Return",
@@ -357,7 +388,10 @@ export const PAGE_TITLES: Record<string, string> = {
     "Inventory Adjustment Posting",
   "/dashboard/item-transactions": "Move Parient",
   "/dashboard/movement-setting": "Movement Setting",
-  "/dashboard/sales-movement-setting": "Sales Movement Setting",
+  "/dashboard/sales-movement-setting": "Sales Movement",
+  "/dashboard/settings/sales-push-list": "SalesPushList",
+  "/dashboard/sales-kind": "Sales Kind",
+  "/dashboard/sales-kind-assignment": "Sales Kind Assignment",
   "/dashboard/sales-pay-method": "Sales Payment Method",
   "/dashboard/sales-payment-assiment": "Sales Payment Assignment",
   "/dashboard/sales-service": "Sales Service",

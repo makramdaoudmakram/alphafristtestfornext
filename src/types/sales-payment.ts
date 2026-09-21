@@ -1,8 +1,15 @@
+export type SalesPaymentKindOption = {
+  salesKindId: number;
+  salesKindName: string | null;
+  deleveryMandatory: boolean;
+};
+
 export type SalesPaymentMethodOption = {
   paymentMethodId: number;
   paymentName: string | null;
   affectsCash: boolean;
   active: boolean;
+  salesKindId: number;
 };
 
 export type SalesPaymentLine = {
@@ -28,6 +35,7 @@ export type SalesPaymentContext = {
 
 export type FinalizeSalePaymentRequest = {
   sthId: number;
+  salesKindId: number;
   payments: Array<{
     paymentMethodId: number;
     amount: number;

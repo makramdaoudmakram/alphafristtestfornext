@@ -32,6 +32,7 @@ import {
   getCurrentOpenShift,
   getSaleDeliveryServices,
   getSalePaymentContext,
+  getSalePaymentKinds,
   getSalePaymentMethods,
   finalizeSalePayment,
   getSalesServerTime,
@@ -60,7 +61,10 @@ import type {
   SalesWorkspaceTab,
 } from "@/types/sales-workspace";
 import type { SalesDeliveryEmployee } from "@/types/sales-delivery";
-import type { SalesPaymentMethodOption } from "@/types/sales-payment";
+import type {
+  SalesPaymentKindOption,
+  SalesPaymentMethodOption,
+} from "@/types/sales-payment";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
 import type { UnitItem } from "@/types/unit";
 import { cn } from "@/lib/utils";
@@ -114,6 +118,7 @@ export function SalesWorkspacePageContent() {
     }>
   >([]);
   const [methods, setMethods] = useState<SalesPaymentMethodOption[]>([]);
+  const [salesKinds, setSalesKinds] = useState<SalesPaymentKindOption[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentPayable, setPaymentPayable] = useState<number | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -122,6 +127,21 @@ export function SalesWorkspacePageContent() {
   const [unitsLoading, setUnitsLoading] = useState(false);
 
   const active = tabs.find((t) => t.clientId === activeId) ?? null;
+
+  const deliveryMandatory = Boolean(
+    active?.salesKindId != null &&
+      salesKinds.find((k) => k.salesKindId === active.salesKindId)?.deleveryMandatory
+  );
+  const showDeliveryFields = Boolean(active?.deliveryEnabled || deliveryMandatory);
+  const deliveryMandatoryRequirementsMet =
+    !deliveryMandatory ||
+    (active != null &&
+      active.customerId != null &&
+      active.customerId > 0 &&
+      active.deliveryEmployeeId != null &&
+      active.deliveryEmployeeId > 0 &&
+      hasValidSalesServiceSelection(active.salesServiceId) &&
+      services.some((s) => s.salesServiceId === active.salesServiceId));
 
   /** Update one tab by id — never depends on which tab is currently active. */
   const updateTab = useCallback(
@@ -226,10 +246,10 @@ export function SalesWorkspacePageContent() {
     let cancelled = false;
     void (async () => {
       setUnitsLoading(true);
-      const [time, svc, payMethods, unitResult] = await Promise.all([
+      const [time, svc, kinds, unitResult] = await Promise.all([
         getSalesServerTime(token),
         getSaleDeliveryServices(token).catch(() => []),
-        getSalePaymentMethods(token).catch(() => []),
+        getSalePaymentKinds(token).catch(() => [] as SalesPaymentKindOption[]),
         createUnitService(token)
           .listUnits()
           .catch(() => ({ units: [] as UnitItem[] })),
@@ -237,7 +257,8 @@ export function SalesWorkspacePageContent() {
       if (cancelled) return;
 
       setServices(svc);
-      setMethods(payMethods);
+      setSalesKinds(kinds);
+      setMethods([]);
       setUnits(unitResult.units);
       setUnitsLoading(false);
 
@@ -362,6 +383,10 @@ export function SalesWorkspacePageContent() {
   const toggleDelivery = () => {
     if (!active || active.saved) return;
     if (active.deliveryEnabled) {
+      if (deliveryMandatory) {
+        toast.message("Delivery is required for the selected Sales Kind.");
+        return;
+      }
       updateActive({
         deliveryEnabled: false,
         deliverySearch: "",
@@ -395,25 +420,6 @@ export function SalesWorkspacePageContent() {
       deliveryEmployeeName: emp.name?.trim() || "",
       deliverySearch: formatDeliveryEmployeeLabel(emp),
     });
-  };
-
-  const assertDeliveryServiceSelected = (): boolean => {
-    if (!active?.deliveryEnabled) return true;
-    if (hasValidSalesServiceSelection(active.salesServiceId)) {
-      const exists = services.some((s) => s.salesServiceId === active.salesServiceId);
-      if (exists) return true;
-    }
-    toast.error("Please select a Sales Service before saving the payment.");
-    return false;
-  };
-
-  const assertDeliveryEmployeeSelected = (): boolean => {
-    if (!active?.deliveryEnabled) return true;
-    if (active.deliveryEmployeeId != null && active.deliveryEmployeeId > 0) {
-      return true;
-    }
-    toast.error("Please select a Delivery employee before saving the payment.");
-    return false;
   };
 
   const paymentTotal = useMemo(() => {
@@ -456,13 +462,13 @@ export function SalesWorkspacePageContent() {
   );
 
   const refreshPaymentContext = useCallback(
-    async (sthId: number, tabId: string) => {
+    async (sthId: number, tabId: string, salesKindId?: number | null) => {
       if (!token) return;
       setPaymentLoading(true);
       try {
-        const ctx = await getSalePaymentContext(token, sthId);
+        const ctx = await getSalePaymentContext(token, sthId, salesKindId);
         updateTab(tabId, { billTyp: ctx.billTyp });
-        if (ctx.availablePaymentMethods.length > 0) {
+        if (salesKindId != null && salesKindId > 0) {
           setMethods(ctx.availablePaymentMethods);
         }
         setPaymentPayable(money(ctx.finalPayableAmount));
@@ -475,6 +481,80 @@ export function SalesWorkspacePageContent() {
       }
     },
     [token, updateTab]
+  );
+
+  const loadMethodsForSalesKind = useCallback(
+    async (salesKindId: number | null) => {
+      if (!token) {
+        setMethods([]);
+        return;
+      }
+      if (salesKindId == null || salesKindId <= 0) {
+        setMethods([]);
+        return;
+      }
+
+      setPaymentLoading(true);
+      try {
+        setMethods(await getSalePaymentMethods(token, salesKindId));
+      } catch (err) {
+        setMethods([]);
+        toast.error(
+          err instanceof ApiError
+            ? err.message
+            : "Failed to load payment methods."
+        );
+      } finally {
+        setPaymentLoading(false);
+      }
+    },
+    [token]
+  );
+
+  const onSalesKindChange = (raw: string) => {
+    if (!active) return;
+    const nextId = raw ? Number(raw) : null;
+    const kindId = nextId != null && nextId > 0 ? nextId : null;
+    const kind = kindId != null
+      ? salesKinds.find((k) => k.salesKindId === kindId) ?? null
+      : null;
+    const mandatory = Boolean(kind?.deleveryMandatory);
+    updateActive({
+      salesKindId: kindId,
+      payments: {},
+      ...(mandatory ? { deliveryEnabled: true } : {}),
+    });
+    void loadMethodsForSalesKind(kindId);
+  };
+
+  const assertDeliveryMandatoryForSave = (): boolean => {
+    if (!active || !deliveryMandatory) return true;
+
+    if (active.customerId == null || active.customerId <= 0) {
+      toast.error("Customer is required when DeliveryMandatory is enabled.");
+      return false;
+    }
+    if (active.deliveryEmployeeId == null || active.deliveryEmployeeId <= 0) {
+      toast.error("Delivery employee is required when DeliveryMandatory is enabled.");
+      return false;
+    }
+    if (!hasValidSalesServiceSelection(active.salesServiceId)) {
+      toast.error("Sales Service is required when DeliveryMandatory is enabled.");
+      return false;
+    }
+    if (!services.some((s) => s.salesServiceId === active.salesServiceId)) {
+      toast.error("Selected Sales Service is not available for the current pharmacy.");
+      return false;
+    }
+    return true;
+  };
+
+  const canSave = Boolean(
+    active &&
+      !active.saved &&
+      !saving &&
+      active.salesManId &&
+      deliveryMandatoryRequirementsMet
   );
 
   const handleSave = async () => {
@@ -502,16 +582,7 @@ export function SalesWorkspacePageContent() {
       toast.error("Cannot use global and row discounts together.");
       return;
     }
-    if (!assertDeliveryServiceSelected()) return;
-    if (!assertDeliveryEmployeeSelected()) return;
-    if (
-      active.deliveryEnabled &&
-      active.requiresDeliveryEmployee &&
-      !active.deliveryCode.trim()
-    ) {
-      toast.error("Delivery employee is required for this service.");
-      return;
-    }
+    if (!assertDeliveryMandatoryForSave()) return;
 
     setSaving(true);
     try {
@@ -525,9 +596,11 @@ export function SalesWorkspacePageContent() {
         globalDiscountMode: hasGlobalDiscount(active) ? active.globalDiscountMode : null,
         globalDiscountPercent: active.globalDiscountPercent,
         globalDiscountValue: active.globalDiscountValue,
-        salesServiceId: active.deliveryEnabled ? active.salesServiceId : null,
+        salesKindId: active.salesKindId,
+        salesServiceId:
+          active.deliveryEnabled || deliveryMandatory ? active.salesServiceId : null,
         deliveryCodeOrPassword:
-          active.deliveryEnabled && active.deliveryEmployeeId
+          (active.deliveryEnabled || deliveryMandatory) && active.deliveryEmployeeId
             ? active.deliveryCode || null
             : null,
         lines: sellableLines.map((l) => ({
@@ -553,7 +626,7 @@ export function SalesWorkspacePageContent() {
       });
       setPaymentPayable(money(result.payable));
       toast.success(`Sale ${result.sthId} saved. Enter payment amounts below.`);
-      void refreshPaymentContext(result.sthId, tabId);
+      void refreshPaymentContext(result.sthId, tabId, active.salesKindId);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Save failed.");
     } finally {
@@ -568,8 +641,12 @@ export function SalesWorkspacePageContent() {
       toast.error("This sale cannot be paid.");
       return;
     }
-    if (!assertDeliveryServiceSelected()) return;
-    if (!assertDeliveryEmployeeSelected()) return;
+    if (!assertDeliveryMandatoryForSave()) return;
+
+    if (active.salesKindId == null || active.salesKindId <= 0) {
+      toast.error("Select a sales kind.");
+      return;
+    }
 
     const targetPayable = money(paymentPayable ?? payable);
     const entries = Object.entries(active.payments)
@@ -581,6 +658,14 @@ export function SalesWorkspacePageContent() {
 
     if (entries.length === 0) {
       toast.error("Enter at least one payment amount greater than zero.");
+      return;
+    }
+
+    const allowedIds = new Set(methods.map((m) => m.paymentMethodId));
+    if (entries.some((p) => !allowedIds.has(p.paymentMethodId))) {
+      toast.error(
+        "One or more payment amounts use a method that is not valid for the selected sales kind."
+      );
       return;
     }
 
@@ -602,6 +687,7 @@ export function SalesWorkspacePageContent() {
     try {
       const result = await finalizeSalePayment(token, {
         sthId: active.sthId,
+        salesKindId: active.salesKindId,
         payments: entries,
       });
 
@@ -816,6 +902,7 @@ export function SalesWorkspacePageContent() {
                   disabled={active.saved}
                   canAddItems={!!active.salesManId}
                   rowDiscDisabled={rowDiscDisabled}
+                  egyptDateDisplay={active.egyptTimeDisplay || egyptTime}
                   onUpdateLines={updateTabLines}
                   onToast={(kind, text) => {
                     if (kind === "error") toast.error(text);
@@ -890,7 +977,12 @@ export function SalesWorkspacePageContent() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Customer</Label>
+                  <Label>
+                    Customer
+                    {deliveryMandatory ? (
+                      <span className="text-destructive"> *</span>
+                    ) : null}
+                  </Label>
                   <SalesCustomerAutocomplete
                     value={
                       active.customerId
@@ -939,12 +1031,15 @@ export function SalesWorkspacePageContent() {
                   </Button>
                 </div>
 
-                {active.deliveryEnabled ? (
+                {showDeliveryFields ? (
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Label htmlFor="delivery-employee-lookup">
                           Delivery Employee
+                          {deliveryMandatory ? (
+                            <span className="text-destructive"> *</span>
+                          ) : null}
                         </Label>
                         {active.deliveryEmployeeId ? (
                           <Button
@@ -976,7 +1071,12 @@ export function SalesWorkspacePageContent() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="payment-sales-service">Sales Service</Label>
+                      <Label htmlFor="payment-sales-service">
+                        Sales Service
+                        {deliveryMandatory ? (
+                          <span className="text-destructive"> *</span>
+                        ) : null}
+                      </Label>
                       <select
                         id="payment-sales-service"
                         className="border-input bg-background h-9 w-full rounded-md border px-2"
@@ -989,7 +1089,7 @@ export function SalesWorkspacePageContent() {
                         <option value="">Select Sales Service</option>
                         {services.map((s) => (
                           <option key={s.salesServiceId} value={s.salesServiceId}>
-                            {s.serviceName} ({s.cost.toFixed(2)})
+                            {s.serviceName} — {s.cost.toFixed(2)}
                           </option>
                         ))}
                       </select>
@@ -1000,12 +1100,39 @@ export function SalesWorkspacePageContent() {
                   </div>
                 ) : null}
 
+                <div className="space-y-2">
+                  <Label htmlFor="payment-sales-kind">Sales Kind</Label>
+                  <select
+                    id="payment-sales-kind"
+                    className="border-input bg-background h-9 w-full rounded-md border px-2"
+                    disabled={active.billTyp === 1 || isFinalizing}
+                    value={active.salesKindId ?? ""}
+                    onChange={(e) => onSalesKindChange(e.target.value)}
+                  >
+                    <option value="">Select Sales Kind</option>
+                    {salesKinds.map((k) => (
+                      <option key={k.salesKindId} value={k.salesKindId}>
+                        {k.salesKindName?.trim() || `Kind #${k.salesKindId}`}
+                      </option>
+                    ))}
+                  </select>
+                  {salesKinds.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      No sales kinds assigned to the current pharmacy.
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="space-y-3 border-t pt-4">
-                  {methods.length === 0 ? (
+                  {!active.salesKindId ? (
+                    <p className="text-sm text-muted-foreground">
+                      Select a sales kind to load payment methods.
+                    </p>
+                  ) : methods.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       {paymentLoading
                         ? "Loading payment methods…"
-                        : "No assigned payment methods for this pharmacy."}
+                        : "No payment methods assigned for this pharmacy and sales kind."}
                     </p>
                   ) : (
                     methods.map((m) => (
@@ -1046,7 +1173,7 @@ export function SalesWorkspacePageContent() {
                 <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
                     <Button
                       type="button"
-                      disabled={active.saved || saving}
+                      disabled={!canSave}
                       onClick={() => void handleSave()}
                     >
                       {saving ? "Saving…" : "Save"}
@@ -1057,6 +1184,7 @@ export function SalesWorkspacePageContent() {
                       disabled={
                         !canPay ||
                         isFinalizing ||
+                        !active.salesKindId ||
                         methods.length === 0 ||
                         paymentTotal <= 0 ||
                         paymentTotal !== money(paymentPayable ?? payable)

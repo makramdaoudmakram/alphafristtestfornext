@@ -45,6 +45,17 @@ import type {
   UpdateSalesPayMethodRequest,
 } from "@/types/sales-pay-method";
 import type {
+  CreateSalesKindRequest,
+  SalesKindCompoItem,
+  SalesKindItem,
+  UpdateSalesKindRequest,
+} from "@/types/sales-kind";
+import type {
+  CreateSalesKindAssignmentRequest,
+  SalesKindAssignmentItem,
+  UpdateSalesKindAssignmentRequest,
+} from "@/types/sales-kind-assignment";
+import type {
   CreateSalesServiceRequest,
   SalesServiceCompoItem,
   SalesServiceItem,
@@ -1490,6 +1501,7 @@ function normalizeSalesPayMethodItem(
     id: readNumber(item, "id", "Id"),
     paymentName: readString(item, "paymentName", "PaymentName"),
     affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
+    salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
     accountCode: readString(item, "accountCode", "AccountCode"),
     active: readBoolean(item, "active", "Active"),
   };
@@ -1531,6 +1543,7 @@ export function createSalesPayMethod(
       body: JSON.stringify({
         PaymentName: data.paymentName,
         AffectsCash: data.affectsCash,
+        SalesKindId: data.salesKindId,
         AccountCode: data.accountCode || null,
         Active: data.active,
       }),
@@ -1551,6 +1564,7 @@ export function updateSalesPayMethod(
       body: JSON.stringify({
         PaymentName: data.paymentName,
         AffectsCash: data.affectsCash,
+        SalesKindId: data.salesKindId,
         AccountCode: data.accountCode || null,
         Active: data.active,
       }),
@@ -1561,6 +1575,155 @@ export function updateSalesPayMethod(
 
 export function deactivateSalesPayMethod(id: number, token: string) {
   return apiFetch<void>(`SalesPayMethod/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesKindItem(item: Record<string, unknown>): SalesKindItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    salesKindName: readString(item, "salesKindName", "SalesKindName"),
+    isActive: readBoolean(item, "isActive", "IsActive"),
+    deleveryMandatory: readBoolean(
+      item,
+      "deleveryMandatory",
+      "deleveryMandatory"
+    ),
+  };
+}
+
+function normalizeSalesKindCompoItem(
+  item: Record<string, unknown>
+): SalesKindCompoItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    salesKindName: readString(item, "salesKindName", "SalesKindName"),
+    isActive: readBoolean(item, "isActive", "IsActive"),
+  };
+}
+
+export function getSalesKinds(token: string) {
+  return fetchAllPaged("SalesKind", token, normalizeSalesKindItem);
+}
+
+export function getSalesKindCompo(token: string, activeOnly?: boolean) {
+  return fetchAllPaged(
+    "SalesKind/for-comp",
+    token,
+    normalizeSalesKindCompoItem,
+    activeOnly === undefined
+      ? undefined
+      : { activeOnly: activeOnly ? "true" : "false" }
+  );
+}
+
+export function createSalesKind(data: CreateSalesKindRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesKind",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        SalesKindName: data.salesKindName,
+        IsActive: data.isActive,
+        deleveryMandatory: data.deleveryMandatory,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesKindItem(item));
+}
+
+export function updateSalesKind(
+  id: number,
+  data: UpdateSalesKindRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesKind/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        SalesKindName: data.salesKindName,
+        IsActive: data.isActive,
+        deleveryMandatory: data.deleveryMandatory,
+      }),
+    },
+    token
+  );
+}
+
+export function deactivateSalesKind(id: number, token: string) {
+  return apiFetch<void>(`SalesKind/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesKindAssignmentItem(
+  item: Record<string, unknown>
+): SalesKindAssignmentItem {
+  return {
+    id: readNumber(item, "id", "Id"),
+    pharmId: readNumber(item, "pharmId", "PharmId"),
+    pharmName: readString(item, "pharmName", "PharmName"),
+    salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
+    salesKindName: readString(item, "salesKindName", "SalesKindName"),
+    salesKindIsActive: readBoolean(item, "salesKindIsActive", "SalesKindIsActive"),
+    active: readBoolean(item, "active", "Active"),
+  };
+}
+
+export function getSalesKindAssignments(
+  token: string,
+  filters?: { pharmId?: number }
+) {
+  return fetchAllPaged(
+    "SalesKindAssignment",
+    token,
+    normalizeSalesKindAssignmentItem,
+    filters?.pharmId != null && filters.pharmId > 0
+      ? { pharmId: String(filters.pharmId) }
+      : undefined
+  );
+}
+
+export function createSalesKindAssignment(
+  data: CreateSalesKindAssignmentRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesKindAssignment",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SalesKindId: data.salesKindId,
+        Active: data.active,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesKindAssignmentItem(item));
+}
+
+export function updateSalesKindAssignment(
+  id: number,
+  data: UpdateSalesKindAssignmentRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesKindAssignment/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        PharmId: data.pharmId,
+        SalesKindId: data.salesKindId,
+        Active: data.active,
+      }),
+    },
+    token
+  );
+}
+
+export function deactivateSalesKindAssignment(id: number, token: string) {
+  return apiFetch<void>(
+    `SalesKindAssignment/${id}`,
+    { method: "DELETE" },
+    token
+  );
 }
 
 function normalizeSalesServiceItem(
@@ -1887,8 +2050,11 @@ function normalizeSalesmovmentDetail(
     movName: readNullableString(item, "movName", "MovName"),
     movParint: readNullableNumber(item, "movParint", "MovParint"),
     pharmId: readNullableNumber(item, "pharmId", "PharmId"),
+    pharmacyName: readNullableString(item, "pharmacyName", "PharmacyName"),
     store1: readNullableNumber(item, "store1", "Store1"),
+    store1Name: readNullableString(item, "store1Name", "Store1Name"),
     store2: readNullableNumber(item, "store2", "Store2"),
+    store2Name: readNullableString(item, "store2Name", "Store2Name"),
     cashDebit: readNullableString(item, "cashDebit", "CashDebit"),
     creditCardDebit: readNullableString(item, "creditCardDebit", "CreditCardDebit"),
     creditCardMachinNo: readNullableString(
@@ -1985,6 +2151,20 @@ function buildSalesmovmentPayload(data: SalesmovmentUpsertRequest) {
   };
 }
 
+export function getSalesmovments(token: string) {
+  return fetchAllPaged("Salesmovment", token, normalizeSalesmovmentDetail, {
+    sortBy: "id",
+  });
+}
+
+export function getSalesmovmentById(id: number, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `Salesmovment/${id}`,
+    {},
+    token
+  ).then((item) => normalizeSalesmovmentDetail(item));
+}
+
 export function getSalesmovmentByParent(
   movParint: SalesMovementParent,
   token: string
@@ -1994,6 +2174,35 @@ export function getSalesmovmentByParent(
     {},
     token
   ).then((item) => normalizeSalesmovmentDetail(item));
+}
+
+export function createSalesmovment(
+  data: SalesmovmentUpsertRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "Salesmovment",
+    {
+      method: "POST",
+      body: JSON.stringify(buildSalesmovmentPayload(data)),
+    },
+    token
+  ).then((item) => normalizeSalesmovmentDetail(item));
+}
+
+export function updateSalesmovment(
+  id: number,
+  data: SalesmovmentUpsertRequest,
+  token: string
+) {
+  return apiFetch<void>(`Salesmovment/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(buildSalesmovmentPayload(data)),
+  }, token);
+}
+
+export function deleteSalesmovment(id: number, token: string) {
+  return apiFetch<void>(`Salesmovment/${id}`, { method: "DELETE" }, token);
 }
 
 export function upsertSalesmovment(
@@ -4875,6 +5084,20 @@ function errorsOnlyMessage(data: Record<string, unknown>): boolean {
   return !Array.isArray(errors) || errors.length === 0;
 }
 
+function mapSalesPaymentKindOption(
+  item: Record<string, unknown>
+): import("@/types/sales-payment").SalesPaymentKindOption {
+  return {
+    salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
+    salesKindName: readNullableString(item, "salesKindName", "SalesKindName"),
+    deleveryMandatory: readBoolean(
+      item,
+      "deleveryMandatory",
+      "DeleveryMandatory"
+    ),
+  };
+}
+
 function mapSalesPaymentMethodOption(
   item: Record<string, unknown>
 ): import("@/types/sales-payment").SalesPaymentMethodOption {
@@ -4883,6 +5106,7 @@ function mapSalesPaymentMethodOption(
     paymentName: readNullableString(item, "paymentName", "PaymentName"),
     affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
     active: readBoolean(item, "active", "Active"),
+    salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
   };
 }
 
@@ -4935,12 +5159,44 @@ function mapSalesPaymentContext(
   };
 }
 
-export async function getSalePaymentMethods(token: string) {
-  const data = await apiFetch<unknown>("SalesPayment/methods", {}, token);
+export async function getSalePaymentKinds(token: string) {
+  const data = await apiFetch<unknown>("SalesPayment/kinds", {}, token);
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) =>
+    mapSalesPaymentKindOption(row as Record<string, unknown>)
+  );
+}
+
+export async function getSalePaymentMethods(
+  token: string,
+  salesKindId?: number | null
+) {
+  const query =
+    salesKindId != null && salesKindId > 0
+      ? `?salesKindId=${encodeURIComponent(String(salesKindId))}`
+      : "";
+  const data = await apiFetch<unknown>(`SalesPayment/methods${query}`, {}, token);
   const list = Array.isArray(data) ? data : [];
   return list.map((row) =>
     mapSalesPaymentMethodOption(row as Record<string, unknown>)
   );
+}
+
+export async function getSalePaymentContext(
+  token: string,
+  sthId: number,
+  salesKindId?: number | null
+) {
+  const query =
+    salesKindId != null && salesKindId > 0
+      ? `?salesKindId=${encodeURIComponent(String(salesKindId))}`
+      : "";
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesPayment/${sthId}${query}`,
+    {},
+    token
+  );
+  return mapSalesPaymentContext(data);
 }
 
 export async function getSalesServerTime(token: string): Promise<{
@@ -5012,6 +5268,9 @@ export async function searchSalesItems(
         unit3: readNullableNumber(r, "unit3", "Unit3"),
         unit1Unit2: readNullableNumber(r, "unit1Unit2", "Unit1Unit2"),
         unit1Unit3: readNullableNumber(r, "unit1Unit3", "Unit1Unit3"),
+        itmMaxDiscPer: readNullableNumber(r, "itmMaxDiscPer", "ItmMaxDiscPer"),
+        groupNameEn: readString(r, "groupNameEn", "GroupNameEn"),
+        groupNameAr: readString(r, "groupNameAr", "GroupNameAr"),
         stocks: stocks.map((s) => {
           const st = s as Record<string, unknown>;
           return {
@@ -5031,6 +5290,52 @@ export async function searchSalesItems(
   };
 }
 
+export async function getSalesItemPharmacyStock(
+  token: string,
+  itemCatalogId: number
+) {
+  const q = new URLSearchParams({
+    itemCatalogId: String(itemCatalogId),
+  });
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesItemSearch/item-stock?${q.toString()}`,
+    {},
+    token
+  );
+  const stocksRaw = data.stocks ?? data.Stocks;
+  const stocks = Array.isArray(stocksRaw) ? stocksRaw : [];
+  return {
+    itemCatalogId: readNumber(data, "itemCatalogId", "ItemCatalogId"),
+    itmCode: readString(data, "itmCode", "ItmCode"),
+    itmNameAr: readString(data, "itmNameAr", "ItmNameAr"),
+    itmNameEn: readString(data, "itmNameEn", "ItmNameEn"),
+    unit1: readNullableNumber(data, "unit1", "Unit1"),
+    unit2: readNullableNumber(data, "unit2", "Unit2"),
+    unit3: readNullableNumber(data, "unit3", "Unit3"),
+    currentStorId: readNumber(data, "currentStorId", "CurrentStorId"),
+    currentParmId: readNumber(data, "currentParmId", "CurrentParmId"),
+    currentPharmacyName: readString(
+      data,
+      "currentPharmacyName",
+      "CurrentPharmacyName"
+    ),
+    stocks: stocks.map((s) => {
+      const st = s as Record<string, unknown>;
+      return {
+        stockId: readNumber(st, "stockId", "StockId"),
+        batchNo: readString(st, "batchNo", "BatchNo"),
+        expDate: readNullableString(st, "expDate", "ExpDate"),
+        availableQty: readNumber(st, "availableQty", "AvailableQty"),
+        salesPrice: readNumber(st, "salesPrice", "SalesPrice"),
+        storId: readNumber(st, "storId", "StorId"),
+        storName: readNullableString(st, "storName", "StorName"),
+        parmId: readNullableNumber(st, "parmId", "ParmId"),
+        pharmacyName: readNullableString(st, "pharmacyName", "PharmacyName"),
+      };
+    }),
+  } satisfies import("@/types/sales-workspace").SalesItemPharmacyStockResponse;
+}
+
 export async function createSale(
   token: string,
   request: import("@/types/sales-workspace").CreateSaleRequest
@@ -5048,6 +5353,7 @@ export async function createSale(
         GlobalDiscountMode: request.globalDiscountMode,
         GlobalDiscountPercent: request.globalDiscountPercent,
         GlobalDiscountValue: request.globalDiscountValue,
+        SalesKindId: request.salesKindId,
         SalesServiceId: request.salesServiceId,
         DeliveryCodeOrPassword: request.deliveryCodeOrPassword,
         Lines: request.lines.map((l) => ({
@@ -5059,6 +5365,7 @@ export async function createSale(
           DiscountMode: l.discountMode,
           DiscountPercent: l.discountPercent,
           DiscountValue: l.discountValue,
+          SalerCom: Number(l.salerCom ?? 0),
         })),
         Payments: request.payments?.map((p) => ({
           PaymentMethodId: p.paymentMethodId,
@@ -5150,15 +5457,6 @@ export async function getSaleDeliveryServices(token: string) {
   });
 }
 
-export async function getSalePaymentContext(token: string, sthId: number) {
-  const data = await apiFetch<Record<string, unknown>>(
-    `SalesPayment/${sthId}`,
-    {},
-    token
-  );
-  return mapSalesPaymentContext(data);
-}
-
 export async function finalizeSalePayment(
   token: string,
   request: import("@/types/sales-payment").FinalizeSalePaymentRequest
@@ -5169,6 +5467,7 @@ export async function finalizeSalePayment(
       method: "POST",
       body: JSON.stringify({
         Sth_Id: request.sthId,
+        SalesKindId: request.salesKindId,
         Payments: request.payments.map((p) => ({
           PaymentMethodId: p.paymentMethodId,
           Amount: p.amount,

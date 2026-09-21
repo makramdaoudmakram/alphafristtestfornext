@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Eye, Plus, Trash2 } from "lucide-react";
 import { SalesItemAutocompleteCell } from "@/components/sales/SalesItemAutocompleteCell";
+import { SalesItemStockSheet } from "@/components/sales/SalesItemStockSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
@@ -18,9 +19,15 @@ import {
   formatInvoiceStockInsufficientMessage,
   invoiceRemainingBaseForStock,
   invoiceRemainingInSelectedUnit,
+  lineGross,
   lineNet,
   money,
 } from "@/lib/sales-workspace-calc";
+import {
+  egyptDisplayToIsoDate,
+  maxDiscountValue,
+  resolveSalesDiscountLimit,
+} from "@/lib/sales-discount-limit";
 import { salesItemPrimaryLabel } from "@/lib/sales-item-search-ux";
 import { cn } from "@/lib/utils";
 import type {
@@ -47,6 +54,8 @@ type SalesDetailsGridProps = {
   /** When false, no item rows can be added (Sales Man not resolved). */
   canAddItems: boolean;
   rowDiscDisabled: boolean;
+  /** Egypt server date yyyy-MM-dd (or display string) for expiry discount windows. */
+  egyptDateDisplay?: string | null;
   onUpdateLines: (
     tabId: string,
     updater: (prev: SalesWorkspaceLine[]) => SalesWorkspaceLine[]
@@ -108,6 +117,9 @@ function applyStockToLine(
     unit3: hit.unit3,
     unit1Unit2: hit.unit1Unit2,
     unit1Unit3: hit.unit1Unit3,
+    itmMaxDiscPer: hit.itmMaxDiscPer,
+    groupNameEn: hit.groupNameEn,
+    groupNameAr: hit.groupNameAr,
     unitId,
     quantity: line.quantity > 0 ? line.quantity : 1,
     baseUnitSellPrice: base,
@@ -116,6 +128,22 @@ function applyStockToLine(
     qtyError: null,
     pendingStocks: undefined,
   };
+}
+
+function lineDiscountLimit(
+  line: Pick<
+    SalesWorkspaceLine,
+    "itmMaxDiscPer" | "groupNameEn" | "groupNameAr" | "expDate"
+  >,
+  egyptDateDisplay?: string | null
+) {
+  return resolveSalesDiscountLimit(
+    line.itmMaxDiscPer,
+    line.groupNameEn,
+    line.groupNameAr,
+    line.expDate,
+    egyptDisplayToIsoDate(egyptDateDisplay) ?? egyptDateDisplay
+  );
 }
 
 export function SalesDetailsGrid({
@@ -129,6 +157,7 @@ export function SalesDetailsGrid({
   disabled,
   canAddItems,
   rowDiscDisabled,
+  egyptDateDisplay,
   onUpdateLines,
   onToast,
 }: SalesDetailsGridProps) {
@@ -136,6 +165,8 @@ export function SalesDetailsGrid({
   const unitSeqRef = useRef(new Map<string, number>());
   const tabIdRef = useRef(tabId);
   tabIdRef.current = tabId;
+  const [stockSheetLine, setStockSheetLine] =
+    useState<SalesWorkspaceLine | null>(null);
 
   const patchLine = useCallback(
     (key: string, patch: Partial<SalesWorkspaceLine>) => {
@@ -385,6 +416,9 @@ export function SalesDetailsGrid({
       unit3: hit.unit3,
       unit1Unit2: hit.unit1Unit2,
       unit1Unit3: hit.unit1Unit3,
+      itmMaxDiscPer: hit.itmMaxDiscPer,
+      groupNameEn: hit.groupNameEn,
+      groupNameAr: hit.groupNameAr,
       unitId,
       baseUnitSellPrice: catalogBase,
       unitSellPrice: catalogBase,
@@ -420,6 +454,20 @@ export function SalesDetailsGrid({
       return;
     }
 
+    const limit = lineDiscountLimit(
+      { ...withStock, expDate: stock.expDate },
+      egyptDateDisplay
+    );
+    let discountPercent = line.discountPercent;
+    let discountValue = line.discountValue;
+    if (line.discountMode === "P" && discountPercent > limit.percent) {
+      discountPercent = limit.percent;
+    }
+    if (line.discountMode === "V") {
+      const cap = maxDiscountValue(lineGross(withStock), limit.percent);
+      if (discountValue > cap) discountValue = cap;
+    }
+
     patchLine(line.key, {
       stockId: withStock.stockId,
       batchNo: withStock.batchNo,
@@ -430,6 +478,8 @@ export function SalesDetailsGrid({
       unitSellPrice: withStock.unitSellPrice,
       pendingStocks: undefined,
       qtyError: null,
+      discountPercent,
+      discountValue,
     });
     if (line.unitId > 0 && line.unitId !== line.unit1) {
       void applyUnitPrice(withStock, line.unitId);
@@ -457,7 +507,7 @@ export function SalesDetailsGrid({
               <th className="p-2">Sales Price</th>
               <th className="p-2">Discount</th>
               <th className="p-2">Total</th>
-              <th className="p-2 w-12" />
+              <th className="p-2 w-20" />
             </tr>
           </thead>
           <tbody>
@@ -643,71 +693,125 @@ export function SalesDetailsGrid({
                   <td className="p-2 tabular-nums">
                     {sellable ? line.unitSellPrice.toFixed(2) : "—"}
                   </td>
-                  <td className="p-2 space-y-1">
-                    <select
-                      className="border-input bg-background h-8 w-full rounded border px-1"
-                      disabled={disabled || !sellable || rowDiscDisabled}
-                      value={line.discountMode}
-                      onChange={(e) =>
-                        patchLine(line.key, {
-                          discountMode: e.target
-                            .value as SalesWorkspaceLine["discountMode"],
-                        })
-                      }
-                    >
-                      <option value="">None</option>
-                      <option value="P">%</option>
-                      <option value="V">Value</option>
-                    </select>
-                    {line.discountMode === "P" ? (
-                      <Input
-                        className={gridInputClass}
-                        type="number"
+                  <td className="p-2">
+                    {(() => {
+                      const limit = lineDiscountLimit(line, egyptDateDisplay);
+                      const valueCap = maxDiscountValue(
+                        lineGross(line),
+                        limit.percent
+                      );
+                      return (
+                    <div className="flex min-w-[9.5rem] flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
                         disabled={disabled || !sellable || rowDiscDisabled}
-                        value={line.discountPercent}
-                        onChange={(e) =>
+                        aria-pressed={line.discountMode !== "V"}
+                        className="h-8 min-w-[4.5rem] shrink-0 px-2"
+                        onClick={() =>
                           patchLine(line.key, {
-                            discountPercent: Number(e.target.value) || 0,
+                            discountMode:
+                              line.discountMode === "V" ? "P" : "V",
                           })
                         }
-                      />
-                    ) : null}
-                    {line.discountMode === "V" ? (
+                      >
+                        {line.discountMode === "V" ? "Value" : "%"}
+                      </Button>
                       <Input
-                        className={gridInputClass}
+                        className={cn(gridInputClass, "w-20")}
                         type="number"
-                        disabled={disabled || !sellable || rowDiscDisabled}
-                        value={line.discountValue}
-                        onChange={(e) =>
-                          patchLine(line.key, {
-                            discountValue: Number(e.target.value) || 0,
-                          })
+                        min={0}
+                        max={
+                          line.discountMode === "V"
+                            ? valueCap
+                            : limit.percent
                         }
+                        step="0.01"
+                        disabled={disabled || !sellable || rowDiscDisabled}
+                        placeholder={
+                          line.discountMode === "V" ? "Amount" : "%"
+                        }
+                        value={
+                          line.discountMode === "V"
+                            ? line.discountValue
+                            : line.discountPercent
+                        }
+                        onChange={(e) => {
+                          const raw = Number(e.target.value) || 0;
+                          if (line.discountMode === "V") {
+                            const n = Math.min(Math.max(0, raw), valueCap);
+                            if (raw > valueCap) {
+                              onToast?.(
+                                "error",
+                                `Discount cannot exceed ${limit.percent}% MAX.`
+                              );
+                            }
+                            patchLine(line.key, { discountValue: n });
+                          } else {
+                            const n = Math.min(Math.max(0, raw), limit.percent);
+                            if (raw > limit.percent) {
+                              onToast?.(
+                                "error",
+                                `Discount cannot exceed ${limit.percent}% MAX.`
+                              );
+                            }
+                            patchLine(line.key, {
+                              discountPercent: n,
+                              discountMode: "P",
+                            });
+                          }
+                        }}
                       />
+                    </div>
+                    {sellable ? (
+                      <div className="text-muted-foreground text-xs tabular-nums">
+                        {limit.percent}% MAX
+                      </div>
                     ) : null}
+                    </div>
+                      );
+                    })()}
                   </td>
                   <td className="p-2 tabular-nums font-medium">
                     {sellable ? lineNet(line).toFixed(2) : "—"}
                   </td>
                   <td className="p-2">
-                    {!disabled && (resolved || line.searchText.trim()) ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          const next = lines.filter((l) => l.key !== line.key);
-                          replaceLines(
-                            next.length === 0
-                              ? [createEmptySalesLine()]
-                              : ensureTrailingDraft(next)
-                          );
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    ) : null}
+                    <div className="flex items-center">
+                      {!disabled && (resolved || line.searchText.trim()) ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="Remove line"
+                          aria-label="Remove line"
+                          onClick={() => {
+                            const next = lines.filter((l) => l.key !== line.key);
+                            replaceLines(
+                              next.length === 0
+                                ? [createEmptySalesLine()]
+                                : ensureTrailingDraft(next)
+                            );
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                      {resolved && line.itemCatalogId > 0 ? (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          title="View stock across pharmacies"
+                          aria-label="View stock across pharmacies"
+                          onClick={() => setStockSheetLine(line)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );
@@ -740,6 +844,16 @@ export function SalesDetailsGrid({
           ) : null}
         </div>
       ) : null}
+      <SalesItemStockSheet
+        open={stockSheetLine != null && stockSheetLine.itemCatalogId > 0}
+        onOpenChange={(next) => {
+          if (!next) setStockSheetLine(null);
+        }}
+        token={token}
+        language={language}
+        units={units}
+        line={stockSheetLine}
+      />
     </div>
   );
 }

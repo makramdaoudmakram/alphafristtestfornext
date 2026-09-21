@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
-  fetchAllItemCatalogItems,
   getItemCatalog,
   getNextMovValue,
   getStors,
@@ -108,7 +107,6 @@ export function InventoryAdjustmentPageContent() {
   const movStat = watch("movStat");
 
   const [catalogItems, setCatalogItems] = useState<ItemCatalogItem[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [stores, setStores] = useState<StorItem[]>([]);
   const [storesLoading, setStoresLoading] = useState(false);
@@ -140,31 +138,15 @@ export function InventoryAdjustmentPageContent() {
   const isPosted = isInventoryAdjustmentPosted(movStat);
   const fhId = watch("fhId");
 
-  const loadCatalog = useCallback(async () => {
-    if (!token) {
-      setCatalogItems([]);
-      setItemByCode(new Map());
-      setCatalogLoading(false);
-      return;
+  const applyCatalogMap = useCallback((map?: Map<string, ItemCatalogItem>) => {
+    if (!map || map.size === 0) return;
+    setItemByCode(map);
+    const unique = new Map<number, ItemCatalogItem>();
+    for (const item of map.values()) {
+      if (item.id > 0) unique.set(item.id, item);
     }
-
-    setCatalogLoading(true);
-    try {
-      const items = await fetchAllItemCatalogItems(token);
-      setCatalogItems(items);
-      const map = new Map<string, ItemCatalogItem>();
-      for (const item of items) {
-        const code = item.itmCode?.trim().toLowerCase();
-        if (code) map.set(code, item);
-      }
-      setItemByCode(map);
-    } catch {
-      setCatalogItems([]);
-      toast.error("Could not load item catalog.");
-    } finally {
-      setCatalogLoading(false);
-    }
-  }, [token]);
+    setCatalogItems([...unique.values()]);
+  }, []);
 
   const loadUnits = useCallback(async () => {
     if (!token) {
@@ -198,10 +180,9 @@ export function InventoryAdjustmentPageContent() {
   useEffect(() => {
     if (!sessionReady) return;
     if (!sessionAuthenticated) return;
-    void loadCatalog();
     void loadUnits();
     void loadStores();
-  }, [sessionReady, sessionAuthenticated, loadCatalog, loadUnits, loadStores]);
+  }, [sessionReady, sessionAuthenticated, loadUnits, loadStores]);
 
   const handleMovementChange = useCallback(
     (movement: MovmentLookupItem | null) => {
@@ -559,11 +540,12 @@ export function InventoryAdjustmentPageContent() {
   }
 
   function handleRefresh() {
-    void loadCatalog();
     void loadUnits();
     void loadStores();
     if (recordId != null && recordId > 0) {
-      void loadRecord(recordId);
+      void loadRecord(recordId, itemByCode, catalogItems).then((map) => {
+        applyCatalogMap(map);
+      });
     }
     setAuditRefreshKey((value) => value + 1);
   }

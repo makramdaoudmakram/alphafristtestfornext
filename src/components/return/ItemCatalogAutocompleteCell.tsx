@@ -21,6 +21,7 @@ import {
   suggestionSecondaryLabel,
   type ItemCatalogSearchField,
 } from "@/lib/item-catalog-search";
+import { resolveCatalogItemByCode } from "@/lib/item-unit-options";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { ReturnDetail, ReturnDetailPatch } from "@/types/return";
@@ -224,15 +225,45 @@ export function ItemCatalogAutocompleteCell({
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      const item =
-        showList && suggestions.length > 0
-          ? suggestions[highlight]
-          : resolveCatalogItemOnEnter(
-              suggestions.length > 0 ? suggestions : catalogItems,
-              field,
-              value
-            );
-      if (item) applyItem(item);
+      if (showList && suggestions.length > 0) {
+        const selected = suggestions[highlight];
+        if (selected) applyItem(selected);
+        return;
+      }
+
+      const query = value.trim();
+      if (!query) return;
+
+      if (!token) {
+        const item = resolveCatalogItemOnEnter(catalogItems, field, query);
+        if (item) applyItem(item);
+        return;
+      }
+
+      void (async () => {
+        const map = new Map<string, ItemCatalogItem>();
+        for (const row of catalogItems) {
+          const code = row.itmCode?.trim().toLowerCase();
+          if (code) map.set(code, row);
+        }
+
+        if (field === "code") {
+          const item = await resolveCatalogItemByCode(
+            token,
+            query,
+            map,
+            catalogItems
+          );
+          if (item) applyItem(item);
+          return;
+        }
+
+        const results = await lookupItemCatalog(token, query, {
+          take: ITEM_AUTOCOMPLETE_LIMIT,
+        });
+        const item = resolveCatalogItemOnEnter(results, field, query);
+        if (item) applyItem(item);
+      })();
       return;
     }
 

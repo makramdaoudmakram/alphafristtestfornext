@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SalesPaymentAssimentItem } from "@/types/sales-payment-assiment";
 import type { SalesPayMethodCompoItem } from "@/types/sales-pay-method";
 import type { PharmItem } from "@/types/pharm";
+import type { ComboboxOption } from "@/components/ui/searchable-combobox";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -26,7 +28,9 @@ export function SalesPaymentAssimentFormSheet({
   item,
   saving,
   pharmacies,
+  pharmacyOptions,
   methods,
+  lookupsLoading,
   onSubmit,
 }: {
   open: boolean;
@@ -34,7 +38,9 @@ export function SalesPaymentAssimentFormSheet({
   item: SalesPaymentAssimentItem | null;
   saving?: boolean;
   pharmacies: PharmItem[];
+  pharmacyOptions: ComboboxOption[];
   methods: SalesPayMethodCompoItem[];
+  lookupsLoading?: boolean;
   onSubmit: (values: SalesPaymentAssimentFormValues) => Promise<void>;
 }) {
   const [pharmId, setPharmId] = useState("");
@@ -46,6 +52,27 @@ export function SalesPaymentAssimentFormSheet({
       setSpmId(item.spmId);
     }
   }, [open, item]);
+
+  const sheetPharmacyOptions = useMemo(() => {
+    const trimmed = pharmId.trim();
+    if (!trimmed || pharmacyOptions.some((o) => o.value === trimmed)) {
+      return pharmacyOptions;
+    }
+    const match = pharmacies.find((p) => String(p.parmId) === trimmed);
+    const name = (
+      match?.parmEnName ||
+      match?.parmArName ||
+      item?.pharmName ||
+      ""
+    ).trim();
+    return [
+      ...pharmacyOptions,
+      {
+        value: trimmed,
+        label: name ? `${name} (${trimmed})` : `Pharmacy #${trimmed}`,
+      },
+    ];
+  }, [pharmacyOptions, pharmacies, pharmId, item?.pharmName]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,21 +93,18 @@ export function SalesPaymentAssimentFormSheet({
         {item ? (
           <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4 px-4">
             <div className="space-y-2">
-              <Label htmlFor="sheet-pharmId">Pharmacy</Label>
-              <select
-                id="sheet-pharmId"
-                className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              <Label>Pharmacy</Label>
+              <SearchableCombobox
                 value={pharmId}
-                onChange={(e) => setPharmId(e.target.value)}
-                required
-              >
-                <option value="">Select pharmacy</option>
-                {pharmacies.map((p) => (
-                  <option key={p.parmId} value={String(p.parmId)}>
-                    {p.parmEnName || p.parmArName || p.parmId}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setPharmId}
+                options={sheetPharmacyOptions}
+                placeholder={
+                  lookupsLoading ? "Loading pharmacies..." : "Select pharmacy"
+                }
+                searchPlaceholder="Search pharmacy..."
+                emptyMessage="No pharmacies found."
+                disabled={lookupsLoading || saving}
+              />
             </div>
 
             <div className="space-y-2">
@@ -111,7 +135,11 @@ export function SalesPaymentAssimentFormSheet({
               >
                 Cancel
               </Button>
-              <Button type="submit" variant="update" disabled={saving}>
+              <Button
+                type="submit"
+                variant="update"
+                disabled={saving || !pharmId.trim() || !spmId}
+              >
                 {saving ? "Saving..." : "Save changes"}
               </Button>
             </SheetFooter>

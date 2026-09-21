@@ -13,13 +13,18 @@ export type SalesApiSearchType =
 
 /**
  * Resolve SalesItemSearch searchType.
- * Normal typing uses Pharmacy Purchase–style General (multi-field Contains).
  * Long numeric payloads are treated as barcode scans.
+ * Otherwise the E/A toggle selects ArabicName or EnglishName so the
+ * existing double-space wildcard runs on the matching name field.
+ * Item-code matching stays on the server for non-wildcard name queries.
  */
-export function resolveSalesSearchType(query: string): SalesApiSearchType {
+export function resolveSalesSearchType(
+  query: string,
+  language: SalesSearchLanguage = "English"
+): SalesApiSearchType {
   const q = query.trim();
   if (/^\d{8,}$/.test(q)) return "Barcode";
-  return "General";
+  return language === "Arabic" ? "ArabicName" : "EnglishName";
 }
 
 export function salesItemPrimaryLabel(

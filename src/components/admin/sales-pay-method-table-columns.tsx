@@ -7,7 +7,8 @@ import type { SalesPayMethodItem } from "@/types/sales-pay-method";
 import { Badge } from "@/components/ui/badge";
 
 export function useSalesPayMethodColumns(
-  accountOptions: ComboboxOption[] = []
+  accountOptions: ComboboxOption[] = [],
+  salesKindOptions: ComboboxOption[] = []
 ): ColumnDef<SalesPayMethodItem>[] {
   return useMemo(
     () => [
@@ -24,6 +25,17 @@ export function useSalesPayMethodColumns(
         accessorKey: "paymentName",
         header: "Payment name",
         cell: ({ row }) => row.original.paymentName?.trim() || "—",
+      },
+      {
+        enableSorting: true,
+        accessorKey: "salesKindId",
+        header: "Sales kind",
+        cell: ({ row }) => {
+          const id = row.original.salesKindId;
+          if (!id) return "—";
+          const match = salesKindOptions.find((option) => option.value === String(id));
+          return match?.label || `#${id}`;
+        },
       },
       {
         enableSorting: true,
@@ -53,6 +65,6 @@ export function useSalesPayMethodColumns(
         ),
       },
     ],
-    [accountOptions]
+    [accountOptions, salesKindOptions]
   );
 }

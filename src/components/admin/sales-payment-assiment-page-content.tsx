@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,8 @@ import {
 import type { SalesPaymentAssimentItem } from "@/types/sales-payment-assiment";
 import type { SalesPayMethodCompoItem } from "@/types/sales-pay-method";
 import type { PharmItem } from "@/types/pharm";
+import type { ComboboxOption } from "@/components/ui/searchable-combobox";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import {
   SalesPaymentAssimentFormSheet,
   type SalesPaymentAssimentFormValues,
@@ -33,6 +35,23 @@ import {
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/data-table";
 
+function toPharmacyOptions(pharmacies: PharmItem[]): ComboboxOption[] {
+  return pharmacies
+    .map((p) => {
+      const id = String(p.parmId);
+      const name = (p.parmEnName || p.parmArName || "").trim();
+      return {
+        value: id,
+        label: name ? `${name} (${id})` : id,
+      };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function withAllPharmacies(options: ComboboxOption[]): ComboboxOption[] {
+  return [{ value: "", label: "All pharmacies" }, ...options];
+}
+
 export function SalesPaymentAssimentPageContent() {
   const { data: session, status } = useSession();
   const { hasPermission } = usePermissions();
@@ -42,6 +61,7 @@ export function SalesPaymentAssimentPageContent() {
   const [items, setItems] = useState<SalesPaymentAssimentItem[]>([]);
   const [pharmacies, setPharmacies] = useState<PharmItem[]>([]);
   const [methods, setMethods] = useState<SalesPayMethodCompoItem[]>([]);
+  const [lookupsLoading, setLookupsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sheetSaving, setSheetSaving] = useState(false);
@@ -59,18 +79,41 @@ export function SalesPaymentAssimentPageContent() {
   const canEdit = hasPermission(PERMISSIONS.salesPaymentAssiment.edit);
   const canDelete = hasPermission(PERMISSIONS.salesPaymentAssiment.delete);
 
+  const pharmacyOptions = useMemo(
+    () => toPharmacyOptions(pharmacies),
+    [pharmacies]
+  );
+  const filterPharmacyOptions = useMemo(
+    () => withAllPharmacies(pharmacyOptions),
+    [pharmacyOptions]
+  );
+
   const loadLookups = useCallback(async () => {
     if (!token) {
       setPharmacies([]);
       setMethods([]);
       return;
     }
-    const [pharmRows, methodRows] = await Promise.all([
-      getPharms(token),
-      getSalesPayMethodCompo(token),
-    ]);
-    setPharmacies(pharmRows);
-    setMethods(methodRows);
+
+    setLookupsLoading(true);
+    try {
+      const [pharmRows, methodRows] = await Promise.all([
+        getPharms(token),
+        getSalesPayMethodCompo(token),
+      ]);
+      setPharmacies(pharmRows);
+      setMethods(methodRows);
+    } catch (error) {
+      setPharmacies([]);
+      setMethods([]);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to load pharmacy / payment method lookups"
+      );
+    } finally {
+      setLookupsLoading(false);
+    }
   }, [token]);
 
   const loadItems = useCallback(async () => {
@@ -115,12 +158,18 @@ export function SalesPaymentAssimentPageContent() {
     e.preventDefault();
     if (!token) return;
 
+    if (!pharmId.trim()) {
+      toast.error("Select a pharmacy.");
+      return;
+    }
+    if (!spmId) {
+      toast.error("Select a payment method.");
+      return;
+    }
+
     setSaving(true);
     try {
-      await createSalesPaymentAssiment(
-        { pharmId, spmId },
-        token
-      );
+      await createSalesPaymentAssiment({ pharmId, spmId }, token);
       toast.success("Payment assignment created");
       setPharmId("");
       setSpmId(0);
@@ -143,6 +192,15 @@ export function SalesPaymentAssimentPageContent() {
 
   async function handleSheetSubmit(values: SalesPaymentAssimentFormValues) {
     if (!token || !editingItem) return;
+
+    if (!values.pharmId.trim()) {
+      toast.error("Select a pharmacy.");
+      return;
+    }
+    if (!values.spmId) {
+      toast.error("Select a payment method.");
+      return;
+    }
 
     setSheetSaving(true);
     try {
@@ -215,21 +273,20 @@ export function SalesPaymentAssimentPageContent() {
             <CardContent>
               <form onSubmit={handleSubmit} className="grid max-w-lg gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="pharmId">Pharmacy</Label>
-                  <select
-                    id="pharmId"
-                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  <Label>Pharmacy</Label>
+                  <SearchableCombobox
                     value={pharmId}
-                    onChange={(e) => setPharmId(e.target.value)}
-                    required
-                  >
-                    <option value="">Select pharmacy</option>
-                    {pharmacies.map((p) => (
-                      <option key={p.parmId} value={String(p.parmId)}>
-                        {p.parmEnName || p.parmArName || p.parmId}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={setPharmId}
+                    options={pharmacyOptions}
+                    placeholder={
+                      lookupsLoading
+                        ? "Loading pharmacies..."
+                        : "Select pharmacy"
+                    }
+                    searchPlaceholder="Search pharmacy..."
+                    emptyMessage="No pharmacies found."
+                    disabled={lookupsLoading || saving}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="spmId">Payment method</Label>
@@ -249,7 +306,10 @@ export function SalesPaymentAssimentPageContent() {
                     ))}
                   </select>
                 </div>
-                <Button type="submit" disabled={saving || !pharmId || !spmId}>
+                <Button
+                  type="submit"
+                  disabled={saving || lookupsLoading || !pharmId || !spmId}
+                >
                   {saving ? "Saving..." : "Create"}
                 </Button>
               </form>
@@ -270,20 +330,18 @@ export function SalesPaymentAssimentPageContent() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex max-w-sm flex-col gap-2">
-              <Label htmlFor="filterPharmId">Filter by pharmacy</Label>
-              <select
-                id="filterPharmId"
-                className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              <Label>Filter by pharmacy</Label>
+              <SearchableCombobox
                 value={filterPharmId}
-                onChange={(e) => setFilterPharmId(e.target.value)}
-              >
-                <option value="">All pharmacies</option>
-                {pharmacies.map((p) => (
-                  <option key={p.parmId} value={String(p.parmId)}>
-                    {p.parmEnName || p.parmArName || p.parmId}
-                  </option>
-                ))}
-              </select>
+                onValueChange={setFilterPharmId}
+                options={filterPharmacyOptions}
+                placeholder={
+                  lookupsLoading ? "Loading pharmacies..." : "All pharmacies"
+                }
+                searchPlaceholder="Search pharmacy..."
+                emptyMessage="No pharmacies found."
+                disabled={lookupsLoading}
+              />
             </div>
             <DataTable
               columns={columns}
@@ -303,7 +361,9 @@ export function SalesPaymentAssimentPageContent() {
           item={editingItem}
           saving={sheetSaving}
           pharmacies={pharmacies}
+          pharmacyOptions={pharmacyOptions}
           methods={methods}
+          lookupsLoading={lookupsLoading}
           onSubmit={handleSheetSubmit}
         />
       </div>

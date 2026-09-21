@@ -23,6 +23,7 @@ import {
   suggestionSecondaryLabel,
   type ItemCatalogSearchField,
 } from "@/lib/item-catalog-search";
+import { resolveCatalogItemByCode } from "@/lib/item-unit-options";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail, PurchaseDetailPatch } from "@/types/purchase";
@@ -263,20 +264,57 @@ export function ItemCatalogAutocompleteCell({
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
-      const fallbackItems =
-        suggestions.length > 0 ? suggestions : catalogItems;
-      const item =
-        showList && suggestions.length > 0
-          ? suggestions[highlight]
-          : useDoubleSpaceWildcard
-            ? searchItemCatalogWithDoubleSpaceWildcard(
-                fallbackItems,
-                field,
-                value,
-                1
-              )[0] ?? null
-            : resolveCatalogItemOnEnter(fallbackItems, field, value);
-      if (item) applyItem(item);
+      if (showList && suggestions.length > 0) {
+        const selected = suggestions[highlight];
+        if (selected) applyItem(selected);
+        return;
+      }
+
+      const query = useDoubleSpaceWildcard ? value : value.trim();
+      if (!query) return;
+
+      if (!token) {
+        const item = useDoubleSpaceWildcard
+          ? searchItemCatalogWithDoubleSpaceWildcard(
+              catalogItems,
+              field,
+              query,
+              1
+            )[0] ?? null
+          : resolveCatalogItemOnEnter(catalogItems, field, query);
+        if (item) applyItem(item);
+        return;
+      }
+
+      void (async () => {
+        const map = new Map<string, ItemCatalogItem>();
+        for (const row of catalogItems) {
+          const code = row.itmCode?.trim().toLowerCase();
+          if (code) map.set(code, row);
+        }
+
+        if (field === "code") {
+          const item = await resolveCatalogItemByCode(
+            token,
+            query,
+            map,
+            catalogItems
+          );
+          if (item) applyItem(item);
+          return;
+        }
+
+        const results = useDoubleSpaceWildcard
+          ? await lookupItemCatalogBySegment(token, query, field, {
+              take: ITEM_AUTOCOMPLETE_LIMIT,
+              doubleSpaceWildcard: true,
+            })
+          : await lookupItemCatalog(token, query, {
+              take: ITEM_AUTOCOMPLETE_LIMIT,
+            });
+        const item = resolveCatalogItemOnEnter(results, field, query);
+        if (item) applyItem(item);
+      })();
       return;
     }
 

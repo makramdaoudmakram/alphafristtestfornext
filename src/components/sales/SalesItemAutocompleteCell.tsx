@@ -26,6 +26,7 @@ import {
   salesItemPrimaryLabel,
   salesItemSecondaryLabel,
 } from "@/lib/sales-item-search-ux";
+import { hasSearchableCatalogQuery } from "@/lib/item-catalog-wildcard";
 import { cn } from "@/lib/utils";
 import type {
   SalesItemSearchHit,
@@ -78,7 +79,10 @@ export function SalesItemAutocompleteCell({
   const [suggestions, setSuggestions] = useState<SalesItemSearchHit[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
 
-  const hasQuery = value.trim().length > 0;
+  const hasQuery =
+    resolveSalesSearchType(value, language) === "Barcode"
+      ? value.trim().length > 0
+      : hasSearchableCatalogQuery(value);
   const showList =
     wantList && !disabled && hasQuery && (suggestions.length > 0 || lookupLoading);
 
@@ -96,27 +100,33 @@ export function SalesItemAutocompleteCell({
   const runSearch = useCallback(
     async (q: string, signal?: AbortSignal) => {
       if (!token) return [] as SalesItemSearchHit[];
-      const searchType = resolveSalesSearchType(q);
+      const searchType = resolveSalesSearchType(q, language);
+      const search = searchType === "Barcode" ? q.trim() : q;
       const result = await searchSalesItems(token, {
         searchType,
         stockScope,
-        search: q,
+        search,
         take: AUTOCOMPLETE_LIMIT,
       });
       if (signal?.aborted) return [];
       return result.items;
     },
-    [token, stockScope]
+    [token, stockScope, language]
   );
 
   useEffect(() => {
-    const q = value.trim();
-    if (!wantList || disabled || !q) {
+    const searchType = resolveSalesSearchType(value, language);
+    const canSearch =
+      searchType === "Barcode"
+        ? value.trim().length > 0
+        : hasSearchableCatalogQuery(value);
+    if (!wantList || disabled || !canSearch) {
       setSuggestions([]);
       setLookupLoading(false);
       return;
     }
 
+    const searchText = searchType === "Barcode" ? value.trim() : value;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       if (!token) {
@@ -126,7 +136,7 @@ export function SalesItemAutocompleteCell({
       }
       setLookupLoading(true);
       try {
-        const items = await runSearch(q, controller.signal);
+        const items = await runSearch(searchText, controller.signal);
         if (controller.signal.aborted) return;
         setSuggestions(items);
       } catch {
@@ -141,7 +151,7 @@ export function SalesItemAutocompleteCell({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [value, wantList, disabled, token, runSearch]);
+  }, [value, wantList, disabled, token, runSearch, language]);
 
   useEffect(() => {
     setHighlight(0);
@@ -197,8 +207,17 @@ export function SalesItemAutocompleteCell({
   );
 
   const resolveOnEnter = async () => {
-    const q = value.trim();
-    if (!q || !token) return;
+    const raw = value;
+    const searchType = resolveSalesSearchType(raw, language);
+    const q = searchType === "Barcode" ? raw.trim() : raw;
+    if (
+      searchType === "Barcode"
+        ? !q
+        : !hasSearchableCatalogQuery(raw)
+    ) {
+      return;
+    }
+    if (!token) return;
 
     if (showList && suggestions.length > 0) {
       applyHit(suggestions[highlight] ?? suggestions[0]);
@@ -207,26 +226,26 @@ export function SalesItemAutocompleteCell({
 
     setLookupLoading(true);
     try {
-      // Scanner Enter: prefer exact barcode when payload is numeric, else General.
+      // Scanner Enter: prefer exact barcode when payload is numeric, else language name search.
       let items: SalesItemSearchHit[] = [];
-      const looksNumeric = /^\d+$/.test(q);
+      const looksNumeric = /^\d+$/.test(raw.trim());
       if (looksNumeric) {
         const barcode = await searchSalesItems(token, {
           searchType: "Barcode",
           stockScope,
-          search: q,
+          search: raw.trim(),
           take: AUTOCOMPLETE_LIMIT,
         });
         items = barcode.items;
       }
       if (items.length === 0) {
-        const general = await searchSalesItems(token, {
-          searchType: "General",
+        const named = await searchSalesItems(token, {
+          searchType: resolveSalesSearchType(raw, language),
           stockScope,
-          search: q,
+          search: looksNumeric ? raw.trim() : raw,
           take: AUTOCOMPLETE_LIMIT,
         });
-        items = general.items;
+        items = named.items;
       }
       if (items.length === 1) {
         applyHit(items[0]);

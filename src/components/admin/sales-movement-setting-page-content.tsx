@@ -1,19 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
+  createSalesmovment,
+  deleteSalesmovment,
   getPharms,
-  getSalesmovmentByParent,
+  getSalesmovments,
   getStors,
-  upsertSalesmovment,
+  updateSalesmovment,
 } from "@/lib/api-client";
-import { getChartLeaves } from "@/lib/manual-journal-api";
+import { getAccountChartSelect } from "@/lib/customer-api";
+import {
+  SalesMovementFormSheet,
+  validateSalesMovementForm,
+  type SalesMovementFormValues,
+} from "@/components/admin/sales-movement-form-sheet";
+import { useSalesMovementColumns } from "@/components/admin/sales-movement-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { PERMISSIONS } from "@/lib/route-permissions";
-import type { ComboboxOption } from "@/components/ui/searchable-combobox";
-import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,93 +29,48 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  SALES_MOVEMENT_ACCOUNT_FIELDS,
-  SALES_MOVEMENT_PARENT_OPTIONS,
-  type SalesMovementParent,
-  type SalesmovmentUpsertRequest,
-} from "@/types/sales-movment";
-
-function emptyForm(parent: SalesMovementParent): SalesmovmentUpsertRequest {
-  return {
-    movId: null,
-    movName: null,
-    movParint: parent,
-    pharmId: null,
-    store1: null,
-    store2: null,
-    cashDebit: null,
-    creditCardDebit: null,
-    creditCardMachinNo: null,
-    discountEmployeesDebit: null,
-    discountMedicalDebit: null,
-    medicinesSalesCredit: null,
-    accesSalesCredit: null,
-    salesTaxCredit: null,
-    salesCostDebit: null,
-    accessCostDebit: null,
-    pharmStorCredit: null,
-    extraordinaryPurchasesDebit: null,
-    extraordinaryPurchasesCredit: null,
-    expensesDebit: null,
-    expensesCredit: null,
-    transferDebit: null,
-    transferCredit: null,
-    postMedicalDebit: null,
-    postEmployeesDebit: null,
-    excessDeficitdept: null,
-    excessDeficitcredit: null,
-    cashdiscount: null,
-    otheraRevinue: null,
-  };
-}
-
-function mergeOption(
-  options: ComboboxOption[],
-  value: string
-): ComboboxOption[] {
-  const trimmed = value.trim();
-  if (!trimmed || options.some((option) => option.value === trimmed)) {
-    return options;
-  }
-  return [...options, { value: trimmed, label: trimmed }];
-}
-
-function withClear(options: ComboboxOption[]): ComboboxOption[] {
-  return [{ value: "", label: "— None —" }, ...options];
-}
-
-function toNullableInt(value: string): number | null {
-  if (!value.trim()) return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+import type { ComboboxOption } from "@/components/ui/searchable-combobox";
+import type { SalesmovmentDetail } from "@/types/sales-movment";
 
 export function SalesMovementSettingPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
 
-  const [parent, setParent] = useState<SalesMovementParent>(1);
-  const [form, setForm] = useState<SalesmovmentUpsertRequest>(() => emptyForm(1));
-  const [recordId, setRecordId] = useState<number | null>(null);
+  const [items, setItems] = useState<SalesmovmentDetail[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [lookupsLoading, setLookupsLoading] = useState(false);
+  const [sheetSaving, setSheetSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<SalesmovmentDetail | null>(null);
+
   const [storOptions, setStorOptions] = useState<ComboboxOption[]>([]);
   const [accountOptions, setAccountOptions] = useState<ComboboxOption[]>([]);
   const [pharmOptions, setPharmOptions] = useState<ComboboxOption[]>([]);
 
-  const parentOptions = useMemo(
-    () =>
-      SALES_MOVEMENT_PARENT_OPTIONS.map((o) => ({
-        value: String(o.value),
-        label: o.label,
-      })),
-    []
-  );
+  const columns = useSalesMovementColumns();
+
+  const loadItems = useCallback(async () => {
+    if (!token) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setItems(await getSalesmovments(token));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load sales movements";
+      setLoadError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   const loadLookups = useCallback(async () => {
     if (!token) {
@@ -122,14 +84,17 @@ export function SalesMovementSettingPageContent() {
     try {
       const [stores, accounts, pharms] = await Promise.all([
         getStors(token),
-        getChartLeaves(token),
+        getAccountChartSelect(token),
         getPharms(token),
       ]);
       setStorOptions(
         stores
           .map((store) => ({
             value: String(store.id),
-            label: store.storArName?.trim() || `Store ${store.id}`,
+            label:
+              store.storArName?.trim() ||
+              store.storEnName?.trim() ||
+              `Store ${store.id}`,
           }))
           .sort((a, b) =>
             a.label.localeCompare(b.label, undefined, { numeric: true })
@@ -140,7 +105,7 @@ export function SalesMovementSettingPageContent() {
           .filter((account) => account.accCode?.trim())
           .map((account) => ({
             value: account.accCode.trim(),
-            label: account.name.trim() || account.accCode.trim(),
+            label: account.accName.trim() || account.accCode.trim(),
           }))
           .sort((a, b) =>
             a.label.localeCompare(b.label, undefined, { numeric: true })
@@ -151,7 +116,8 @@ export function SalesMovementSettingPageContent() {
           .map((pharm) => ({
             value: String(pharm.parmId),
             label:
-              [pharm.parmArName, pharm.parmEnName].filter(Boolean).join(" / ") ||
+              pharm.parmEnName?.trim() ||
+              pharm.parmArName?.trim() ||
               `Pharmacy ${pharm.parmId}`,
           }))
           .sort((a, b) =>
@@ -168,255 +134,153 @@ export function SalesMovementSettingPageContent() {
     }
   }, [token]);
 
-  const loadConfig = useCallback(
-    async (movParint: SalesMovementParent) => {
-      if (!token) {
-        setForm(emptyForm(movParint));
-        setRecordId(null);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const row = await getSalesmovmentByParent(movParint, token);
-        setRecordId(row.id > 0 ? row.id : null);
-        setForm({
-          movId: row.movId,
-          movName: row.movName,
-          movParint,
-          pharmId: row.pharmId,
-          store1: row.store1,
-          store2: row.store2,
-          cashDebit: row.cashDebit,
-          creditCardDebit: row.creditCardDebit,
-          creditCardMachinNo: row.creditCardMachinNo,
-          discountEmployeesDebit: row.discountEmployeesDebit,
-          discountMedicalDebit: row.discountMedicalDebit,
-          medicinesSalesCredit: row.medicinesSalesCredit,
-          accesSalesCredit: row.accesSalesCredit,
-          salesTaxCredit: row.salesTaxCredit,
-          salesCostDebit: row.salesCostDebit,
-          accessCostDebit: row.accessCostDebit,
-          pharmStorCredit: row.pharmStorCredit,
-          extraordinaryPurchasesDebit: row.extraordinaryPurchasesDebit,
-          extraordinaryPurchasesCredit: row.extraordinaryPurchasesCredit,
-          expensesDebit: row.expensesDebit,
-          expensesCredit: row.expensesCredit,
-          transferDebit: row.transferDebit,
-          transferCredit: row.transferCredit,
-          postMedicalDebit: row.postMedicalDebit,
-          postEmployeesDebit: row.postEmployeesDebit,
-          excessDeficitdept: row.excessDeficitdept,
-          excessDeficitcredit: row.excessDeficitcredit,
-          cashdiscount: row.cashdiscount,
-          otheraRevinue: row.otheraRevinue,
-        });
-      } catch (error) {
-        setForm(emptyForm(movParint));
-        setRecordId(null);
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to load sales movement settings."
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [token]
-  );
+  useEffect(() => {
+    if (!sessionReady) return;
+    void loadItems();
+  }, [sessionReady, loadItems]);
 
   useEffect(() => {
-    if (status === "loading") return;
+    if (!sessionReady) return;
     void loadLookups();
-  }, [status, loadLookups]);
+  }, [sessionReady, loadLookups]);
 
-  useEffect(() => {
-    if (status === "loading") return;
-    void loadConfig(parent);
-  }, [status, parent, loadConfig]);
-
-  function patch(partial: Partial<SalesmovmentUpsertRequest>) {
-    setForm((current) => ({ ...current, ...partial }));
+  function handleNew() {
+    setEditing(null);
+    setSheetOpen(true);
   }
 
-  async function handleSave(event: React.FormEvent) {
-    event.preventDefault();
-    if (!token) {
-      toast.error("Sign in required.");
+  function handleEdit(row: SalesmovmentDetail) {
+    setEditing(row);
+    setSheetOpen(true);
+  }
+
+  async function handleSheetSubmit(values: SalesMovementFormValues) {
+    if (!token) return;
+
+    const validationError = validateSalesMovementForm(values);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
-    setSaving(true);
+    setSheetSaving(true);
     try {
-      const saved = await upsertSalesmovment({ ...form, movParint: parent }, token);
-      setRecordId(saved.id > 0 ? saved.id : null);
-      toast.success(
-        parent === 1
-          ? "Sales configuration saved."
-          : "Return Sales configuration saved."
-      );
-      await loadConfig(parent);
+      if (editing && editing.id > 0) {
+        await updateSalesmovment(editing.id, values, token);
+        toast.success("Sales movement updated");
+      } else {
+        await createSalesmovment(values, token);
+        toast.success("Sales movement created");
+      }
+      setSheetOpen(false);
+      setEditing(null);
+      await loadItems();
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to save sales movement settings."
+        error instanceof Error ? error.message : "Failed to save sales movement"
       );
     } finally {
-      setSaving(false);
+      setSheetSaving(false);
     }
   }
 
-  const store1Options = useMemo(
-    () => mergeOption(storOptions, form.store1 != null ? String(form.store1) : ""),
-    [storOptions, form.store1]
-  );
-  const store2Options = useMemo(
-    () => mergeOption(storOptions, form.store2 != null ? String(form.store2) : ""),
-    [storOptions, form.store2]
-  );
-  const pharmMerged = useMemo(
-    () => mergeOption(pharmOptions, form.pharmId != null ? String(form.pharmId) : ""),
-    [pharmOptions, form.pharmId]
-  );
+  function handleDelete(row: SalesmovmentDetail) {
+    const label = row.movName?.trim() || `MovId ${row.movId ?? row.id}`;
+    toast(`Delete "${label}"?`, {
+      description: "Blocked if the movement is used by a shift or sales transactions.",
+      action: {
+        label: "Delete",
+        onClick: () => void confirmDelete(row),
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => toast.message("Delete cancelled"),
+      },
+    });
+  }
 
-  const busy = !sessionReady || loading || lookupsLoading;
+  async function confirmDelete(row: SalesmovmentDetail) {
+    if (!token) return;
+    try {
+      await deleteSalesmovment(row.id, token);
+      toast.success("Sales movement deleted");
+      await loadItems();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete sales movement"
+      );
+    }
+  }
 
   return (
     <PageGuard permission={PERMISSIONS.salesMovment.view}>
       <div className="space-y-6">
-        <div>
-          <h2 className="text-lg font-semibold">Sales Movement Setting</h2>
-          <p className="text-muted-foreground text-sm">
-            Configure accounts, stores, and pharmacy for Sales and Return Sales.
-            Account lists use Accounts Chart names; stores use Arabic store names.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Sales Movement</h2>
+            <p className="text-muted-foreground text-sm">
+              Maintain Sales and Return Sales configurations per pharmacy.
+              Account ComboBoxes display ACCName and save ACCCode. Stores save
+              Stor Id.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={handleNew}
+            disabled={!sessionReady || !token}
+          >
+            New
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Movement type</CardTitle>
+            <CardTitle>Sales movements ({items.length})</CardTitle>
             <CardDescription>
-              Switch between Sales and Return Sales to load that configuration.
-              {recordId != null ? ` Current record #${recordId}.` : " No saved row yet."}
+              {loadError
+                ? loadError
+                : "Search, create, edit, or delete sales movement configuration."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="max-w-sm space-y-2">
-            <Label>Type</Label>
-            <SearchableCombobox
-              value={String(parent)}
-              onValueChange={(value) => {
-                const next = Number(value) === 2 ? 2 : 1;
-                setParent(next);
-              }}
-              options={parentOptions}
-              placeholder="Select type..."
-              searchPlaceholder="Search type..."
-              disabled={busy || saving}
+          <CardContent>
+            <DataTable
+              columns={columns}
+              data={items}
+              loading={!sessionReady || loading}
+              filterPlaceholder="Filter sales movements..."
+              emptyMessage="No sales movements yet. Click New to create one."
+              onEdit={handleEdit}
+              onDelete={handleDelete}
             />
+            {loadError ? (
+              <div className="mt-3 space-y-3">
+                <p className="text-destructive text-sm">{loadError}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadItems()}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
-        <form onSubmit={handleSave} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pharmacy & stores</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label>Pharmacy</Label>
-                <SearchableCombobox
-                  value={form.pharmId != null ? String(form.pharmId) : ""}
-                  onValueChange={(value) => patch({ pharmId: toNullableInt(value) })}
-                  options={withClear(pharmMerged)}
-                  placeholder="Select pharmacy..."
-                  searchPlaceholder="Search pharmacy..."
-                  disabled={busy || saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Store 1</Label>
-                <SearchableCombobox
-                  value={form.store1 != null ? String(form.store1) : ""}
-                  onValueChange={(value) => patch({ store1: toNullableInt(value) })}
-                  options={withClear(store1Options)}
-                  placeholder="Select store..."
-                  searchPlaceholder="Search store..."
-                  disabled={busy || saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Store 2</Label>
-                <SearchableCombobox
-                  value={form.store2 != null ? String(form.store2) : ""}
-                  onValueChange={(value) => patch({ store2: toNullableInt(value) })}
-                  options={withClear(store2Options)}
-                  placeholder="Select store..."
-                  searchPlaceholder="Search store..."
-                  disabled={busy || saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="creditCardMachinNo">Credit card machine no.</Label>
-                <Input
-                  id="creditCardMachinNo"
-                  value={form.creditCardMachinNo ?? ""}
-                  onChange={(e) =>
-                    patch({ creditCardMachinNo: e.target.value.trim() || null })
-                  }
-                  maxLength={15}
-                  disabled={busy || saving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="movName">Movement name</Label>
-                <Input
-                  id="movName"
-                  value={form.movName ?? ""}
-                  onChange={(e) => patch({ movName: e.target.value.trim() || null })}
-                  maxLength={50}
-                  disabled={busy || saving}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Accounts</CardTitle>
-              <CardDescription>
-                Each list shows the account name from Accounts Chart (not the internal id).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              {SALES_MOVEMENT_ACCOUNT_FIELDS.map(({ key, label }) => {
-                const current = (form[key] as string | null) ?? "";
-                const options = mergeOption(accountOptions, current);
-                return (
-                  <div key={key} className="space-y-2">
-                    <Label>{label}</Label>
-                    <SearchableCombobox
-                      value={current}
-                      onValueChange={(value) =>
-                        patch({ [key]: value.trim() || null } as Partial<SalesmovmentUpsertRequest>)
-                      }
-                      options={withClear(options)}
-                      placeholder="Select account..."
-                      searchPlaceholder="Search account..."
-                      disabled={busy || saving}
-                    />
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Button type="submit" disabled={busy || saving}>
-            {saving ? "Saving..." : "Save configuration"}
-          </Button>
-        </form>
+        <SalesMovementFormSheet
+          open={sheetOpen}
+          onOpenChange={(open) => {
+            setSheetOpen(open);
+            if (!open) setEditing(null);
+          }}
+          item={editing}
+          saving={sheetSaving}
+          lookupsLoading={lookupsLoading}
+          pharmOptions={pharmOptions}
+          storOptions={storOptions}
+          accountOptions={accountOptions}
+          onSubmit={handleSheetSubmit}
+        />
       </div>
     </PageGuard>
   );

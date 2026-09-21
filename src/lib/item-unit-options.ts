@@ -2,7 +2,6 @@ import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
 import type { ComboboxOption } from "@/components/ui/searchable-combobox";
 import {
-  fetchAllItemCatalogItems,
   getItemCatalog,
   getItemCatalogByCodes,
   getItemCatalogPage,
@@ -320,24 +319,17 @@ export async function ensureCatalogItemsForItmCodes(
         indexCatalogItem(map, item, catalogItems);
       }
     } catch {
-      try {
-        const all = await fetchAllItemCatalogItems(token);
-        for (const item of all) {
-          indexCatalogItem(map, item, catalogItems);
-        }
-      } catch {
-        for (let index = 0; index < missing.length; index += 1) {
-          const code = missing[index];
-          if (!code) continue;
-          const resolved = await resolveCatalogItemByCode(
-            token,
-            code,
-            map,
-            catalogItems
-          );
-          if (resolved) indexCatalogItem(map, resolved, catalogItems);
-          onProgress?.(index + 1, total);
-        }
+      for (let index = 0; index < missing.length; index += 1) {
+        const code = missing[index];
+        if (!code) continue;
+        const resolved = await resolveCatalogItemByCode(
+          token,
+          code,
+          map,
+          catalogItems
+        );
+        if (resolved) indexCatalogItem(map, resolved, catalogItems);
+        onProgress?.(index + 1, total);
       }
     }
   }

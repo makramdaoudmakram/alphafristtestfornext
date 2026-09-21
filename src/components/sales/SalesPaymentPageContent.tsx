@@ -20,12 +20,18 @@ import {
   finalizeSalePayment,
   getSaleDeliveryContext,
   getSalePaymentContext,
+  getSalePaymentKinds,
+  getSalePaymentMethods,
   resolveSaleDeliveryEmployee,
   upsertSaleDelivery,
 } from "@/lib/api-client";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import type { SalesDeliveryContext, SalesServiceOption } from "@/types/sales-delivery";
-import type { SalesPaymentContext } from "@/types/sales-payment";
+import type {
+  SalesPaymentContext,
+  SalesPaymentKindOption,
+  SalesPaymentMethodOption,
+} from "@/types/sales-payment";
 
 function money(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -46,6 +52,10 @@ export function SalesPaymentPageContent() {
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [amounts, setAmounts] = useState<Record<number, string>>({});
+  const [salesKinds, setSalesKinds] = useState<SalesPaymentKindOption[]>([]);
+  const [salesKindId, setSalesKindId] = useState<number | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<SalesPaymentMethodOption[]>([]);
+  const [loadingMethods, setLoadingMethods] = useState(false);
   const [loading, setLoading] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
 
@@ -83,7 +93,13 @@ export function SalesPaymentPageContent() {
   const saleTotal = paymentContext ? money(paymentContext.finalPayableAmount) : 0;
   const totalsMatch =
     paymentContext != null && paymentTotal === saleTotal && selectedIds.length > 0;
-  const readyToPay = Boolean(paymentContext && !isFinalized && totalsMatch);
+  const readyToPay = Boolean(
+    paymentContext &&
+      !isFinalized &&
+      salesKindId != null &&
+      salesKindId > 0 &&
+      totalsMatch
+  );
 
   const applyDeliveryForm = (ctx: SalesDeliveryContext) => {
     const d = ctx.delivery;
@@ -108,22 +124,57 @@ export function SalesPaymentPageContent() {
 
     setLoading(true);
     try {
-      const [payment, delivery] = await Promise.all([
+      const [payment, delivery, kinds] = await Promise.all([
         getSalePaymentContext(token, sthId),
         getSaleDeliveryContext(token, sthId),
+        getSalePaymentKinds(token).catch(() => [] as SalesPaymentKindOption[]),
       ]);
       setPaymentContext(payment);
       setDeliveryContext(delivery);
       applyDeliveryForm(delivery);
+      setSalesKinds(kinds);
+      setSalesKindId(null);
+      setPaymentMethods([]);
       setSelectedIds([]);
       setAmounts({});
       toast.success(`Loaded sale ${payment.sthId}`);
     } catch (err) {
       setPaymentContext(null);
       setDeliveryContext(null);
+      setSalesKinds([]);
+      setSalesKindId(null);
+      setPaymentMethods([]);
       toast.error(err instanceof ApiError ? err.message : "Failed to load sale.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onSalesKindChange = async (raw: string) => {
+    const nextId = raw ? Number(raw) : null;
+    const kindId = nextId != null && Number.isInteger(nextId) && nextId > 0 ? nextId : null;
+    setSalesKindId(kindId);
+    setSelectedIds([]);
+    setAmounts({});
+    setPaymentMethods([]);
+
+    if (!token || !paymentContext || kindId == null) return;
+
+    setLoadingMethods(true);
+    try {
+      const [methods, refreshed] = await Promise.all([
+        getSalePaymentMethods(token, kindId),
+        getSalePaymentContext(token, paymentContext.sthId, kindId),
+      ]);
+      setPaymentMethods(methods);
+      setPaymentContext(refreshed);
+    } catch (err) {
+      setPaymentMethods([]);
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to load payment methods."
+      );
+    } finally {
+      setLoadingMethods(false);
     }
   };
 
@@ -207,7 +258,7 @@ export function SalesPaymentPageContent() {
   };
 
   const handleFinalize = async () => {
-    if (!token || !paymentContext || !readyToPay) return;
+    if (!token || !paymentContext || !readyToPay || salesKindId == null) return;
 
     const payments = selectedIds.map((paymentMethodId) => ({
       paymentMethodId,
@@ -223,10 +274,15 @@ export function SalesPaymentPageContent() {
     try {
       const result = await finalizeSalePayment(token, {
         sthId: paymentContext.sthId,
+        salesKindId,
         payments,
       });
       toast.success(result.paymentStatus);
-      const refreshed = await getSalePaymentContext(token, paymentContext.sthId);
+      const refreshed = await getSalePaymentContext(
+        token,
+        paymentContext.sthId,
+        salesKindId
+      );
       setPaymentContext(refreshed);
       setSelectedIds([]);
       setAmounts({});
@@ -447,14 +503,43 @@ export function SalesPaymentPageContent() {
                   </div>
                 ) : (
                   <>
+                    <div className="space-y-1">
+                      <Label htmlFor="salesKind">Sales Kind</Label>
+                      <select
+                        id="salesKind"
+                        className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                        value={salesKindId ?? ""}
+                        onChange={(e) => void onSalesKindChange(e.target.value)}
+                        disabled={isFinalized || salesKinds.length === 0}
+                      >
+                        <option value="">Select sales kind…</option>
+                        {salesKinds.map((k) => (
+                          <option key={k.salesKindId} value={k.salesKindId}>
+                            {k.salesKindName?.trim() || `Kind #${k.salesKindId}`}
+                          </option>
+                        ))}
+                      </select>
+                      {salesKinds.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          No SalesKinds are assigned to the current pharmacy.
+                        </p>
+                      ) : null}
+                    </div>
+
                     <div className="space-y-3">
                       <Label>Payment methods</Label>
-                      {paymentContext.availablePaymentMethods.length === 0 ? (
+                      {!salesKindId ? (
                         <p className="text-muted-foreground text-sm">
-                          No active payment methods are assigned to this pharmacy.
+                          Select a Sales Kind to load payment methods.
+                        </p>
+                      ) : loadingMethods ? (
+                        <p className="text-muted-foreground text-sm">Loading payment methods…</p>
+                      ) : paymentMethods.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          No active payment methods are assigned to this pharmacy and Sales Kind.
                         </p>
                       ) : (
-                        paymentContext.availablePaymentMethods.map((method) => {
+                        paymentMethods.map((method) => {
                           const checked = selectedIds.includes(method.paymentMethodId);
                           return (
                             <div
@@ -470,6 +555,7 @@ export function SalesPaymentPageContent() {
                                       event.target.checked
                                     )
                                   }
+                                  disabled={!salesKindId}
                                 />
                                 <span>
                                   {method.paymentName ?? `Method ${method.paymentMethodId}`}

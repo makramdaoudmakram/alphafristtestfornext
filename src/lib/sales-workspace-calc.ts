@@ -405,6 +405,9 @@ export function createEmptySalesLine(): SalesWorkspaceLine {
     unit3: null,
     unit1Unit2: null,
     unit1Unit3: null,
+    itmMaxDiscPer: null,
+    groupNameEn: "",
+    groupNameAr: "",
     unitId: 0,
     quantity: 1,
     baseUnitSellPrice: 0,
@@ -447,6 +450,7 @@ export function createEmptyTab(seq: number, egyptTimeDisplay: string): SalesWork
     deliveryEmployeeId: null,
     deliveryCode: "",
     deliveryEmployeeName: "",
+    salesKindId: null,
     payments: {},
   };
 }

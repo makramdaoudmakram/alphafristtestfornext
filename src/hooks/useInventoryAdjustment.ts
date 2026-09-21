@@ -20,6 +20,7 @@ import {
   applyIncreaseDecreasePatch,
   recomputeInventoryDetailFromAdjustment,
 } from "@/lib/inventory-adjustment-detail";
+import { ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import {
   createInventoryAdjustmentService,
   InventoryAdjustmentService,
@@ -87,11 +88,26 @@ export function useInventoryAdjustment(token: string | undefined) {
   }, [form]);
 
   const loadRecord = useCallback(
-    async (id: number) => {
+    async (
+      id: number,
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[]
+    ) => {
       if (!service) return;
       setLoading(true);
       try {
         const doc = await service.getById(id);
+
+        let catalogMap = itemByCode ?? new Map<string, ItemCatalogItem>();
+        if (token) {
+          catalogMap = await ensureCatalogItemsForItmCodes(
+            doc.details.map((row) => ({ itmId: row.itmCode })),
+            catalogMap,
+            catalogItems,
+            token
+          );
+        }
+
         form.reset(documentToFormValues(doc.header));
         setDetails(doc.details.map((row) => ({ ...row, detailGroupId: 0 })));
         setLatestDetailGroupId(0);
@@ -100,15 +116,17 @@ export function useInventoryAdjustment(token: string | undefined) {
           .map((row) => row.id)
           .filter((value): value is number => value != null && value > 0);
         setMode("view");
+        return catalogMap;
       } catch (error) {
         toast.error("Could not load inventory document.", {
           description: error instanceof Error ? error.message : undefined,
         });
+        return undefined;
       } finally {
         setLoading(false);
       }
     },
-    [form, service]
+    [form, service, token]
   );
 
   const applyMovement = useCallback(

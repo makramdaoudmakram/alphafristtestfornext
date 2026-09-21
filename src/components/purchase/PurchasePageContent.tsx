@@ -8,9 +8,7 @@ import { toast } from "sonner";
 import {
   ApiError,
   downloadPurTransDExcelTemplate,
-  fetchAllItemCatalogItems,
   getItemCatalog,
-  getItemCatalogPage,
   getMovmentById,
   getNextMovValue,
   getStors,
@@ -105,84 +103,6 @@ export function PurchasePageContent() {
       setCatalogItems([]);
       setItemByCode(new Map());
       setCatalogLoaded(false);
-      setCatalogLoading(false);
-      return;
-    }
-
-    setCatalogLoading(true);
-    setCatalogLoaded(false);
-
-    const applyCatalog = (items: ItemCatalogItem[]) => {
-      setCatalogItems(items);
-      setItemByCode((prev) => {
-        const map = new Map(prev);
-        for (const item of items) {
-          const code = item.itmCode?.trim();
-          if (!code) continue;
-          const key = code.toLowerCase();
-          const existing = map.get(key);
-          map.set(
-            key,
-            existing
-              ? mergeCatalogItemWithCache(item, map, items)
-              : item
-          );
-        }
-        return map;
-      });
-    };
-
-    try {
-      // 1) Fast first page so autocomplete works immediately
-      const firstPage = await getItemCatalogPage(token, {
-        page: 1,
-        pageSize: 100,
-        sortBy: "itmCode",
-        sortDesc: false,
-      });
-      applyCatalog(firstPage.items);
-      setCatalogLoaded(true);
-
-      // 2) Load remaining pages in the background (contains-search needs full list)
-      if (firstPage.totalCount > firstPage.items.length) {
-        try {
-          const all = await fetchAllItemCatalogItems(token);
-          if (all.length > 0) applyCatalog(all);
-        } catch {
-          // Keep first page — better than clearing autocomplete entirely
-        }
-      }
-
-      if (firstPage.items.length === 0 && firstPage.totalCount === 0) {
-        toast.message("Item catalog is empty", {
-          description:
-            "Add items under Item Catalog, or check that the API returns data.",
-        });
-      }
-    } catch (err) {
-      // Last resort: try the full fetch
-      try {
-        const all = await fetchAllItemCatalogItems(token);
-        applyCatalog(all);
-        setCatalogLoaded(true);
-        if (all.length === 0) {
-          toast.message("Item catalog is empty", {
-            description:
-              "Add items under Item Catalog, or check that the API returns data.",
-          });
-        }
-      } catch {
-        setCatalogItems([]);
-        setItemByCode(new Map());
-        setCatalogLoaded(true);
-        toast.error("Could not load item catalog for autocomplete.", {
-          description:
-            err instanceof Error
-              ? err.message
-              : "Check API connection and try Refresh.",
-        });
-      }
-    } finally {
       setCatalogLoading(false);
     }
   }, [token]);
@@ -764,6 +684,7 @@ export function PurchasePageContent() {
                     key={recordId ?? "new"}
                     form={form}
                     disabled={!isEditable}
+                    phtDateReadOnly
                   />
                   <HeaderTotalsFields
                     form={form}

@@ -25,6 +25,8 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/cost-centers": null,
   "/dashboard/stores": null,
   "/dashboard/vendors": null,
+  "/dashboard/sales-kind": null,
+  "/dashboard/sales-kind-assignment": "SalesKindAssignment.View",
   "/dashboard/sales-pay-method": "SalesPayMethod.View",
   "/dashboard/sales-service": "SalesService.View",
   "/dashboard/sales-service-assignment": "SalesServiceAssignment.View",
@@ -40,6 +42,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/brands": "Brand.View",
   "/dashboard/employ-info": null,
   "/dashboard/transactions/purchase": null,
+  "/dashboard/reporting/mongo-test": null,
   "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
@@ -50,7 +53,9 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-transactions": null,
   "/dashboard/movement-setting": null,
   "/dashboard/sales-movement-setting": null,
+  "/dashboard/settings/sales-push-list": null,
   "/dashboard/sales": "Sales.View",
+  "/dashboard/sales/pharm-expenses": "Sales.View",
   "/dashboard/shift": "Sales.View",
 };
 
@@ -141,6 +146,12 @@ export const PERMISSIONS = {
     edit: "SalesServiceAssignment.Edit",
     delete: "SalesServiceAssignment.Delete",
   },
+  salesKindAssignment: {
+    view: "SalesKindAssignment.View",
+    create: "SalesKindAssignment.Create",
+    edit: "SalesKindAssignment.Edit",
+    delete: "SalesKindAssignment.Delete",
+  },
   salesPaymentAssiment: {
     view: "SalesPaymentAssiment.View",
     create: "SalesPaymentAssiment.Create",
@@ -229,6 +240,16 @@ export const NAV_LINKS = [
     permission: null,
   },
   {
+    href: "/dashboard/sales-kind",
+    label: "Sales Kind",
+    permission: null,
+  },
+  {
+    href: "/dashboard/sales-kind-assignment",
+    label: "Sales Kind Assignment",
+    permission: PERMISSIONS.salesKindAssignment.view,
+  },
+  {
     href: "/dashboard/sales-pay-method",
     label: "Sales Payment Method",
     permission: PERMISSIONS.salesPayMethod.view,
@@ -305,7 +326,7 @@ export const NAV_LINKS = [
   },
   {
     href: "/dashboard/sales-movement-setting",
-    label: "Sales Movement Setting",
+    label: "Sales Movement",
     permission: PERMISSIONS.salesMovment.view,
   },
 ] as const;
