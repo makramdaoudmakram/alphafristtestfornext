@@ -22,6 +22,7 @@ import {
   mergeSavedDetailsWithPrior,
 } from "@/lib/purchase.mapper";
 import { enrichDetailFromCatalog } from "@/lib/item-catalog-search";
+import { validatePurchaseDetailExpDateForNewRow } from "@/lib/purchase-exp-date";
 import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import {
@@ -577,10 +578,31 @@ export function usePurchase(token: string | undefined) {
     [service]
   );
 
+  const [newRowFocusRequest, setNewRowFocusRequest] = useState<number | null>(
+    null
+  );
+
+  const clearNewRowFocusRequest = useCallback(() => {
+    setNewRowFocusRequest(null);
+  }, []);
+
   const addDetailRow = useCallback((defaultStoId = "") => {
-    setDetails((rows) => [...rows, createEmptyDetailRow(defaultStoId)]);
-    setSelectedRowIndex(details.length);
-  }, [details.length]);
+    setDetails((rows) => {
+      const lastRow = rows[rows.length - 1];
+      const expDateError = validatePurchaseDetailExpDateForNewRow(
+        lastRow?.expDate ?? ""
+      );
+      if (expDateError) {
+        toast.error(expDateError);
+        return rows;
+      }
+
+      const newIndex = rows.length;
+      setSelectedRowIndex(newIndex);
+      setNewRowFocusRequest(newIndex);
+      return [...rows, createEmptyDetailRow(defaultStoId)];
+    });
+  }, []);
 
   const removeDetailRow = useCallback((index: number) => {
     setDetails((rows) => {
@@ -665,6 +687,8 @@ export function usePurchase(token: string | undefined) {
     removeDetailRow,
     updateDetailRow,
     computedTotals,
+    newRowFocusRequest,
+    clearNewRowFocusRequest,
   };
 }
 

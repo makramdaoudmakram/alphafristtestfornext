@@ -38,6 +38,24 @@ export {
 
 export const emptyReturnHeader = emptyPurchaseHeader;
 
+/** Map API detail — preserve saved itmNet as line total on retrieval. */
+export function mapReturnDetailFromApi(raw: Record<string, unknown>): ReturnDetail {
+  const row = mapDetailFromApi(raw) as ReturnDetail;
+  if (row.id != null && row.id > 0 && Number.isFinite(row.itmNet)) {
+    row.lineTotal = row.itmNet;
+  }
+  return row;
+}
+
+/** Keep saved header totals from API on retrieve. */
+export function returnDocumentToFormValues(
+  header: ReturnHeader,
+  _details: ReturnDetail[]
+) {
+  void _details;
+  return headerToFormValues(header);
+}
+
 export function mapDocumentFromApi(raw: Record<string, unknown>): ReturnDocument {
   const headerSource =
     (raw.header as Record<string, unknown> | undefined) ??
@@ -59,7 +77,7 @@ export function mapDocumentFromApi(raw: Record<string, unknown>): ReturnDocument
 
   return {
     header: mapHeaderFromApi(headerSource) as ReturnHeader,
-    details: detailsRaw.map((line) => mapDetailFromApi(line) as ReturnDetail),
+    details: detailsRaw.map((line) => mapReturnDetailFromApi(line)),
   };
 }
 

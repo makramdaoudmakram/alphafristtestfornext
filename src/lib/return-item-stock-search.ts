@@ -9,6 +9,7 @@ import {
   expDateToMonthInput,
   monthInputToExpDate,
 } from "@/lib/return-exp-date";
+import { returnDetailDisplayAvailableQty } from "@/lib/return-detail-sales-stock";
 import type { ReturnItemStockSearchItem } from "@/types/stock";
 
 export type ItemStockSearchLanguage = "en" | "ar";
@@ -21,6 +22,37 @@ function formatDisplayNumber(value: number): string {
   const rounded = Math.round(value * 10000) / 10000;
   const text = rounded.toFixed(4).replace(/\.?0+$/, "");
   return text || "0";
+}
+
+/** Stock.AvailableQty in base units — same source as Sales stock.availableQty. */
+function resolveReturnSearchBaseAvailableQty(
+  searchResult: ReturnItemStockSearchItem
+): number {
+  if (
+    searchResult.baseAvailableQty != null &&
+    Number.isFinite(searchResult.baseAvailableQty) &&
+    searchResult.baseAvailableQty >= 0
+  ) {
+    return searchResult.baseAvailableQty;
+  }
+  return 0;
+}
+
+/** Unit fields from search row / catalog — same shape as Sales workspace lines. */
+function returnUnitFieldsFromSearch(
+  searchResult: ReturnItemStockSearchItem,
+  catalogItem: ItemCatalogItem
+): Pick<
+  ReturnDetailPatch,
+  "unit1" | "unit2" | "unit3" | "unit1Unit2" | "unit1Unit3"
+> {
+  return {
+    unit1: searchResult.itmUnit1 ?? catalogItem.itmUnit1 ?? null,
+    unit2: searchResult.itmUnit2 ?? catalogItem.itmUnit2 ?? null,
+    unit3: searchResult.itmUnit3 ?? catalogItem.itmUnit3 ?? null,
+    unit1Unit2: searchResult.itmUnit1Unit2 ?? catalogItem.itmUnit1Unit2 ?? null,
+    unit1Unit3: searchResult.itmUnit1Unit3 ?? catalogItem.itmUnit1Unit3 ?? null,
+  };
 }
 
 /** Display ExpDate as YYYY-MM-DD (API DateOnly / ISO date). */
@@ -39,7 +71,6 @@ function formatSearchResultExpDateForDetail(value: string | null): string {
   return month ? monthInputToExpDate(month) : "";
 }
 
-/** Resolve display name for stock search / detail rows. */
 export function resolveItemStockSearchDisplayName(
   item: Pick<
     ReturnItemStockSearchItem,
@@ -66,12 +97,13 @@ export function resolveItemStockSearchDisplayName(
   return item.itemName.trim();
 }
 
-/** Four display parts — itemName is catalog name only (no qty/price). */
 export function getReturnItemStockSearchDisplayParts(
   item: ReturnItemStockSearchItem,
   language?: ItemStockSearchLanguage,
-  options?: { preferAvailableQty?: boolean }
+  options?: { preferAvailableQty?: boolean; includeBatchDetails?: boolean }
 ): {
+  itemCode: string;
+  batchNo: string;
   itemName: string;
   expDate: string;
   totalQuantity: string;
@@ -85,6 +117,8 @@ export function getReturnItemStockSearchDisplayParts(
       : item.totalQuantity;
 
   return {
+    itemCode: item.itemCode?.trim() || "—",
+    batchNo: item.batchNo?.trim() || "—",
     itemName: resolveItemStockSearchDisplayName(item, language),
     expDate: formatReturnItemStockSearchExpDate(item.expDate),
     totalQuantity: formatDisplayNumber(qty),
@@ -92,14 +126,18 @@ export function getReturnItemStockSearchDisplayParts(
   };
 }
 
-/** Single-line display: Item Name / ExpDate / Qty / Sales Price. */
 export function formatReturnItemStockSearchLabel(
   item: ReturnItemStockSearchItem,
   language?: ItemStockSearchLanguage,
-  options?: { preferAvailableQty?: boolean }
+  options?: { preferAvailableQty?: boolean; includeBatchDetails?: boolean }
 ): string {
   const { itemName, expDate, totalQuantity, salesPrice } =
     getReturnItemStockSearchDisplayParts(item, language, options);
+  if (options?.includeBatchDetails) {
+    const batch = item.batchNo?.trim() || "—";
+    const code = item.itemCode?.trim() || "—";
+    return `${code} | ${itemName} | Batch ${batch} | Exp ${expDate} | Net ${totalQuantity} | ${salesPrice}`;
+  }
   return `${itemName} / ${expDate} / ${totalQuantity} / ${salesPrice}`;
 }
 
@@ -108,60 +146,77 @@ export function patchDetailFromStockSearchResult(
   catalogItem: ItemCatalogItem,
   searchResult: ReturnItemStockSearchItem,
   storeId: string
-): ReturnDetailPatch {
+): ReturnDetailPatch | { error: string } {
+  if (!searchResult.stockId || searchResult.stockId <= 0) {
+    return {
+      error: `No stock record for item "${searchResult.itemCode}" batch "${searchResult.batchNo?.trim() || "—"}".`,
+    };
+  }
+
+  if (!searchResult.batchNo?.trim()) {
+    return {
+      error: `Item "${searchResult.itemCode}" has no batch on the selected stock record.`,
+    };
+  }
+
+  const availableQty = resolveReturnSearchBaseAvailableQty(searchResult);
+  if (!(availableQty > 0)) {
+    return {
+      error: `Insufficient available stock for item "${searchResult.itemCode}" batch "${searchResult.batchNo.trim()}".`,
+    };
+  }
+
   const { itmPurPrice } = catalogDefaultPrices(catalogItem);
   const salesPrice = Number.isFinite(searchResult.salesPrice)
     ? searchResult.salesPrice
-    : 0;
-  const qty = Number.isFinite(searchResult.totalQuantity)
-    ? searchResult.totalQuantity
     : 0;
   const expDate =
     formatReturnItemStockSearchExpDate(searchResult.expDate) ||
     formatSearchResultExpDateForDetail(searchResult.expDate);
 
+  const unitFields = returnUnitFieldsFromSearch(searchResult, catalogItem);
+  const unitId = getItemDefaultUnitId(catalogItem);
+
+  const displayAvail = returnDetailDisplayAvailableQty({
+    clientRowId: "",
+    stockId: searchResult.stockId,
+    availableQty,
+    qnty: 1,
+    unitId,
+    batchNo: searchResult.batchNo.trim(),
+    itmId: catalogItem.itmCode ?? searchResult.itemCode,
+    ...unitFields,
+  });
+
   return {
     ...patchDetailFromCatalogItem(catalogItem),
+    ...unitFields,
     stoId: storeId.trim(),
-    qnty: qty,
+    qnty: 1,
     itmPurPrice,
     itmSell: salesPrice,
     baseItmPurPrice: itmPurPrice,
     baseItmSell: salesPrice,
-    stdItmStock: qty,
-    maxReturnQty: qty,
-    batchNo: searchResult.batchNo?.trim() ?? "",
+    itmDisMon: 0,
+    itmDisPer: 0,
+    itmExtraDis: 0,
+    availableQty,
+    stdItmStock: displayAvail ?? 0,
+    maxReturnQty: displayAvail ?? undefined,
+    stockId: searchResult.stockId,
+    batchNo: searchResult.batchNo.trim(),
     expDate,
-    unitId: getItemDefaultUnitId(catalogItem),
+    unitId,
     priceQtyNet: 1,
     skipDiscPercent: true,
     skipTax: true,
   };
 }
 
-/** Selected search-row qty cap. Null when the row was not filled from stock search. */
-export function getReturnDetailMaxQty(row: {
-  batchNo?: string | null;
-  maxReturnQty?: number;
-  stdItmStock?: number;
-}): number | null {
-  if (!row.batchNo?.trim()) return null;
-  if (typeof row.maxReturnQty === "number" && Number.isFinite(row.maxReturnQty) && row.maxReturnQty >= 0) {
-    return row.maxReturnQty;
-  }
-  if (typeof row.stdItmStock === "number" && Number.isFinite(row.stdItmStock) && row.stdItmStock >= 0) {
-    return row.stdItmStock;
-  }
-  return null;
-}
-
-export function formatReturnAvailableQty(value: number): string {
-  return formatDisplayNumber(value);
-}
-
-/** First empty detail row index, or -1 when all rows have an item code. */
 export function findEmptyDetailRowIndex(
   details: readonly { itmId?: string | null }[]
 ): number {
   return details.findIndex((row) => !row.itmId?.trim());
 }
+
+export { formatReturnAvailableQty } from "@/lib/return-detail-sales-stock";

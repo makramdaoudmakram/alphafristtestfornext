@@ -36,6 +36,7 @@ export function PurchaseTab({
             onValueChange={(value) => setField("itmPurchaseUnit", value)}
             options={lookups.unitOptions}
             placeholder="Select purchase unit"
+            orphanLabel={formValues.itmPurchaseUnit || null}
           />
         </FormFieldInlineWrap>
       </div>

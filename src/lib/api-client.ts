@@ -147,6 +147,7 @@ import type {
   BatchTraceabilityResult,
   BatchTraceabilityTimelineEntry,
 } from "@/types/batch-traceability";
+import type { ItemCardQuery, ItemCardResponse, ItemCardRow } from "@/types/item-card";
 import type {
   ExcelEntityMetadata,
   ExcelImportCommitResponse,
@@ -658,8 +659,18 @@ function normalizeItemCatalogChild(
     itmMaxLimit: readNullableNumber(item, "itmMaxLimit", "ItmMaxLimit"),
     itmMinLimit: readNullableNumber(item, "itmMinLimit", "ItmMinLimit"),
     itmDefaultLimit: readNullableNumber(item, "itmDefaultLimit", "ItmDefaultLimit"),
-    itmPurchaseUnit: readNullableNumber(item, "itmPurchaseUnit", "Itm_Purchase_Unit"),
-    itmSellUnit: readNullableNumber(item, "itmSellUnit", "Itm_Sell_Unit"),
+    itmPurchaseUnit: readNullableNumber(
+      item,
+      "itmPurchaseUnit",
+      "itm_Purchase_Unit",
+      "Itm_Purchase_Unit"
+    ),
+    itmSellUnit: readNullableNumber(
+      item,
+      "itmSellUnit",
+      "itm_Sell_Unit",
+      "Itm_Sell_Unit"
+    ),
     itmScientificN1: readString(item, "itmScientificN1", "ItmScientificN1") || null,
     itmScientificN2: readString(item, "itmScientificN2", "ItmScientificN2") || null,
     itmG1: readNullableNumber(item, "itmG1", "ItmG1"),
@@ -735,30 +746,60 @@ function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogIte
       "hasExpire",
       "HasExpire"
     ),
-    itmActive: readBoolean(item, "itmActive", "Itm_Active"),
-    itmStopSell: readBoolean(item, "itmStopSell", "Itm_Stop_Sell"),
-    itmSrvc: readBoolean(item, "itmSrvc", "Itm_Srvc"),
-    itmStopPur: readBoolean(item, "itmStopPur", "Itm_StopPur"),
-    itmPrintBarcode: readBoolean(item, "itmPrintBarcode", "Itm_PrintBarcode"),
-    itmAllowDiscount: readBoolean(item, "itmAllowDiscount", "Itm_Allow_Discount"),
+    itmActive: readBoolean(item, "itmActive", "itm_Active", "Itm_Active"),
+    itmStopSell: readBoolean(item, "itmStopSell", "itm_Stop_Sell", "Itm_Stop_Sell"),
+    itmSrvc: readBoolean(item, "itmSrvc", "itm_Srvc", "Itm_Srvc"),
+    itmStopPur: readBoolean(item, "itmStopPur", "itm_StopPur", "Itm_StopPur"),
+    itmPrintBarcode: readBoolean(
+      item,
+      "itmPrintBarcode",
+      "itm_PrintBarcode",
+      "Itm_PrintBarcode"
+    ),
+    itmAllowDiscount: readBoolean(
+      item,
+      "itmAllowDiscount",
+      "itm_Allow_Discount",
+      "Itm_Allow_Discount"
+    ),
     itmFreez: readBoolean(item, "itmFreez", "ItmFreez"),
     stopTransfer: readBoolean(item, "stopTransfer", "StopTransfer"),
     brandId: readNullableNumber(item, "brandId", "BrandId", "Brand_Id"),
     brandName: readString(item, "brandName", "BrandName") || null,
-    itmGroup: readNullableNumber(item, "itmGroup", "Itm_Group"),
+    itmGroup: readNullableNumber(item, "itmGroup", "itm_Group", "Itm_Group"),
     groupName: readString(item, "groupName", "GroupName") || null,
     itemForm: readNullableNumber(item, "itemForm", "item_Form"),
     itemFormName: readString(item, "itemFormatName", "ItemFormatName") || null,
-    itmOrigin: readNullableNumber(item, "itmOrigin", "Itm_Origin"),
+    itmOrigin: readNullableNumber(item, "itmOrigin", "itm_Origin", "Itm_Origin"),
     itemOriginName: readString(item, "itemOriginName", "ItemOriginName") || null,
-    itmNotes: readString(item, "itmNotes", "Itm_Notes") || null,
-    itmMaxDiscPer: readNullableNumber(item, "itmMaxDiscPer", "Itm_MaxDisc_Per"),
-    itmMaxDiscVal: readNullableNumber(item, "itmMaxDiscVal", "Itm_MaxDisc_Val"),
+    itmNotes: readString(item, "itmNotes", "itm_Notes", "Itm_Notes") || null,
+    itmMaxDiscPer: readNullableNumber(
+      item,
+      "itmMaxDiscPer",
+      "itm_MaxDisc_Per",
+      "Itm_MaxDisc_Per"
+    ),
+    itmMaxDiscVal: readNullableNumber(
+      item,
+      "itmMaxDiscVal",
+      "itm_MaxDisc_Val",
+      "Itm_MaxDisc_Val"
+    ),
     itmUnit1: readItemCatalogUnit(item, 1),
     itmUnit2: readItemCatalogUnit(item, 2),
     itmUnit3: readItemCatalogUnit(item, 3),
-    itmUnit1Unit2: readNullableNumber(item, "itmUnit1Unit2", "Itm_Unit1Unit2"),
-    itmUnit1Unit3: readNullableNumber(item, "itmUnit1Unit3", "Itm_Unit1_Unit3"),
+    itmUnit1Unit2: readNullableNumber(
+      item,
+      "itmUnit1Unit2",
+      "itm_Unit1Unit2",
+      "Itm_Unit1Unit2"
+    ),
+    itmUnit1Unit3: readNullableNumber(
+      item,
+      "itmUnit1Unit3",
+      "itm_Unit1_Unit3",
+      "Itm_Unit1_Unit3"
+    ),
     child: normalizeItemCatalogChild(
       child as Record<string, unknown> | null | undefined
     ),
@@ -2500,8 +2541,10 @@ export function deleteInternationalBarcode(id: number, token: string) {
 function normalizeBrandItem(item: Record<string, unknown>): BrandItem {
   return {
     id: readNumber(item, "id", "Id"),
-    brandNameAr: readString(item, "brandNameAr", "BrandName_ar") || null,
-    brandNameEn: readString(item, "brandNameEn", "BrandName_En") || null,
+    brandNameAr:
+      readString(item, "brandNameAr", "brandName_ar", "BrandName_ar") || null,
+    brandNameEn:
+      readString(item, "brandNameEn", "brandName_En", "BrandName_En") || null,
   };
 }
 
@@ -2694,6 +2737,12 @@ function normalizeReturnItemStockSearchItem(
     totalQuantity: readNumber(item, "totalQuantity", "TotalQuantity"),
     transferQty: readNumber(item, "transferQty", "TransferQty"),
     availableQty: readNumber(item, "availableQty", "AvailableQty"),
+    baseAvailableQty: readNumber(item, "baseAvailableQty", "BaseAvailableQty"),
+    itmUnit1: readNullableNumber(item, "itmUnit1", "ItmUnit1"),
+    itmUnit2: readNullableNumber(item, "itmUnit2", "ItmUnit2"),
+    itmUnit3: readNullableNumber(item, "itmUnit3", "ItmUnit3"),
+    itmUnit1Unit2: readNullableNumber(item, "itmUnit1Unit2", "ItmUnit1Unit2"),
+    itmUnit1Unit3: readNullableNumber(item, "itmUnit1Unit3", "ItmUnit1Unit3"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
     costPrice: readNumber(item, "costPrice", "CostPrice"),
     stockId: readNullableNumber(item, "stockId", "StockId"),
@@ -2839,6 +2888,76 @@ export function getBatchTraceability(token: string, batchNo: string) {
   const encoded = encodeURIComponent(batchNo.trim());
   return apiFetch<unknown>(`BatchTraceability/${encoded}`, {}, token).then(
     normalizeBatchTraceabilityResult
+  );
+}
+
+function normalizeItemCardRow(raw: Record<string, unknown>): ItemCardRow {
+  return {
+    date: readString(raw, "date", "Date") || null,
+    documentType: readString(raw, "documentType", "DocumentType"),
+    documentId: readNumber(raw, "documentId", "DocumentId"),
+    documentNo: readNullableNumber(raw, "documentNo", "DocumentNo"),
+    storeId: readString(raw, "storeId", "StoreId") || null,
+    storeName: readString(raw, "storeName", "StoreName") || null,
+    branchId: readString(raw, "branchId", "BranchId") || null,
+    branchName: readString(raw, "branchName", "BranchName") || null,
+    movementType: readString(raw, "movementType", "MovementType") || null,
+    movementDirection: readString(raw, "movementDirection", "MovementDirection"),
+    quantityIn: readNumber(raw, "quantityIn", "QuantityIn"),
+    quantityOut: readNumber(raw, "quantityOut", "QuantityOut"),
+    balance: readNumber(raw, "balance", "Balance"),
+    unitId: readNullableNumber(raw, "unitId", "UnitId"),
+    unitName: readString(raw, "unitName", "UnitName") || null,
+    unitValue: readNumber(raw, "unitValue", "UnitValue"),
+    reportingKey: readString(raw, "reportingKey", "ReportingKey"),
+    lineNo: readNumber(raw, "lineNo", "LineNo"),
+  };
+}
+
+function normalizeItemCardResponse(raw: unknown): ItemCardResponse {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const itemsRaw = obj.items ?? obj.Items;
+  return {
+    itemId: readNumber(obj, "itemId", "ItemId"),
+    fromDate: readString(obj, "fromDate", "FromDate"),
+    toDateExclusive: readString(obj, "toDateExclusive", "ToDateExclusive"),
+    items: Array.isArray(itemsRaw)
+      ? itemsRaw.map((row) =>
+          normalizeItemCardRow((row ?? {}) as Record<string, unknown>)
+        )
+      : [],
+    totalCount: readNumber(obj, "totalCount", "TotalCount"),
+    openingBalance: readNumber(obj, "openingBalance", "OpeningBalance"),
+    totalIn: readNumber(obj, "totalIn", "TotalIn"),
+    totalOut: readNumber(obj, "totalOut", "TotalOut"),
+    net: readNumber(obj, "net", "Net"),
+    closingBalance: readNumber(obj, "closingBalance", "ClosingBalance"),
+    displayUnitValue: readNullableNumber(
+      obj,
+      "displayUnitValue",
+      "DisplayUnitValue"
+    ),
+    displayUnitName: readString(obj, "displayUnitName", "DisplayUnitName") || null,
+    page: readNumber(obj, "page", "Page") || 1,
+    pageSize: readNumber(obj, "pageSize", "PageSize") || 50,
+  };
+}
+
+export function getItemCard(token: string, query: ItemCardQuery) {
+  const params = new URLSearchParams();
+  if (query.itemId != null && query.itemId > 0)
+    params.set("itemId", String(query.itemId));
+  if (query.fromDate) params.set("fromDate", query.fromDate);
+  if (query.toDate) params.set("toDate", query.toDate);
+  if (query.storeId?.trim()) params.set("storeId", query.storeId.trim());
+  if (query.branchId?.trim()) params.set("branchId", query.branchId.trim());
+  if (query.documentType?.trim())
+    params.set("documentType", query.documentType.trim());
+  params.set("page", String(query.page ?? 1));
+  params.set("pageSize", String(query.pageSize ?? 50));
+
+  return apiFetch<unknown>(`reports/item-card?${params.toString()}`, {}, token).then(
+    normalizeItemCardResponse
   );
 }
 
@@ -4389,7 +4508,7 @@ export function lookupItemCatalog(
 export async function lookupItemCatalogBySegment(
   token: string,
   search: string,
-  field: "code" | "nameAr" | "nameEn",
+  field?: "code" | "nameAr" | "nameEn" | null,
   options?: {
     take?: number;
     signal?: AbortSignal;
@@ -4408,7 +4527,7 @@ export async function lookupItemCatalogBySegment(
   const take = String(options?.take ?? 20);
   const params = new URLSearchParams();
   params.set("search", term);
-  params.set("field", field);
+  if (field) params.set("field", field);
   params.set("take", take);
   if (doubleSpaceWildcard) params.set("doubleSpaceWildcard", "true");
 
@@ -5371,6 +5490,53 @@ export async function createSale(
           PaymentMethodId: p.paymentMethodId,
           Amount: p.amount,
         })),
+      }),
+    },
+    token
+  );
+
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId"),
+    headerId: readNumber(data, "headerId", "HeaderId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    totalBill: readNumber(data, "totalBill", "TotalBill"),
+    totalBillAfterDisc: readNumber(data, "totalBillAfterDisc", "TotalBillAfterDisc"),
+    totalBillNet: readNumber(data, "totalBillNet", "TotalBillNet"),
+    serviceCost: readNumber(data, "serviceCost", "ServiceCost"),
+    payable: readNumber(data, "payable", "Payable"),
+    secInsertDateUtc: readString(data, "secInsertDateUtc", "SecInsertDateUtc"),
+    egyptLocalDisplay: readString(data, "egyptLocalDisplay", "EgyptLocalDisplay"),
+  } satisfies import("@/types/sales-workspace").CreateSaleResponse;
+}
+
+export async function createSalesReturn(
+  token: string,
+  request: import("@/types/sales-workspace").CreateSalesReturnRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesReturn",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        EmpId: request.empId,
+        CustId: request.custId,
+        CustomerName: request.customerName,
+        CustomerTel: request.customerTel,
+        CustomerAddress: request.customerAddress,
+        GlobalDiscountMode: request.globalDiscountMode,
+        GlobalDiscountPercent: request.globalDiscountPercent,
+        GlobalDiscountValue: request.globalDiscountValue,
+        Lines: request.lines.map((l) => ({
+          ItemCatalogId: l.itemCatalogId,
+          StockId: l.stockId,
+          Quantity: l.quantity,
+          UnitId: l.unitId,
+          UnitSellPrice: l.unitSellPrice,
+          DiscountMode: l.discountMode,
+          DiscountPercent: l.discountPercent,
+          DiscountValue: l.discountValue,
+        })),
+        Payments: null,
       }),
     },
     token

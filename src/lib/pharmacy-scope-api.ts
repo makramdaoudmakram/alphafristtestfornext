@@ -46,6 +46,8 @@ export function getActivePharmacy(token: string) {
       ({
         parmId: (data.parmId ?? data.ParmId ?? null) as string | null,
         name: (data.name ?? data.Name ?? null) as string | null,
+        storageId: (data.storageId ?? data.StorageId ?? null) as string | null,
+        storageName: (data.storageName ?? data.StorageName ?? null) as string | null,
       }) satisfies ActivePharmacyResponse
   );
 }
@@ -63,6 +65,8 @@ export function setActivePharmacy(parmId: string, token: string) {
       ({
         parmId: (data.parmId ?? data.ParmId ?? null) as string | null,
         name: (data.name ?? data.Name ?? null) as string | null,
+        storageId: (data.storageId ?? data.StorageId ?? null) as string | null,
+        storageName: (data.storageName ?? data.StorageName ?? null) as string | null,
       }) satisfies ActivePharmacyResponse
   );
 }

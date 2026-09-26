@@ -63,7 +63,6 @@ export function ReturnPageContent() {
   const sessionReady = status !== "loading";
   const sessionAuthenticated = status === "authenticated" && !!token;
 
-  const returnState = useReturn(token);
   const searchParams = useSearchParams();
   const loadedFromUrlRef = useRef<number | null>(null);
   const [catalogItems, setCatalogItems] = useState<ItemCatalogItem[]>([]);
@@ -76,6 +75,8 @@ export function ReturnPageContent() {
   const [itemByCode, setItemByCode] = useState<Map<string, ItemCatalogItem>>(
     () => new Map()
   );
+
+  const returnState = useReturn(token);
   const [selectedMovement, setSelectedMovement] =
     useState<MovmentLookupItem | null>(null);
   const [pthIdLoading, setPthIdLoading] = useState(false);
@@ -254,13 +255,27 @@ export function ReturnPageContent() {
         return;
       }
 
+      if (getItemUnitIds(catalogItem).length === 0 && catalogItem.id > 0) {
+        try {
+          catalogItem = await getItemCatalog(catalogItem.id, token);
+        } catch {
+          toast.error("Could not load item unit conversion data.");
+          return;
+        }
+      }
+
       handleCatalogItemApplied(catalogItem);
 
-      const patch = patchDetailFromStockSearchResult(
+      const patchOrError = patchDetailFromStockSearchResult(
         catalogItem,
         searchResult,
         storeId
       );
+      if ("error" in patchOrError) {
+        toast.error(patchOrError.error);
+        return;
+      }
+      const patch = patchOrError;
 
       const emptyIndex = findEmptyDetailRowIndex(details);
       const targetIndex = emptyIndex >= 0 ? emptyIndex : details.length;
@@ -282,10 +297,7 @@ export function ReturnPageContent() {
       const unitId = getItemDefaultUnitId(catalogItem);
       if (!itemCode || unitId == null || unitId <= 0) return;
 
-      const conversionQty =
-        Number.isFinite(searchResult.totalQuantity) && searchResult.totalQuantity > 0
-          ? searchResult.totalQuantity
-          : 1;
+      const conversionQty = 1;
 
       try {
         const info = await getUnitConversionInfo(token, itemCode, unitId, conversionQty);
@@ -301,6 +313,8 @@ export function ReturnPageContent() {
           baseItmPurPrice: patch.baseItmPurPrice,
           baseItmSell: patch.baseItmSell,
           priceQtyNet: info.priceQtyNet,
+          skipDiscPercent: true,
+          skipTax: true,
         });
       } catch {
         // Row already has stock sales price; conversion is best-effort.
@@ -670,6 +684,8 @@ export function ReturnPageContent() {
                     token={token}
                     storeId={getDefaultMovementStoreId(selectedMovement)}
                     disabled={!sessionAuthenticated || loading || !isEditable}
+                    preferAvailableQty
+                    showBatchDetails
                     onItemSelected={(item) =>
                       void handleStockSearchItemSelected(item)
                     }
@@ -709,6 +725,7 @@ export function ReturnPageContent() {
               catalogLoading={catalogLoading}
               catalogLoaded={catalogLoaded}
               disabled={!isEditable || loading}
+              batchFromSearchRequired
               selectedRowIndex={selectedRowIndex}
               onSelectRow={setSelectedRowIndex}
               onChangeRow={updateDetailRow}

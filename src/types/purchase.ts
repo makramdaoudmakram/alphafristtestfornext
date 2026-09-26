@@ -88,6 +88,19 @@ export type PurchaseDetail = {
    * Max return qty from the selected search row. UI-only; not sent on purchase save.
    */
   maxReturnQty?: number;
+  /**
+   * Stock.AvailableQty in base units (same field semantics as Sales workspace lines).
+   * UI-only; set when a return batch is selected from stock search.
+   */
+  availableQty?: number;
+  /** Unit conversion snapshot from batch selection (same fields as Sales workspace). */
+  unit1?: number | null;
+  unit2?: number | null;
+  unit3?: number | null;
+  unit1Unit2?: number | null;
+  unit1Unit3?: number | null;
+  /** Representative Stock.Id from batch search. UI-only; not sent on purchase save. */
+  stockId?: number | null;
   /** Computed: quantity × price − discounts + tax */
   lineTotal: number;
 };

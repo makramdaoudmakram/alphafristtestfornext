@@ -12,6 +12,7 @@ export const RETURN_DETAIL_GRID_COLUMNS: readonly GridColumnDefinition[] = [
   { key: "line", title: "#", required: true, defaultWidth: 44 },
   { key: "itmNameAr", title: "Item Name Arabic", required: true, defaultWidth: 148 },
   { key: "itmNameEn", title: "Item Name English", defaultWidth: 148 },
+  { key: "batchNo", title: "Batch No", defaultWidth: 120 },
   { key: "qnty", title: "Quantity", defaultWidth: 88 },
   { key: "bonus", title: "Bonus", defaultWidth: 88 },
   { key: "unitId", title: "Unit", defaultWidth: 120 },
@@ -36,6 +37,7 @@ export const RETURN_DETAIL_GRID_COLUMNS: readonly GridColumnDefinition[] = [
 export const RETURN_DETAIL_EDITABLE_COLUMNS = [
   "itmNameAr",
   "itmNameEn",
+  "batchNo",
   "qnty",
   "bonus",
   "unitId",

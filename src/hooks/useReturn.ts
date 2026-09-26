@@ -8,25 +8,25 @@ import type { Resolver } from "react-hook-form";
 import {
   applyReturnDetailPatch,
   computeHeaderTotals,
-  mapDetailsWithLineTotals,
+  mapReturnDetailsWithLineTotals,
 } from "@/lib/return-calculations";
 import {
   applyMovementStoToDetails,
   applyMovementToHeader,
   createEmptyDetailRow,
   computeDeletedDetailIds,
-  documentToFormValues,
   emptyReturnHeader,
   filterDetailsWithItemCode,
   headerToFormValues,
   mergeSavedDetailsWithPrior,
+  returnDocumentToFormValues,
 } from "@/lib/return.mapper";
 import { enrichDetailFromCatalog } from "@/lib/item-catalog-search";
 import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
 import {
-  formatReturnAvailableQty,
-  getReturnDetailMaxQty,
-} from "@/lib/return-item-stock-search";
+  checkReturnDetailStockAllocation,
+  clearReturnDetailStockFields,
+} from "@/lib/return-detail-sales-stock";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import {
   createReturnService,
@@ -104,7 +104,7 @@ export function useReturn(token: string | undefined) {
   const pOtherExpenses = useWatch({ control: form.control, name: "pOtherExpenses" });
 
   const detailsWithTotals = useMemo(
-    () => mapDetailsWithLineTotals(details),
+    () => mapReturnDetailsWithLineTotals(details),
     [details]
   );
 
@@ -124,11 +124,12 @@ export function useReturn(token: string | undefined) {
   useEffect(() => {
     form.setValue("noOfItems", computedTotals.noOfItems, { shouldDirty: false });
     form.setValue("totalQuantity", computedTotals.totalQuantity, { shouldDirty: false });
+    if (mode === "view") return;
     form.setValue("totalBill", computedTotals.totalBill, { shouldDirty: false });
     form.setValue("totalDesMon", computedTotals.totalDesMon, { shouldDirty: false });
     form.setValue("totalTax", computedTotals.totalTax, { shouldDirty: false });
     form.setValue("pthNetBill", computedTotals.pthNetBill, { shouldDirty: false });
-  }, [computedTotals, form]);
+  }, [computedTotals, form, mode]);
 
   const service = useMemo(
     () => (token ? createReturnService(token) : null),
@@ -173,7 +174,7 @@ export function useReturn(token: string | undefined) {
 
   const applyDocument = useCallback(
     (header: ReturnHeader, nextDetails: ReturnDetail[]) => {
-      form.reset(documentToFormValues(header, nextDetails));
+      form.reset(returnDocumentToFormValues(header, nextDetails));
       setDetails(nextDetails.length ? nextDetails : [createEmptyDetailRow()]);
       setSelectedRowIndex(0);
       loadedRecordIdRef.current =
@@ -316,7 +317,7 @@ export function useReturn(token: string | undefined) {
       }
 
       if (removedCount > 0 && !allowEmptyDetails) {
-        setDetails(mapDetailsWithLineTotals(detailsForSave));
+        setDetails(mapReturnDetailsWithLineTotals(detailsForSave));
         setSelectedRowIndex((i) => Math.min(i, Math.max(0, detailsForSave.length - 1)));
       }
 
@@ -558,33 +559,30 @@ export function useReturn(token: string | undefined) {
         rows.map((row, i) => {
           if (i !== index) return row;
 
-          const nextPatch =
+          let nextPatch: ReturnDetailPatch =
             patch.itmId != null && patch.batchNo === undefined
-              ? { ...patch, batchNo: "", maxReturnQty: undefined }
+              ? {
+                  ...patch,
+                  batchNo: "",
+                  ...clearReturnDetailStockFields(),
+                }
               : patch;
 
+          if (nextPatch.batchNo !== undefined && !nextPatch.batchNo.trim()) {
+            nextPatch = {
+              ...nextPatch,
+              ...clearReturnDetailStockFields(),
+            };
+          }
+
           if (nextPatch.qnty != null) {
-            const max = getReturnDetailMaxQty({
-              batchNo:
-                nextPatch.batchNo !== undefined ? nextPatch.batchNo : row.batchNo,
-              maxReturnQty:
-                nextPatch.maxReturnQty !== undefined
-                  ? nextPatch.maxReturnQty
-                  : row.maxReturnQty,
-              stdItmStock:
-                nextPatch.stdItmStock !== undefined
-                  ? nextPatch.stdItmStock
-                  : row.stdItmStock,
-            });
-            const nextQty = Number(nextPatch.qnty);
-            if (
-              max != null &&
-              Number.isFinite(nextQty) &&
-              nextQty > max
-            ) {
-              toast.error(
-                `Quantity cannot be greater than available quantity (${formatReturnAvailableQty(max)}).`
-              );
+            const merged = applyReturnDetailPatch(row, nextPatch);
+            const nextRows = rows.map((line, lineIndex) =>
+              lineIndex === index ? merged : line
+            );
+            const check = checkReturnDetailStockAllocation(merged, nextRows, "");
+            if (!check.ok) {
+              toast.error(check.message);
               return row;
             }
           }

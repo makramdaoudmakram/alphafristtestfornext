@@ -240,6 +240,8 @@ export function PurchasePageContent() {
     removeDetailRow,
     updateDetailRow,
     computedTotals,
+    newRowFocusRequest,
+    clearNewRowFocusRequest,
   } = purchase;
 
   const hasRecord = !!form.watch("id");
@@ -719,6 +721,8 @@ export function PurchasePageContent() {
                 addDetailRow(getDefaultMovementStoreId(selectedMovement))
               }
               onRemoveRow={removeDetailRow}
+              newRowFocusRequest={newRowFocusRequest}
+              onNewRowFocusHandled={clearNewRowFocusRequest}
             />
           </CardContent>
         </Card>

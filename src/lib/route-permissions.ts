@@ -42,7 +42,6 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/brands": "Brand.View",
   "/dashboard/employ-info": null,
   "/dashboard/transactions/purchase": null,
-  "/dashboard/reporting/mongo-test": null,
   "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
@@ -55,7 +54,9 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/sales-movement-setting": null,
   "/dashboard/settings/sales-push-list": null,
   "/dashboard/sales": "Sales.View",
+  "/dashboard/sales-return": "Sales.View",
   "/dashboard/sales/pharm-expenses": "Sales.View",
+  "/dashboard/sales/item-card": "Sales.View",
   "/dashboard/shift": "Sales.View",
 };
 
@@ -301,7 +302,7 @@ export const NAV_LINKS = [
   },
   {
     href: "/dashboard/item-catalog",
-    label: "Item Catalog",
+    label: "Master Data",
     permission: PERMISSIONS.itemCatalog.view,
   },
   {

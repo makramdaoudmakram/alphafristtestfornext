@@ -27,6 +27,13 @@ import {
   findCatalogItemByCode,
   getItemDefaultUnitId,
 } from "@/lib/item-unit-options";
+import { formatReturnAvailableQty } from "@/lib/return-item-stock-search";
+import {
+  checkReturnDetailStockAllocation,
+  returnDetailDisplayAvailableQty,
+  returnDetailRemainingInSelectedUnit,
+} from "@/lib/return-detail-sales-stock";
+import { formatUnitOptionLabel } from "@/lib/item-unit-options";
 import { formatStorDisplayName } from "@/lib/return-stores";
 import {
   applyPriceQtyNetToBasePrices,
@@ -34,12 +41,20 @@ import {
   resolveRowBasePrices,
 } from "@/lib/return-unit-conversion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { ReturnDetail, ReturnDetailPatch } from "@/types/return";
 import type { StorItem } from "@/types/stor";
 import type { UnitItem } from "@/types/unit";
 
 const gridInputClass = cn("h-8 w-full min-w-0 tabular-nums", formControlFocusClass);
+
+function unitShortName(unitId: number | null, units: UnitItem[]): string {
+  if (unitId == null || unitId <= 0) return "";
+  const unit = units.find((u) => u.uCode === unitId);
+  const name = unit?.uNameEn?.trim() || unit?.uNameAr?.trim();
+  return name || formatUnitOptionLabel(unitId, unit);
+}
 
 function stockConversionQuantity(row: ReturnDetail): number {
   return (Number(row.qnty) || 0) + (Number(row.bonus) || 0);
@@ -91,6 +106,8 @@ type DetailsGridProps = {
   catalogLoading?: boolean;
   catalogLoaded?: boolean;
   disabled: boolean;
+  /** Purchase Return: lines must be added via batch stock search, not catalog autocomplete. */
+  batchFromSearchRequired?: boolean;
   selectedRowIndex: number;
   onSelectRow: (index: number) => void;
   onChangeRow: (index: number, patch: ReturnDetailPatch) => void;
@@ -111,6 +128,7 @@ export function DetailsGrid({
   catalogLoading = false,
   catalogLoaded = false,
   disabled,
+  batchFromSearchRequired = false,
   selectedRowIndex,
   onSelectRow,
   onChangeRow,
@@ -120,6 +138,7 @@ export function DetailsGrid({
 }: DetailsGridProps) {
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
+    focusCell: (rowIndex: number, columnKey: string) => void;
   } | null>(null);
   const conversionSeqRef = useRef(new Map<string, number>());
 
@@ -191,12 +210,12 @@ export function DetailsGrid({
           baseItmPurPrice: base.baseItmPurPrice,
           baseItmSell: base.baseItmSell,
           priceQtyNet: nextPrices.priceQtyNet,
-          skipDiscPercent: options?.skipDiscPercent === true ? true : undefined,
+          skipDiscPercent: true,
           skipTax: options?.skipTax === true ? true : undefined,
         })
       );
     })();
-  }, [onChangeRow, token]);
+  }, [catalogItems, itemByCode, onChangeRow, token]);
 
   const columns = useMemo<ColumnDef<ReturnDetail>[]>(() => {
     const numberCell = (
@@ -238,6 +257,8 @@ export function DetailsGrid({
               field === "itmPurPrice" ||
               field === "itmExtraDis" ||
               field === "itmSell" ||
+              field === "itmDisPer" ||
+              field === "itmDisMon" ||
               field === "itmNet"
                 ? withSameRowQtyBonus(row.original, patch)
                 : patch
@@ -291,66 +312,165 @@ export function DetailsGrid({
       {
         id: "itmNameAr",
         header: "Itm_Name_Ar",
-        cell: ({ row }) => (
-          <ItemCatalogAutocompleteCell
-            field="nameAr"
-            rowIndex={row.index}
-            dataCol="itmNameAr"
-            value={row.original.itmNameAr}
-            token={token}
-            catalogItems={catalogItems}
-            disabled={disabled}
-            inputClassName="w-full min-w-0"
-            onFocusRow={() => onSelectRow(row.index)}
-            onChangeRow={(patch) => onChangeRow(row.index, patch)}
-            onItemApplied={(item) => {
-              onCatalogItemApplied?.(item);
-              const itemCode = item.itmCode?.trim() ?? "";
-              const unitId = getItemDefaultUnitId(item);
-              const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
-              applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
-                baseItmPurPrice: itmPurPrice,
-                baseItmSell: itmSell,
-              }, { skipDiscPercent: true, skipTax: true });
-            }}
-            onAfterApply={() =>
-              keyboardRef.current?.focusColumnAfter(row.index, "itmNameAr")
-            }
-          />
-        ),
+        cell: ({ row }) => {
+          const resolved = Boolean(row.original.itmId?.trim());
+          if (batchFromSearchRequired) {
+            return resolved ? (
+              <span className="block px-1 py-1.5 text-sm font-medium">
+                {row.original.itmNameAr || "—"}
+              </span>
+            ) : (
+              <span className="text-muted-foreground px-1 py-1.5 text-xs">
+                Use item search above
+              </span>
+            );
+          }
+          return (
+            <ItemCatalogAutocompleteCell
+              field="nameAr"
+              rowIndex={row.index}
+              dataCol="itmNameAr"
+              value={row.original.itmNameAr}
+              token={token}
+              catalogItems={catalogItems}
+              disabled={disabled}
+              inputClassName="w-full min-w-0"
+              onFocusRow={() => onSelectRow(row.index)}
+              onChangeRow={(patch) => onChangeRow(row.index, patch)}
+              onItemApplied={(item) => {
+                onCatalogItemApplied?.(item);
+                const itemCode = item.itmCode?.trim() ?? "";
+                const unitId = getItemDefaultUnitId(item);
+                const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
+                applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
+                  baseItmPurPrice: itmPurPrice,
+                  baseItmSell: itmSell,
+                }, { skipDiscPercent: true, skipTax: true });
+              }}
+              onAfterApply={() =>
+                keyboardRef.current?.focusColumnAfter(row.index, "itmNameAr")
+              }
+            />
+          );
+        },
       },
       {
         id: "itmNameEn",
         header: "Itm_Name_En",
+        cell: ({ row }) => {
+          const resolved = Boolean(row.original.itmId?.trim());
+          if (batchFromSearchRequired) {
+            return resolved ? (
+              <span className="block px-1 py-1.5 text-sm font-medium">
+                {row.original.itmNameEn || "—"}
+              </span>
+            ) : (
+              <span className="text-muted-foreground px-1 py-1.5 text-xs">
+                Use item search above
+              </span>
+            );
+          }
+          return (
+            <ItemCatalogAutocompleteCell
+              field="nameEn"
+              rowIndex={row.index}
+              dataCol="itmNameEn"
+              value={row.original.itmNameEn}
+              token={token}
+              catalogItems={catalogItems}
+              disabled={disabled}
+              inputClassName="w-full min-w-0"
+              onFocusRow={() => onSelectRow(row.index)}
+              onChangeRow={(patch) => onChangeRow(row.index, patch)}
+              onItemApplied={(item) => {
+                onCatalogItemApplied?.(item);
+                const itemCode = item.itmCode?.trim() ?? "";
+                const unitId = getItemDefaultUnitId(item);
+                const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
+                applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
+                  baseItmPurPrice: itmPurPrice,
+                  baseItmSell: itmSell,
+                }, { skipDiscPercent: true, skipTax: true });
+              }}
+              onAfterApply={() =>
+                keyboardRef.current?.focusColumnAfter(row.index, "itmNameEn")
+              }
+            />
+          );
+        },
+      },
+      {
+        id: "batchNo",
+        accessorKey: "batchNo",
+        header: "Batch No",
         cell: ({ row }) => (
-          <ItemCatalogAutocompleteCell
-            field="nameEn"
-            rowIndex={row.index}
-            dataCol="itmNameEn"
-            value={row.original.itmNameEn}
-            token={token}
-            catalogItems={catalogItems}
-            disabled={disabled}
-            inputClassName="w-full min-w-0"
-            onFocusRow={() => onSelectRow(row.index)}
-            onChangeRow={(patch) => onChangeRow(row.index, patch)}
-            onItemApplied={(item) => {
-              onCatalogItemApplied?.(item);
-              const itemCode = item.itmCode?.trim() ?? "";
-              const unitId = getItemDefaultUnitId(item);
-              const { itmPurPrice, itmSell } = catalogDefaultPrices(item);
-              applyUnitConversionToRow(row.index, row.original, itemCode, unitId, {
-                baseItmPurPrice: itmPurPrice,
-                baseItmSell: itmSell,
-              }, { skipDiscPercent: true, skipTax: true });
-            }}
-            onAfterApply={() =>
-              keyboardRef.current?.focusColumnAfter(row.index, "itmNameEn")
-            }
-          />
+          <span className="block truncate px-1 py-1.5 text-sm tabular-nums">
+            {row.original.batchNo?.trim() || "—"}
+          </span>
         ),
       },
-      numberCell("qnty", "qnty", "Qty", "1"),
+      {
+        id: "qnty",
+        accessorKey: "qnty",
+        header: "Qty",
+        cell: ({ row }) => {
+          const hasBatch = Boolean(row.original.batchNo?.trim());
+          const displayAvail = returnDetailDisplayAvailableQty(row.original);
+          const remaining = hasBatch
+            ? returnDetailRemainingInSelectedUnit(row.original, rows)
+            : null;
+          const unitLabel = unitShortName(row.original.unitId, units);
+
+          return (
+            <div>
+              {displayAvail != null ? (
+                <div className="text-muted-foreground mb-0.5 text-[10px] tabular-nums">
+                  Avail {formatReturnAvailableQty(displayAvail)}
+                  {unitLabel ? ` ${unitLabel}` : ""}
+                </div>
+              ) : null}
+              <Input
+                data-row={row.index}
+                data-col="qnty"
+                type="number"
+                step="1"
+                min={1}
+                max={
+                  hasBatch && remaining != null && remaining > 0
+                    ? Math.trunc(remaining)
+                    : undefined
+                }
+                disabled={disabled}
+                value={row.original.qnty}
+                onFocus={() => onSelectRow(row.index)}
+                onChange={(e) => {
+                  const nextQty = Math.max(
+                    1,
+                    Math.trunc(Number(e.target.value) || 1)
+                  );
+                  const candidate = { ...row.original, qnty: nextQty };
+                  const check = checkReturnDetailStockAllocation(
+                    candidate,
+                    rows.map((line, i) =>
+                      i === row.index ? candidate : line
+                    ),
+                    unitLabel
+                  );
+                  if (!check.ok) {
+                    toast.error(check.message);
+                    return;
+                  }
+                  onChangeRow(
+                    row.index,
+                    withSameRowQtyBonus(row.original, { qnty: nextQty })
+                  );
+                }}
+                className={gridInputClass}
+              />
+            </div>
+          );
+        },
+      },
       numberCell("bonus", "bonus", "Bonus"),
       {
         id: "unitId",
@@ -381,13 +501,36 @@ export function DetailsGrid({
                 const parsed = Number(value);
                 const unitId =
                   Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-                onChangeRow(row.index, { unitId });
+                const candidate = { ...row.original, unitId };
+                const displayAvail = returnDetailDisplayAvailableQty(candidate);
+                const stdItmStock =
+                  displayAvail != null && Number.isFinite(displayAvail)
+                    ? displayAvail
+                    : 0;
+                onChangeRow(row.index, {
+                  unitId,
+                  stdItmStock,
+                  maxReturnQty: displayAvail ?? undefined,
+                });
                 applyUnitConversionToRow(
                   row.index,
                   row.original,
                   row.original.itmId?.trim() ?? "",
-                  unitId
+                  unitId,
+                  undefined,
+                  { skipTax: true }
                 );
+                const unitLabel = unitShortName(unitId, units);
+                const check = checkReturnDetailStockAllocation(
+                  candidate,
+                  rows.map((line, i) =>
+                    i === row.index ? candidate : line
+                  ),
+                  unitLabel
+                );
+                if (!check.ok) {
+                  toast.error(check.message);
+                }
               }}
               options={rowUnitOptions}
               disabled={disabled || unitsLoading}
@@ -490,8 +633,10 @@ export function DetailsGrid({
     ];
   }, [
     disabled,
+    batchFromSearchRequired,
     catalogItems,
     itemByCode,
+    rows,
     token,
     units,
     unitsLoading,

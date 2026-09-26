@@ -67,6 +67,7 @@ export type MasterDetailGridProps<TData extends RowData> = {
   /** Expose keyboard helpers to column cell renderers via render prop context. */
   keyboardRef?: React.MutableRefObject<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
+    focusCell: (rowIndex: number, columnKey: string) => void;
   } | null>;
 };
 
@@ -125,7 +126,8 @@ export function MasterDetailGrid<TData extends RowData>({
     [editableColumns, isColumnVisible]
   );
 
-  const { handleKeyDown, focusColumnAfter } = useMasterDetailGridKeyboard({
+  const { handleKeyDown, focusColumnAfter, focusCell } =
+    useMasterDetailGridKeyboard({
     containerRef,
     editableColumns: visibleEditableColumns,
     rowCount: data.length,
@@ -142,8 +144,8 @@ export function MasterDetailGrid<TData extends RowData>({
 
   useEffect(() => {
     if (!keyboardRef) return;
-    keyboardRef.current = { focusColumnAfter };
-  }, [focusColumnAfter, keyboardRef]);
+    keyboardRef.current = { focusColumnAfter, focusCell };
+  }, [focusCell, focusColumnAfter, keyboardRef]);
 
   const table = useReactTable({
     data,

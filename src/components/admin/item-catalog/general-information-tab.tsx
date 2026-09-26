@@ -22,7 +22,7 @@ type GeneralInformationTabProps = {
 };
 
 const unitConversionInputClass =
-  "h-9 w-14 shrink-0 px-2 text-center sm:w-16";
+  "item-catalog-unit-factor h-9 w-36 min-w-36 max-w-36 shrink-0 px-2 text-start";
 
 function UnitRow({
   unitId,
@@ -34,6 +34,7 @@ function UnitRow({
   conversionValue,
   onConversionChange,
   showConversion,
+  wide = false,
 }: {
   unitId: string;
   unitLabel: string;
@@ -44,16 +45,20 @@ function UnitRow({
   conversionValue?: string;
   onConversionChange?: (value: string) => void;
   showConversion: boolean;
+  wide?: boolean;
 }) {
   return (
     <FormFieldInlineWrap id={unitId} label={unitLabel}>
-      <div className="flex min-w-0 items-center gap-2">
-        <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className={wide ? "min-w-[12rem] flex-1 basis-[16rem]" : "min-w-0 flex-1"}>
           <SearchableCombobox
             value={unitValue}
             onValueChange={onUnitChange}
             options={unitOptions}
             placeholder="Select unit"
+            orphanLabel={unitValue || null}
+            dropdownMinWidth={wide ? 420 : undefined}
+            wrapOptionLabels={wide}
           />
         </div>
         {showConversion && conversionId && onConversionChange ? (
@@ -81,7 +86,8 @@ export function GeneralInformationTab({
   idPrefix = "",
 }: GeneralInformationTabProps) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="space-y-3">
+      <div className="grid gap-6 lg:grid-cols-2">
       <div className="min-w-0 space-y-3">
         <FormFieldInline
           id={`${idPrefix}itmCode`}
@@ -109,6 +115,7 @@ export function GeneralInformationTab({
             onValueChange={(value) => setField("itmGroup", value)}
             options={lookups.groupOptions}
             placeholder="Select group"
+            orphanLabel={lookups.savedLabels?.group}
           />
         </FormFieldInlineWrap>
         <FormFieldInlineWrap id={`${idPrefix}itemForm`} label="Dosage Format">
@@ -117,6 +124,7 @@ export function GeneralInformationTab({
             onValueChange={(value) => setField("itemForm", value)}
             options={lookups.formatOptions}
             placeholder="Select dosage format"
+            orphanLabel={lookups.savedLabels?.format}
           />
         </FormFieldInlineWrap>
         <FormFieldInlineWrap id={`${idPrefix}brandId`} label="Brand">
@@ -125,6 +133,7 @@ export function GeneralInformationTab({
             onValueChange={(value) => setField("brandId", value)}
             options={lookups.brandOptions}
             placeholder="Select brand"
+            orphanLabel={lookups.savedLabels?.brand}
           />
         </FormFieldInlineWrap>
         <FormFieldInlineWrap
@@ -136,6 +145,7 @@ export function GeneralInformationTab({
             onValueChange={(value) => setField("itmOrigin", value)}
             options={lookups.originOptions}
             placeholder="Select item organization"
+            orphanLabel={lookups.savedLabels?.origin}
           />
         </FormFieldInlineWrap>
       </div>
@@ -158,6 +168,16 @@ export function GeneralInformationTab({
           unitOptions={lookups.unitOptions}
           showConversion={false}
         />
+
+        <FormFieldInline
+          id={`${idPrefix}itmNotes`}
+          label="Notes"
+          value={formValues.itmNotes}
+          onChange={(event) => setField("itmNotes", event.target.value)}
+        />
+      </div>
+      </div>
+      <div className="grid gap-3">
         <UnitRow
           unitId={`${idPrefix}itmUnit2`}
           unitLabel="Unit 2"
@@ -168,6 +188,7 @@ export function GeneralInformationTab({
           conversionValue={formValues.itmUnit1Unit2}
           onConversionChange={(value) => setField("itmUnit1Unit2", value)}
           showConversion
+          wide
         />
         <UnitRow
           unitId={`${idPrefix}itmUnit3`}
@@ -179,13 +200,7 @@ export function GeneralInformationTab({
           conversionValue={formValues.itmUnit1Unit3}
           onConversionChange={(value) => setField("itmUnit1Unit3", value)}
           showConversion
-        />
-
-        <FormFieldInline
-          id={`${idPrefix}itmNotes`}
-          label="Notes"
-          value={formValues.itmNotes}
-          onChange={(event) => setField("itmNotes", event.target.value)}
+          wide
         />
       </div>
     </div>

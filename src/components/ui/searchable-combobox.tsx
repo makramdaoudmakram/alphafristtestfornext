@@ -29,6 +29,10 @@ type SearchableComboboxProps = {
   /** Grid keyboard navigation (data-row / data-col). */
   dataRow?: number;
   dataCol?: string;
+  /** Minimum dropdown width in pixels. Defaults to 240. */
+  dropdownMinWidth?: number;
+  /** Keep long option labels fully visible instead of truncating them. */
+  wrapOptionLabels?: boolean;
 };
 
 type DropdownPosition = {
@@ -38,11 +42,22 @@ type DropdownPosition = {
   maxHeight: number;
 };
 
+function optionValuesMatch(optionValue: string, current: string): boolean {
+  if (optionValue === current) return true;
+  if (optionValue === "" || current === "") return false;
+  const left = Number(optionValue);
+  const right = Number(current);
+  return Number.isFinite(left) && Number.isFinite(right) && left === right;
+}
+
 const DROPDOWN_GAP = 4;
 const DROPDOWN_MAX_H = 280;
 const VIEWPORT_PAD = 8;
 
-function measureDropdownPosition(trigger: HTMLButtonElement): DropdownPosition {
+function measureDropdownPosition(
+  trigger: HTMLButtonElement,
+  minWidth = 240
+): DropdownPosition {
   const rect = trigger.getBoundingClientRect();
   const viewportH = window.innerHeight;
   const viewportW = window.innerWidth;
@@ -58,7 +73,10 @@ function measureDropdownPosition(trigger: HTMLButtonElement): DropdownPosition {
     Math.min(DROPDOWN_MAX_H, openUp ? spaceAbove - DROPDOWN_GAP : spaceBelow - DROPDOWN_GAP)
   );
 
-  const width = Math.min(Math.max(rect.width, 240), viewportW - VIEWPORT_PAD * 2);
+  const width = Math.min(
+    Math.max(rect.width, minWidth),
+    viewportW - VIEWPORT_PAD * 2
+  );
   let left = rect.left;
   if (left + width > viewportW - VIEWPORT_PAD) {
     left = Math.max(VIEWPORT_PAD, viewportW - VIEWPORT_PAD - width);
@@ -84,6 +102,8 @@ export function SearchableCombobox({
   size = "default",
   dataRow,
   dataCol,
+  dropdownMinWidth = 240,
+  wrapOptionLabels = false,
 }: SearchableComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -108,7 +128,9 @@ export function SearchableCombobox({
   }, [options, search]);
 
   const selectedLabel = React.useMemo(() => {
-    const match = options.find((option) => option.value === value);
+    const match = options.find((option) =>
+      optionValuesMatch(option.value, value)
+    );
     if (match) {
       lastSelectionRef.current = { value, label: match.label };
       return match.label;
@@ -127,8 +149,8 @@ export function SearchableCombobox({
 
   const updatePosition = React.useCallback(() => {
     if (!triggerRef.current) return;
-    setPosition(measureDropdownPosition(triggerRef.current));
-  }, []);
+    setPosition(measureDropdownPosition(triggerRef.current, dropdownMinWidth));
+  }, [dropdownMinWidth]);
 
   const closeDropdown = React.useCallback(() => {
     setOpen(false);
@@ -169,10 +191,12 @@ export function SearchableCombobox({
     // Measure after scroll settles a bit.
     requestAnimationFrame(() => {
       if (!triggerRef.current) return;
-      setPosition(measureDropdownPosition(triggerRef.current));
+      setPosition(
+        measureDropdownPosition(triggerRef.current, dropdownMinWidth)
+      );
       setOpen(true);
     });
-  }, []);
+  }, [dropdownMinWidth]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -255,7 +279,8 @@ export function SearchableCombobox({
                     key={option.value}
                     type="button"
                     className={cn(
-                      "hover:bg-accent flex w-full items-center rounded-sm px-2 py-1.5 text-left",
+                      "hover:bg-accent flex w-full rounded-sm px-2 py-1.5 text-left",
+                      wrapOptionLabels ? "items-start" : "items-center",
                       optionTextClass
                     )}
                     onPointerDown={(event) =>
@@ -265,10 +290,20 @@ export function SearchableCombobox({
                     <Check
                       className={cn(
                         "mr-2 size-4",
-                        value === option.value ? "opacity-100" : "opacity-0"
+                        optionValuesMatch(option.value, value)
+                          ? "opacity-100"
+                          : "opacity-0"
                       )}
                     />
-                    <span className="truncate">{option.label}</span>
+                    <span
+                      className={
+                        wrapOptionLabels
+                          ? "whitespace-normal break-words text-start"
+                          : "truncate"
+                      }
+                    >
+                      {option.label}
+                    </span>
                   </button>
                 ))
               ) : (
@@ -301,7 +336,8 @@ export function SearchableCombobox({
         className={cn(
           "w-full justify-between font-normal",
           formControlFocusClass,
-          triggerSizeClass
+          triggerSizeClass,
+          wrapOptionLabels && "h-auto min-h-9 whitespace-normal py-2"
         )}
         onClick={() => {
           if (disabled) return;
@@ -312,7 +348,15 @@ export function SearchableCombobox({
           }
         }}
       >
-        <span className={cn("truncate", !selectedLabel && "text-muted-foreground")}>
+        <span
+          title={selectedLabel || undefined}
+          className={cn(
+            wrapOptionLabels
+              ? "whitespace-normal break-words text-start"
+              : "truncate",
+            !selectedLabel && "text-muted-foreground"
+          )}
+        >
           {selectedLabel || placeholder}
         </span>
         <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
