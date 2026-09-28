@@ -73,6 +73,8 @@ import type {
   UpdateSalesPaymentAssimentRequest,
 } from "@/types/sales-payment-assiment";
 import type { BrandItem, CreateBrandRequest, UpdateBrandRequest } from "@/types/brand";
+import type { ItemCardQuery, ItemCardResponse, ItemCardRow } from "@/types/item-card";
+import { buildItemCardQueryString } from "@/lib/item-card-query";
 import type {
   CreateEmployInfoRequest,
   EmployInfoCreateResult,
@@ -2839,6 +2841,57 @@ export function getBatchTraceability(token: string, batchNo: string) {
   const encoded = encodeURIComponent(batchNo.trim());
   return apiFetch<unknown>(`BatchTraceability/${encoded}`, {}, token).then(
     normalizeBatchTraceabilityResult
+  );
+}
+
+function normalizeItemCardRow(item: Record<string, unknown>): ItemCardRow {
+  return {
+    date: readString(item, "date", "Date") || null,
+    documentType: readString(item, "documentType", "DocumentType"),
+    documentId: readNumber(item, "documentId", "DocumentId"),
+    documentNo: readNumber(item, "documentNo", "DocumentNo") || null,
+    storeId: readString(item, "storeId", "StoreId") || null,
+    storeName: readString(item, "storeName", "StoreName") || null,
+    branchId: readString(item, "branchId", "BranchId") || null,
+    branchName: readString(item, "branchName", "BranchName") || null,
+    movementType: readString(item, "movementType", "MovementType") || null,
+    movementDirection: readString(item, "movementDirection", "MovementDirection"),
+    quantityIn: readNumber(item, "quantityIn", "QuantityIn"),
+    quantityOut: readNumber(item, "quantityOut", "QuantityOut"),
+    balance: readNumber(item, "balance", "Balance"),
+    unitId: readNumber(item, "unitId", "UnitId") || null,
+    unitName: readString(item, "unitName", "UnitName") || null,
+    unitValue: readNumber(item, "unitValue", "UnitValue"),
+    reportingKey: readString(item, "reportingKey", "ReportingKey"),
+    lineNo: readNumber(item, "lineNo", "LineNo"),
+  };
+}
+
+function normalizeItemCardResponse(data: Record<string, unknown>): ItemCardResponse {
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => normalizeItemCardRow(row as Record<string, unknown>))
+    : [];
+
+  return {
+    itemId: readNumber(data, "itemId", "ItemId"),
+    fromDate: readString(data, "fromDate", "FromDate"),
+    toDateExclusive: readString(data, "toDateExclusive", "ToDateExclusive"),
+    items,
+    totalCount: readNumber(data, "totalCount", "TotalCount"),
+    openingBalance: readNumber(data, "openingBalance", "OpeningBalance"),
+    totalIn: readNumber(data, "totalIn", "TotalIn"),
+    totalOut: readNumber(data, "totalOut", "TotalOut"),
+    closingBalance: readNumber(data, "closingBalance", "ClosingBalance"),
+    page: readNumber(data, "page", "Page"),
+    pageSize: readNumber(data, "pageSize", "PageSize"),
+  };
+}
+
+export function getItemCard(token: string, query: ItemCardQuery) {
+  const q = buildItemCardQueryString(query);
+  return apiFetch<unknown>(`reports/item-card?${q}`, {}, token).then((data) =>
+    normalizeItemCardResponse(data as Record<string, unknown>)
   );
 }
 

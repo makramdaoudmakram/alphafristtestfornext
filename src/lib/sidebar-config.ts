@@ -44,6 +44,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.sales.view,
       },
       {
+        title: "Item Card",
+        href: "/dashboard/sales/item-card",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
         title: "Pharm Expenses",
         href: "/dashboard/sales/pharm-expenses",
         permission: PERMISSIONS.sales.view,
@@ -344,6 +349,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/permissions": "Role Permissions",
   "/dashboard/shift": "Shift Management",
   "/dashboard/sales": "Sales",
+  "/dashboard/sales/item-card": "Item Card",
   "/dashboard/sales/pharm-expenses": "Pharm Expenses",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
