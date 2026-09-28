@@ -89,6 +89,7 @@ export function DetailsGrid({
 }: DetailsGridProps) {
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
+    focusCell: (rowIndex: number, columnKey: string) => void;
   } | null>(null);
 
   const itemField = itemLanguage === "ar" ? "nameAr" : "nameEn";

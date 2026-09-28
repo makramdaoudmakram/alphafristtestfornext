@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2 } from "lucide-react";
 import { MasterDetailGrid } from "@/components/grid/master-detail-grid";
@@ -11,6 +12,7 @@ import {
   SearchableCombobox,
   type ComboboxOption,
 } from "@/components/ui/searchable-combobox";
+import { DetailNumericInput } from "@/components/purchase/DetailNumericInput";
 import { ExpDateMmYyyyInput } from "@/components/purchase/ExpDateMmYyyyInput";
 import { ItemCatalogAutocompleteCell } from "@/components/purchase/ItemCatalogAutocompleteCell";
 import {
@@ -27,6 +29,10 @@ import {
   findCatalogItemByCode,
   getItemDefaultUnitId,
 } from "@/lib/item-unit-options";
+import {
+  EXP_DATE_BEFORE_CURRENT_MONTH,
+  isExpDateOnOrAfterCurrentMonth,
+} from "@/lib/purchase-exp-date";
 import { formatStorDisplayName } from "@/lib/purchase-stores";
 import {
   applyPriceQtyNetToBasePrices,
@@ -97,6 +103,9 @@ type DetailsGridProps = {
   onCatalogItemApplied?: (item: ItemCatalogItem) => void;
   onAddRow: () => void;
   onRemoveRow: (index: number) => void;
+  /** When set, focus the English item name cell on this row (standard purchase only). */
+  newRowFocusRequest?: number | null;
+  onNewRowFocusHandled?: () => void;
   /** Hides tax/extra-discount columns for pharmacy purchase. */
   variant?: "purchase" | "pharm-purchase";
 };
@@ -119,11 +128,21 @@ export function DetailsGrid({
   onCatalogItemApplied,
   onAddRow,
   onRemoveRow,
+  newRowFocusRequest = null,
+  onNewRowFocusHandled,
   variant = "purchase",
 }: DetailsGridProps) {
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
+    focusCell: (rowIndex: number, columnKey: string) => void;
   } | null>(null);
+
+  useEffect(() => {
+    if (variant !== "purchase") return;
+    if (newRowFocusRequest == null) return;
+    keyboardRef.current?.focusCell(newRowFocusRequest, "itmNameEn");
+    onNewRowFocusHandled?.();
+  }, [newRowFocusRequest, onNewRowFocusHandled, variant]);
   const conversionSeqRef = useRef(new Map<string, number>());
 
   const storeOptions = useMemo<ComboboxOption[]>(
@@ -211,16 +230,13 @@ export function DetailsGrid({
       accessorKey: field,
       header,
       cell: ({ row }) => (
-        <Input
-          data-row={row.index}
-          data-col={dataCol}
-          type="number"
-          step="0.01"
+        <DetailNumericInput
+          rowIndex={row.index}
+          dataCol={dataCol}
           disabled={disabled}
           value={row.original[field]}
-          onFocus={() => onSelectRow(row.index)}
-          onChange={(e) => {
-            const nextValue = Number(e.target.value) || 0;
+          onFocusRow={() => onSelectRow(row.index)}
+          onCommit={(nextValue) => {
             const patch = {
               [field]: nextValue,
             } as Partial<PurchaseDetail>;
@@ -240,6 +256,8 @@ export function DetailsGrid({
               field === "itmPurPrice" ||
               field === "itmExtraDis" ||
               field === "itmSell" ||
+              field === "itmDisPer" ||
+              field === "itmDisMon" ||
               field === "itmNet"
                 ? withSameRowQtyBonus(row.original, patch)
                 : patch
@@ -499,7 +517,15 @@ export function DetailsGrid({
             storedValue={row.original.expDate}
             disabled={disabled}
             onFocusRow={() => onSelectRow(row.index)}
-            onCommit={(expDate) => onChangeRow(row.index, { expDate })}
+            onCommit={(expDate) => {
+              if (variant === "purchase" && expDate) {
+                if (!isExpDateOnOrAfterCurrentMonth(expDate)) {
+                  toast.error(EXP_DATE_BEFORE_CURRENT_MONTH);
+                  return;
+                }
+              }
+              onChangeRow(row.index, { expDate });
+            }}
           />
         ),
       },

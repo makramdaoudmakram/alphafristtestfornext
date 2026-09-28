@@ -9,6 +9,7 @@ export const PURCHASE_TAX_TRIGGER_FIELDS = [
   "taxPercent",
   "itmTaxPrice",
   "itmPurPrice",
+  "itmSell",
   "qnty",
   "bonus",
   "itmDisMon",
@@ -32,6 +33,7 @@ export const PURCHASE_DISC_TRIGGER_FIELDS = [
 export type PurchaseTaxFields = {
   taxPercent?: number | null;
   itmPurPrice?: number | null;
+  itmSell?: number | null;
   itmTaxPrice?: number | null;
   itmTaxTotal?: number;
   itmCost?: number;
@@ -50,7 +52,7 @@ export type PurchaseNetFields = PurchaseTaxFields & {
 };
 
 export type PurchaseDiscAmountFields = {
-  itmPurPrice?: number | null;
+  itmSell?: number | null;
   qnty?: number | null;
   itmDisPer?: number | null;
   itmExtraDis?: number | null;
@@ -90,9 +92,14 @@ export function getPurchaseTaxableQuantity(row: PurchaseTaxFields): number {
   return qty + bonus;
 }
 
+/** Line financial calculations use Sales Price (itmSell), not Purchase Price. */
+function readPurchaseLinePrice(row: { itmSell?: number | null }): number {
+  return toFiniteNumber(row.itmSell);
+}
+
 /**
  * IF TaxPercent > 0:
- *   ((PurchPrice × Qty) + (Bonus × PurchPrice) − DiscAmount) × (TaxPercent ÷ 100)
+ *   ((SalesPrice × Qty) + (Bonus × SalesPrice) − DiscAmount) × (TaxPercent ÷ 100)
  * ELSE IF TaxPrice > 0:
  *   (Bonus + Qty) × Cost × TaxPrice
  * ELSE:
@@ -108,12 +115,12 @@ export function computePurchaseTaxAmount(row: PurchaseTaxFields): number {
     return 0;
   }
 
-  const purchPrice = toFiniteNumber(row.itmPurPrice);
+  const salesPrice = readPurchaseLinePrice(row);
   const { qty, bonus } = readPurchaseRowQtyBonus(row);
   const discAmount = toFiniteNumber(row.itmDisMon);
 
   if (isGreaterThanZero(row.taxPercent)) {
-    const base = purchPrice * qty + bonus * purchPrice - discAmount;
+    const base = salesPrice * qty + bonus * salesPrice - discAmount;
     return roundMoney(base * ((row.taxPercent as number) / 100));
   }
 
@@ -169,18 +176,18 @@ function shouldRecalculateDiscPercent(patch: PurchaseDetailPatch): boolean {
 }
 
 /**
- * Net = ((PurchPrice × Qty) - DiscAmount) + Tax
+ * Net = ((SalesPrice × Qty) - DiscAmount) + Tax
  */
 export function computePurchaseNetAmount(row: PurchaseNetFields): number {
-  const purchPrice = toFiniteNumber(row.itmPurPrice);
+  const salesPrice = readPurchaseLinePrice(row);
   const qty = toFiniteNumber(row.qnty);
   const discAmount = toFiniteNumber(row.itmDisMon);
   const tax = toFiniteNumber(row.itmTaxTotal);
-  return roundMoney(purchPrice * qty - discAmount + tax);
+  return roundMoney(salesPrice * qty - discAmount + tax);
 }
 
 /**
- * Cost = ((Qty × PurchPrice) - DiscAmount) / (Bonus + Qty).
+ * Cost = ((Qty × SalesPrice) - DiscAmount) / (Bonus + Qty).
  * Returns 0 when Bonus + Qty is 0.
  */
 export function computePurchaseCostAmount(row: PurchaseNetFields): number {
@@ -188,9 +195,9 @@ export function computePurchaseCostAmount(row: PurchaseNetFields): number {
   const bonus = toFiniteNumber(row.bonus);
   const divisor = bonus + qty;
   if (divisor === 0) return 0;
-  const purchPrice = toFiniteNumber(row.itmPurPrice);
+  const salesPrice = readPurchaseLinePrice(row);
   const discAmount = toFiniteNumber(row.itmDisMon);
-  return roundMoney((qty * purchPrice - discAmount) / divisor);
+  return roundMoney((qty * salesPrice - discAmount) / divisor);
 }
 
 /** Disc% = (1 - (Net / (SalesPrice × Qty))) × 100. Returns 0 if SalesPrice or Qty is 0. */
@@ -206,15 +213,15 @@ export function computePurchaseDiscPercent(
 }
 
 /**
- * Disc Amt = (PurchPrice × Quantity × (Disc % ÷ 100)) + Extra Disc.
+ * Disc Amt = (SalesPrice × Quantity × (Disc % ÷ 100)) + Extra Disc.
  * Disc % is a percent (7 means 7%), not a fraction. Empty Extra Disc is 0.
  */
 export function computePurchaseDiscAmount(row: PurchaseDiscAmountFields): number {
-  const purchPrice = toFiniteNumber(row.itmPurPrice);
+  const salesPrice = toFiniteNumber(row.itmSell);
   const qty = toFiniteNumber(row.qnty);
   const discPercent = toFiniteNumber(row.itmDisPer);
   const extraDisc = toFiniteNumber(row.itmExtraDis);
-  const discountFromPercent = purchPrice * qty * (discPercent / 100);
+  const discountFromPercent = salesPrice * qty * (discPercent / 100);
   return roundMoney(discountFromPercent + extraDisc);
 }
 
@@ -258,17 +265,15 @@ export function applyPurchaseDetailNet<T extends PurchaseNetFields>(
   row: T,
   options?: { updateDiscPercent?: boolean; preserveNet?: boolean }
 ): T {
-  const withNet = options?.preserveNet
-    ? row
-    : {
-        ...row,
-        itmNet: computePurchaseNetAmount(row),
-      };
-  const withCost = applyPurchaseDetailCost(withNet);
-  if (options?.updateDiscPercent === true) {
-    return applyPurchaseDetailDiscPercent(withCost);
+  let next: T = { ...row };
+  if (!options?.preserveNet) {
+    next = { ...next, itmNet: computePurchaseNetAmount(next) };
   }
-  return withCost;
+  next = applyPurchaseDetailCost(next);
+  if (options?.updateDiscPercent === true) {
+    next = applyPurchaseDetailDiscPercent(next);
+  }
+  return next;
 }
 
 /**
@@ -287,8 +292,8 @@ export function applyPurchaseDetailTax<T extends PurchaseTaxFields>(row: T): T {
   const next = { ...row };
 
   if (isGreaterThanZero(row.taxPercent)) {
-    const purchPrice = toFiniteNumber(row.itmPurPrice);
-    next.itmTaxPrice = roundMoney((purchPrice * (row.taxPercent as number)) / 100);
+    const salesPrice = readPurchaseLinePrice(row);
+    next.itmTaxPrice = roundMoney((salesPrice * (row.taxPercent as number)) / 100);
   }
 
   next.itmTaxTotal = computePurchaseTaxAmount(next);
@@ -307,21 +312,27 @@ export function recalculatePurchaseDetailRow(
     preserveNet?: boolean;
   }
 ): PurchaseDetail {
-  let next: PurchaseDetail = row;
+  let next: PurchaseDetail = { ...row };
+
   if (options?.updateDiscPercent === true) {
     next = applyPurchaseDetailDiscPercent(next);
   }
+
   if (!options?.preserveDiscAmount) {
     next = applyPurchaseDiscAmount(next);
   }
+
   next = applyPurchaseDetailCost(next);
+
   if (!options?.preserveTax) {
     next = applyPurchaseDetailTax(next);
   }
-  return applyPurchaseDetailNet(next, {
-    updateDiscPercent: false,
-    preserveNet: options?.preserveNet === true,
-  });
+
+  if (!options?.preserveNet) {
+    next = { ...next, itmNet: computePurchaseNetAmount(next) };
+  }
+
+  return next;
 }
 
 export function applyPurchaseDetailPatch(
@@ -345,7 +356,7 @@ export function applyPurchaseDetailPatch(
   const discPercentChanged = patchHas(detailPatch, "itmDisPer");
   const updateDiscPercent = shouldRecalculateDiscPercent(patch);
   const preserveDiscAmount = !(
-    patchHas(detailPatch, "itmPurPrice") ||
+    patchHas(detailPatch, "itmSell") ||
     patchHas(detailPatch, "qnty") ||
     patchHas(detailPatch, "itmDisPer") ||
     patchHas(detailPatch, "itmExtraDis")
@@ -354,6 +365,7 @@ export function applyPurchaseDetailPatch(
     patch.skipTax === true ||
     (patchHas(detailPatch, "itmTaxTotal") &&
       !patchHas(detailPatch, "itmPurPrice") &&
+      !patchHas(detailPatch, "itmSell") &&
       !patchHas(detailPatch, "qnty") &&
       !patchHas(detailPatch, "bonus") &&
       !patchHas(detailPatch, "itmDisMon") &&
@@ -385,11 +397,10 @@ export function applyPurchaseDetailPatch(
 /** Line total before header-level discount */
 export function computeLineTotal(row: Pick<
   PurchaseDetail,
-  "qnty" | "itmPurPrice" | "itmDisPer" | "itmDisMon" | "itmTaxTotal"
+  "qnty" | "itmSell" | "itmDisMon" | "itmTaxTotal"
 >): number {
-  const gross = (row.qnty ?? 0) * (row.itmPurPrice ?? 0);
-  const discountFromPercent = gross * ((row.itmDisPer ?? 0) / 100);
-  const discount = (row.itmDisMon ?? 0) + discountFromPercent;
+  const gross = (row.qnty ?? 0) * (row.itmSell ?? 0);
+  const discount = row.itmDisMon ?? 0;
   const tax = row.itmTaxTotal ?? 0;
   const total = gross - discount + tax;
   return Number.isFinite(total) ? Math.round(total * 100) / 100 : 0;

@@ -68,6 +68,7 @@ export function PharmTransferDetailsGrid({
 }: PharmTransferDetailsGridProps) {
   const keyboardRef = useRef<{
     focusColumnAfter: (rowIndex: number, appliedColumnKey: string) => void;
+    focusCell: (rowIndex: number, columnKey: string) => void;
   } | null>(null);
 
   const resolveItemName = useCallback(

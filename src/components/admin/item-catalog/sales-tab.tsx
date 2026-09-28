@@ -41,6 +41,7 @@ export function SalesTab({
             onValueChange={(value) => setField("itmSellUnit", value)}
             options={lookups.unitOptions}
             placeholder="Select sell unit"
+            orphanLabel={formValues.itmSellUnit || null}
           />
         </FormFieldInlineWrap>
         <FormFieldInline

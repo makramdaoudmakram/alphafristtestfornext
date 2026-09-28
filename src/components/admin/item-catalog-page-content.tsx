@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { useSession } from "next-auth/react";
 import { FileSpreadsheet, Upload } from "lucide-react";
@@ -10,6 +10,7 @@ import {
   deleteItemCatalog,
   getBrands,
   getGroups,
+  getItemCatalog,
   getItemCatalogPage,
   getItemFormats,
   getItemOrigins,
@@ -53,6 +54,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { ItemCatalogSavedLabels } from "@/components/admin/item-catalog/types";
 import type { ComboboxOption } from "@/components/ui/searchable-combobox";
 import {
   Dialog,
@@ -71,8 +73,42 @@ function unitValueFromItem(
   units: UnitItem[]
 ): string {
   if (unitId === null || unitId === undefined) return "";
-  const match = units.find((unit) => unit.uCode === unitId);
+  const match = units.find((unit) => Number(unit.uCode) === Number(unitId));
   return match ? String(match.uCode) : String(unitId);
+}
+
+function catalogItemToEditForm(
+  item: ItemCatalogItem,
+  unitList: UnitItem[]
+): ItemCatalogFormValues {
+  const nextValues = itemCatalogToFormValues(item);
+  nextValues.itmUnit1 = unitValueFromItem(item.itmUnit1, unitList);
+  nextValues.itmUnit2 = unitValueFromItem(item.itmUnit2, unitList);
+  nextValues.itmUnit3 = unitValueFromItem(item.itmUnit3, unitList);
+  nextValues.itmPurchaseUnit = unitValueFromItem(
+    item.child?.itmPurchaseUnit,
+    unitList
+  );
+  nextValues.itmSellUnit = unitValueFromItem(item.child?.itmSellUnit, unitList);
+  return nextValues;
+}
+
+function savedLabelsFromItem(item: ItemCatalogItem): ItemCatalogSavedLabels {
+  return {
+    brand: item.brandName,
+    group: item.groupName,
+    origin: item.itemOriginName,
+    format: item.itemFormName,
+  };
+}
+
+function sameFormValues(
+  left: ItemCatalogFormValues,
+  right: ItemCatalogFormValues
+): boolean {
+  return (Object.keys(left) as Array<keyof ItemCatalogFormValues>).every(
+    (key) => left[key] === right[key]
+  );
 }
 
 export function ItemCatalogPageContent() {
@@ -112,6 +148,8 @@ export function ItemCatalogPageContent() {
   const [formValues, setFormValues] = useState<ItemCatalogFormValues>(
     emptyItemCatalogFormValues
   );
+  const [savedLabels, setSavedLabels] = useState<ItemCatalogSavedLabels>({});
+  const editLoadSeq = useRef(0);
 
   const columns = useItemCatalogColumns();
 
@@ -139,16 +177,25 @@ export function ItemCatalogPageContent() {
   }, [formValues.itmGroup]);
 
   const formatOptions = useMemo<ComboboxOption[]>(() => {
-    const visibleFormats =
-      selectedGroupId == null
-        ? formats
-        : formats.filter((format) => format.groupId === selectedGroupId);
+    const currentFormatId = Number.parseInt(formValues.itemForm, 10);
+    const matchesGroup = (format: ItemFormatItem) =>
+      selectedGroupId == null || Number(format.groupId) === selectedGroupId;
 
-    return visibleFormats.map((format) => ({
+    const visibleFormats = formats.filter(matchesGroup);
+    const savedFormat = formats.find(
+      (format) => format.itfCode === currentFormatId
+    );
+    const withSaved =
+      savedFormat &&
+      !visibleFormats.some((format) => format.itfCode === savedFormat.itfCode)
+        ? [savedFormat, ...visibleFormats]
+        : visibleFormats;
+
+    return withSaved.map((format) => ({
       value: String(format.itfCode),
       label: `${format.itfNameEn || format.itfNameAr || format.itfCode} (#${format.itfCode})`,
     }));
-  }, [formats, selectedGroupId]);
+  }, [formats, formValues.itemForm, selectedGroupId]);
 
   const originOptions = useMemo<ComboboxOption[]>(
     () =>
@@ -175,8 +222,16 @@ export function ItemCatalogPageContent() {
       formatOptions,
       originOptions,
       groupOptions,
+      savedLabels,
     }),
-    [brandOptions, unitOptions, formatOptions, originOptions, groupOptions]
+    [
+      brandOptions,
+      unitOptions,
+      formatOptions,
+      originOptions,
+      groupOptions,
+      savedLabels,
+    ]
   );
 
   const setField = useCallback(
@@ -291,8 +346,10 @@ export function ItemCatalogPageContent() {
   const pageCount = Math.max(1, Math.ceil(totalCount / pagination.pageSize));
 
   function handleNew() {
+    editLoadSeq.current += 1;
     setEditDialogOpen(false);
     setEditingId(null);
+    setSavedLabels({});
     setFormValues(emptyItemCatalogFormValues);
     setActiveTab(DEFAULT_TAB);
   }
@@ -300,7 +357,9 @@ export function ItemCatalogPageContent() {
   function handleEditDialogOpenChange(open: boolean) {
     setEditDialogOpen(open);
     if (!open) {
+      editLoadSeq.current += 1;
       setEditingId(null);
+      setSavedLabels({});
       setFormValues(emptyItemCatalogFormValues);
       setActiveTab(DEFAULT_TAB);
       setVendorCodeDialogOpen(false);
@@ -308,7 +367,7 @@ export function ItemCatalogPageContent() {
     }
   }
 
-  function handleEdit(row: ItemCatalogItem) {
+  async function handleEdit(row: ItemCatalogItem) {
     if (!hasPermission(PERMISSIONS.itemCatalog.edit)) {
       toast.error("You need ItemCatalog.Edit permission to update items.");
       return;
@@ -322,20 +381,27 @@ export function ItemCatalogPageContent() {
       return;
     }
 
-    const nextValues = itemCatalogToFormValues(row);
-    nextValues.itmUnit1 = unitValueFromItem(row.itmUnit1, units);
-    nextValues.itmUnit2 = unitValueFromItem(row.itmUnit2, units);
-    nextValues.itmUnit3 = unitValueFromItem(row.itmUnit3, units);
-    nextValues.itmPurchaseUnit = unitValueFromItem(
-      row.child?.itmPurchaseUnit,
-      units
-    );
-    nextValues.itmSellUnit = unitValueFromItem(row.child?.itmSellUnit, units);
-
+    const seq = ++editLoadSeq.current;
+    const seeded = catalogItemToEditForm(row, units);
     setEditingId(id);
-    setFormValues(nextValues);
+    setSavedLabels(savedLabelsFromItem(row));
+    setFormValues(seeded);
     setActiveTab(DEFAULT_TAB);
     setEditDialogOpen(true);
+
+    if (!token) return;
+
+    try {
+      const fresh = await getItemCatalog(id, token);
+      if (editLoadSeq.current !== seq) return;
+      const loaded = catalogItemToEditForm(fresh, units);
+      setSavedLabels(savedLabelsFromItem(fresh));
+      setFormValues((current) =>
+        sameFormValues(current, seeded) ? loaded : current
+      );
+    } catch {
+      // The list row is the same detail shape, so the form already has the saved values.
+    }
   }
 
   async function handleSave(options?: { closeDialog?: boolean }) {

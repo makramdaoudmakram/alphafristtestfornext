@@ -195,11 +195,16 @@ export function ItemCatalogAutocompleteCell({
     function onDocDown(event: MouseEvent) {
       const target = event.target as Node;
       if (rootRef.current?.contains(target)) return;
-      if (listRef.current?.contains(target)) return;
+      if (
+        target instanceof Element &&
+        target.closest("[data-suggestion-index] button")
+      ) {
+        return;
+      }
       setWantList(false);
     }
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
+    document.addEventListener("mousedown", onDocDown, true);
+    return () => document.removeEventListener("mousedown", onDocDown, true);
   }, [showList]);
 
   // Radix Dialog marks portaled siblings as inert; clicks never reach the list.
@@ -212,7 +217,7 @@ export function ItemCatalogAutocompleteCell({
       node.inert = false;
       node.removeAttribute("inert");
       node.setAttribute("aria-hidden", "false");
-      node.style.pointerEvents = "auto";
+      node.style.pointerEvents = "none";
     };
 
     unlock();
@@ -351,11 +356,9 @@ export function ItemCatalogAutocompleteCell({
           left: menuPos.left,
           width: menuPos.width,
           zIndex: 400,
-          pointerEvents: "auto",
+          pointerEvents: "none",
         }}
-        className="bg-popover pointer-events-auto max-h-52 overflow-y-auto rounded-md border py-1 shadow-md"
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
+        className="bg-popover max-h-52 overflow-y-auto rounded-md border py-1 shadow-md"
       >
         {lookupLoading && suggestions.length === 0 ? (
           <li className="text-muted-foreground px-2 py-1.5 text-xs">
@@ -372,7 +375,7 @@ export function ItemCatalogAutocompleteCell({
             <button
               type="button"
               className={cn(
-                "hover:bg-accent flex w-full flex-col items-start px-2 py-1.5 text-left text-sm",
+                "pointer-events-auto hover:bg-accent flex w-full flex-col items-start px-2 py-1.5 text-left text-sm",
                 index === highlight && "bg-accent"
               )}
               onPointerDown={(e) => applyItemFromPointer(item, e)}
@@ -418,6 +421,14 @@ export function ItemCatalogAutocompleteCell({
           }
         }}
         onChange={(e) => onInputChange(e.target.value)}
+        onBlur={() => {
+          window.setTimeout(() => {
+            const active = document.activeElement;
+            if (listRef.current?.contains(active)) return;
+            if (rootRef.current?.contains(active)) return;
+            setWantList(false);
+          }, 0);
+        }}
         onKeyDown={onKeyDown}
         className={cn("h-8", formControlFocusClass, inputClassName)}
       />

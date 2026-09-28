@@ -33,6 +33,8 @@ type ReturnItemStockSearchBoxProps = {
   itemLanguage?: ItemStockSearchLanguage;
   /** Pharmacy transfer: show AvailableQty instead of physical Qty. */
   preferAvailableQty?: boolean;
+  /** Sales Return: show item code + batch columns in the dropdown. */
+  showBatchDetails?: boolean;
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
 };
@@ -51,6 +53,7 @@ export function ReturnItemStockSearchBox({
   className,
   itemLanguage,
   preferAvailableQty = false,
+  showBatchDetails = false,
   onItemSelected,
 }: ReturnItemStockSearchBoxProps) {
   const listId = useId();
@@ -246,8 +249,8 @@ export function ReturnItemStockSearchBox({
           </li>
         ) : null}
         {results.map((item, index) => {
-          const displayOpts = { preferAvailableQty };
-          const { itemName, expDate, totalQuantity, salesPrice } =
+          const displayOpts = { preferAvailableQty, includeBatchDetails: showBatchDetails };
+          const { itemCode, batchNo, itemName, expDate, totalQuantity, salesPrice } =
             getReturnItemStockSearchDisplayParts(item, itemLanguage, displayOpts);
           return (
           <li
@@ -268,9 +271,35 @@ export function ReturnItemStockSearchBox({
               onClick={(e) => applyResultFromPointer(item, e)}
               onMouseEnter={() => setHighlight(index)}
             >
-              <span className="min-w-0 flex-1 truncate" title={itemName}>
-                {itemName}
-              </span>
+              {showBatchDetails ? (
+                <>
+                  <span
+                    className="w-24 shrink-0 font-medium tabular-nums"
+                    title="Item code"
+                  >
+                    {itemCode}
+                  </span>
+                  <span className="text-muted-foreground shrink-0" aria-hidden>
+                    |
+                  </span>
+                  <span className="min-w-[8rem] flex-1 truncate" title={itemName}>
+                    {itemName}
+                  </span>
+                  <span className="text-muted-foreground shrink-0" aria-hidden>
+                    |
+                  </span>
+                  <span
+                    className="w-28 shrink-0 truncate font-medium"
+                    title="Batch number"
+                  >
+                    {batchNo}
+                  </span>
+                </>
+              ) : (
+                <span className="min-w-0 flex-1 truncate" title={itemName}>
+                  {itemName}
+                </span>
+              )}
               <span
                 className="text-muted-foreground shrink-0 tabular-nums"
                 aria-hidden

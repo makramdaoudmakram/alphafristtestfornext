@@ -101,6 +101,13 @@
     width: 100%;
     min-width: 0;
   }
+  /* Unit 2/3 factor must stay a fixed width so it does not collapse the unit list. */
+  .item-catalog-edit-form .form-field-inline input.item-catalog-unit-factor {
+    width: 9rem;
+    min-width: 9rem;
+    max-width: 9rem;
+    flex: 0 0 9rem;
+  }
   .item-catalog-edit-form .item-catalog-fields-grid {
     gap: 0.5rem;
   }

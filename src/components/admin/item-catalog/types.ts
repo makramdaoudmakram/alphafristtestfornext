@@ -6,12 +6,20 @@ export type ItemCatalogSetField = <K extends keyof ItemCatalogFormValues>(
   value: ItemCatalogFormValues[K]
 ) => void;
 
+export type ItemCatalogSavedLabels = {
+  brand?: string | null;
+  group?: string | null;
+  origin?: string | null;
+  format?: string | null;
+};
+
 export type ItemCatalogLookupOptions = {
   brandOptions: ComboboxOption[];
   unitOptions: ComboboxOption[];
   formatOptions: ComboboxOption[];
   originOptions: ComboboxOption[];
   groupOptions: ComboboxOption[];
+  savedLabels?: ItemCatalogSavedLabels;
 };
 
 export type ItemCatalogFormProps = {

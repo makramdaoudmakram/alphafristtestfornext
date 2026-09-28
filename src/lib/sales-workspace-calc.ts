@@ -354,6 +354,56 @@ export function formatSalesQuantityExceedsMessage(
  * Shared frontend guard for Payment + Save.
  * Validates sellable lines using invoice-local StockId allocation (base units).
  */
+type ValidateReturnQuantitiesOptions = {
+  /** When true, every sellable line must have batch/stock and respect batch availability. */
+  enforceBatchStock?: boolean;
+};
+
+/** Sales Return quantity validation (unit, batch stock, optional availability cap). */
+export function validateReturnQuantities(
+  lines: SalesWorkspaceLine[],
+  resolveUnitName: (unitId: number) => string = (id) => String(id),
+  options?: ValidateReturnQuantitiesOptions
+): { ok: true } | { ok: false; message: string; lineKey: string } {
+  for (const line of lines) {
+    if (!isSellableSalesLine(line)) continue;
+    if (options?.enforceBatchStock) {
+      if (!line.batchNo?.trim()) {
+        return {
+          ok: false,
+          message: `Select a batch for ${line.itemName || line.itemCode || "item"}.`,
+          lineKey: line.key,
+        };
+      }
+      if (line.stockId <= 0) {
+        return {
+          ok: false,
+          message: `Missing stock record for ${line.itemName || line.itemCode || "item"}.`,
+          lineKey: line.key,
+        };
+      }
+    }
+    if (line.unitId <= 0) {
+      return {
+        ok: false,
+        message: `Select a unit for ${line.itemName || line.itemCode || "item"}.`,
+        lineKey: line.key,
+      };
+    }
+    if (line.quantity <= 0) {
+      return {
+        ok: false,
+        message: "Quantity must be greater than zero.",
+        lineKey: line.key,
+      };
+    }
+    if (line.qtyError) {
+      return { ok: false, message: line.qtyError, lineKey: line.key };
+    }
+  }
+  return { ok: true };
+}
+
 export function validateSalesQuantities(
   lines: SalesWorkspaceLine[],
   resolveUnitName: (unitId: number) => string = (id) => String(id)
@@ -418,6 +468,11 @@ export function createEmptySalesLine(): SalesWorkspaceLine {
     discountPercent: 0,
     discountValue: 0,
   };
+}
+
+export function createEmptyReturnTab(seq: number, egyptTimeDisplay: string): SalesWorkspaceTab {
+  const tab = createEmptyTab(seq, egyptTimeDisplay);
+  return { ...tab, label: `New Return ${seq}` };
 }
 
 export function createEmptyTab(seq: number, egyptTimeDisplay: string): SalesWorkspaceTab {

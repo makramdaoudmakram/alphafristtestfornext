@@ -28,27 +28,21 @@ export type ItemCardResponse = {
   openingBalance: number;
   totalIn: number;
   totalOut: number;
+  net: number;
   closingBalance: number;
+  displayUnitValue: number | null;
+  displayUnitName: string | null;
   page: number;
   pageSize: number;
 };
 
 export type ItemCardQuery = {
-  itemId: number;
-  fromDate: string;
-  toDate: string;
+  itemId?: number;
+  fromDate?: string;
+  toDate?: string;
+  storeId?: string;
+  branchId?: string;
   documentType?: string;
   page?: number;
   pageSize?: number;
 };
-
-export const ITEM_CARD_DOCUMENT_TYPES = [
-  "Purchase",
-  "PharmacyPurchase",
-  "Return",
-  "PharmacyReceive",
-  "StockTransfer",
-  "InventoryAdjustment",
-  "Sales",
-  "SalesReturn",
-] as const;

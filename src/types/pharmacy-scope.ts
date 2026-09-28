@@ -12,6 +12,8 @@ export type UserPharmaciesResponse = {
 export type ActivePharmacyResponse = {
   parmId: string | null;
   name: string | null;
+  storageId: string | null;
+  storageName: string | null;
 };
 
 export type ScopeTestPharmacy = {

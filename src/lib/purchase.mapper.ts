@@ -126,6 +126,13 @@ export function createEmptyDetailRow(stoId = ""): PurchaseDetail {
     stoId,
     batchNo: "",
     maxReturnQty: undefined,
+    availableQty: 0,
+    unit1: null,
+    unit2: null,
+    unit3: null,
+    unit1Unit2: null,
+    unit1Unit3: null,
+    stockId: null,
     lineTotal: 0,
   };
 }

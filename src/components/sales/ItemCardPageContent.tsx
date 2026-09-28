@@ -1,24 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, getItemCard, lookupItemCatalog } from "@/lib/api-client";
 import {
-  defaultFromDate,
-  defaultToDate,
-  formatItemCardDate,
-  formatItemCardQuantity,
-} from "@/lib/item-card-query";
+  ApiError,
+  getItemCard,
+  getPharms,
+  getStors,
+  lookupItemCatalog,
+  lookupItemCatalogBySegment,
+} from "@/lib/api-client";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { PERMISSIONS } from "@/lib/route-permissions";
-import type { ItemCardResponse } from "@/types/item-card";
-import { ITEM_CARD_DOCUMENT_TYPES } from "@/types/item-card";
-import type { ItemCatalogItem } from "@/types/item-catalog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -26,6 +22,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -34,412 +32,521 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  SearchableCombobox,
+  type ComboboxOption,
+} from "@/components/ui/searchable-combobox";
+import { formatStorDisplayName } from "@/lib/purchase-stores";
+import {
+  ITEM_AUTOCOMPLETE_LIMIT,
+  hasSearchableCatalogQuery,
+} from "@/lib/item-catalog-search";
+import type { ItemCardResponse } from "@/types/item-card";
+import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { PharmItem } from "@/types/pharm";
+import type { StorItem } from "@/types/stor";
 
-const PAGE_SIZE = 50;
+/** Values stored on MovementFact.DocumentType — not display-only labels. */
+const ITEM_CARD_DOCUMENT_TYPES: ComboboxOption[] = [
+  { value: "", label: "All Document Types" },
+  { value: "Purchase", label: "Purchase" },
+  { value: "PharmacyPurchase", label: "Pharmacy Purchase" },
+  { value: "Return", label: "Return" },
+  { value: "PharmacyReceive", label: "Pharmacy Receive" },
+  { value: "InventoryAdjustment", label: "Inventory Adjustment" },
+  { value: "Sales", label: "Sales" },
+  { value: "SalesReturn", label: "Sales Return" },
+  { value: "StockTransfer", label: "Stock Transfer" },
+];
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
-  return (
-    <Card>
-      <CardContent className="pt-4">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold">{formatItemCardQuantity(value)}</p>
-      </CardContent>
-    </Card>
-  );
+function startOfMonthIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-01`;
+}
+
+function todayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function formatQty(value: number): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  });
+}
+
+function formatQtyWithUnit(quantity: number, unitName: string | null): string {
+  if (quantity <= 0) return formatQty(0);
+  const label = unitName?.trim();
+  return label ? `${formatQty(quantity)} ${label}` : formatQty(quantity);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function itemDisplayLabel(
+  item: Pick<ItemCatalogItem, "itmCode" | "itmNameAr" | "itmNameEn" | "id">
+) {
+  const names = [item.itmNameAr, item.itmNameEn].filter(Boolean).join(" · ");
+  const name = names || `Item #${item.id}`;
+  return item.itmCode ? `${item.itmCode} — ${name}` : name;
 }
 
 export function ItemCardPageContent() {
   const { data: session, status } = useSession();
-  const token = session?.accessToken ?? null;
+  const token = session?.accessToken;
   const sessionReady = status !== "loading";
 
-  const [itemSearch, setItemSearch] = useState("");
-  const [itemResults, setItemResults] = useState<ItemCatalogItem[]>([]);
-  const [itemLookupOpen, setItemLookupOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [matches, setMatches] = useState<ItemCatalogItem[]>([]);
   const [itemLookupLoading, setItemLookupLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ItemCatalogItem | null>(null);
-  const [fromDate, setFromDate] = useState(defaultFromDate);
-  const [toDate, setToDate] = useState(defaultToDate);
-  const [documentType, setDocumentType] = useState<string>("all");
-  const [report, setReport] = useState<ItemCardResponse | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [fromDate, setFromDate] = useState(startOfMonthIso);
+  const [toDate, setToDate] = useState(todayIso);
+  const [storeId, setStoreId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [documentType, setDocumentType] = useState("");
+  const [stores, setStores] = useState<StorItem[]>([]);
+  const [branches, setBranches] = useState<PharmItem[]>([]);
+  const [lookupsLoading, setLookupsLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-
-  const requestSeq = useRef(0);
-  const lookupSeq = useRef(0);
-  const lookupAbort = useRef<AbortController | null>(null);
+  const [result, setResult] = useState<ItemCardResponse | null>(null);
 
   useEffect(() => {
-    if (selectedItem || !token || !itemSearch.trim()) {
-      setItemResults([]);
+    if (!token) return;
+    let cancelled = false;
+    setLookupsLoading(true);
+    void Promise.all([getStors(token), getPharms(token)])
+      .then(([storeRows, pharmRows]) => {
+        if (cancelled) return;
+        setStores(storeRows);
+        setBranches(pharmRows);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setStores([]);
+        setBranches([]);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Unable to load stores and branches."
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLookupsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || selectedItem) {
+      setMatches([]);
+      setItemLookupLoading(false);
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      lookupAbort.current?.abort();
-      const controller = new AbortController();
-      lookupAbort.current = controller;
-      const seq = ++lookupSeq.current;
-      setItemLookupLoading(true);
+    const useWildcard = search.includes("  ");
+    const term = useWildcard ? search : search.trim();
+    if (useWildcard) {
+      if (!hasSearchableCatalogQuery(term)) {
+        setMatches([]);
+        setItemLookupLoading(false);
+        return;
+      }
+    } else if (term.length < 1) {
+      setMatches([]);
+      setItemLookupLoading(false);
+      return;
+    }
 
-      void lookupItemCatalog(token, itemSearch.trim(), {
-        take: 20,
-        signal: controller.signal,
-      })
-        .then((rows) => {
-          if (seq !== lookupSeq.current) return;
-          setItemResults(rows);
-          setItemLookupOpen(rows.length > 0);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setItemLookupLoading(true);
+      const request = useWildcard
+        ? lookupItemCatalogBySegment(token, term, null, {
+            take: ITEM_AUTOCOMPLETE_LIMIT,
+            signal: controller.signal,
+            doubleSpaceWildcard: true,
+          })
+        : lookupItemCatalog(token, term, {
+            take: ITEM_AUTOCOMPLETE_LIMIT,
+            signal: controller.signal,
+          });
+
+      void request
+        .then((items) => {
+          if (!controller.signal.aborted) setMatches(items);
         })
-        .catch((error) => {
-          if (seq !== lookupSeq.current) return;
-          if (error instanceof DOMException && error.name === "AbortError") return;
-          setItemResults([]);
+        .catch(() => {
+          if (!controller.signal.aborted) setMatches([]);
         })
         .finally(() => {
-          if (seq === lookupSeq.current) setItemLookupLoading(false);
+          if (!controller.signal.aborted) setItemLookupLoading(false);
         });
-    }, 300);
+    }, 250);
 
-    return () => window.clearTimeout(timer);
-  }, [itemSearch, selectedItem, token]);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [search, token, selectedItem]);
 
-  const loadReport = useCallback(
-    async (nextPage: number, resetReport: boolean) => {
+  const storeOptions = useMemo<ComboboxOption[]>(() => {
+    const rows = stores
+      .map((store) => ({
+        value: String(store.id),
+        label:
+          formatStorDisplayName(store) ||
+          store.storEnName?.trim() ||
+          `Store ${store.id}`,
+      }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, { numeric: true })
+      );
+    return [{ value: "", label: "All Stores" }, ...rows];
+  }, [stores]);
+
+  const branchOptions = useMemo<ComboboxOption[]>(() => {
+    const rows = branches
+      .map((branch) => {
+        const name = (branch.parmEnName || branch.parmArName || "").trim();
+        return {
+          value: String(branch.parmId),
+          label: name || `Branch ${branch.parmId}`,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: "", label: "All Branches" }, ...rows];
+  }, [branches]);
+
+  const loadCard = useCallback(
+    async (nextPage = 1) => {
       if (!token) {
         toast.error("Sign in required.");
         return;
       }
-      if (!selectedItem) {
-        toast.error("Select an item to view its movement history.");
-        return;
-      }
 
-      const seq = ++requestSeq.current;
       setLoading(true);
-      if (resetReport) setReport(null);
-
       try {
         const data = await getItemCard(token, {
-          itemId: selectedItem.id,
+          itemId: selectedItem?.id,
           fromDate,
           toDate,
-          documentType: documentType === "all" ? undefined : documentType,
+          storeId: storeId || undefined,
+          branchId: branchId || undefined,
+          documentType: documentType || undefined,
           page: nextPage,
-          pageSize: PAGE_SIZE,
+          pageSize: 50,
         });
-
-        if (seq !== requestSeq.current) return;
-        setReport(data);
-        setHasSearched(true);
+        setPage(nextPage);
+        setResult(data);
       } catch (error) {
-        if (seq !== requestSeq.current) return;
-        setReport(null);
-        if (error instanceof ApiError) {
-          if (error.status === 401 || error.status === 403) {
-            toast.error("You are not authorized to view this report.");
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.error("Unable to load item card. Please try again.");
-        }
+        setResult(null);
+        toast.error(
+          error instanceof ApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "Unable to load item card."
+        );
       } finally {
-        if (seq === requestSeq.current) setLoading(false);
+        setLoading(false);
       }
     },
-    [token, selectedItem, fromDate, toDate, documentType]
+    [token, selectedItem, fromDate, toDate, storeId, branchId, documentType]
   );
 
-  const handleSearch = () => {
-    void loadReport(1, true);
-  };
+  const pageCount = useMemo(() => {
+    if (!result) return 1;
+    return Math.max(1, Math.ceil(result.totalCount / (result.pageSize || 50)));
+  }, [result]);
 
-  const handleReset = () => {
-    requestSeq.current += 1;
-    lookupAbort.current?.abort();
+  const clearSelectedItem = useCallback(() => {
     setSelectedItem(null);
-    setItemSearch("");
-    setItemResults([]);
-    setFromDate(defaultFromDate());
-    setToDate(defaultToDate());
-    setDocumentType("all");
-    setReport(null);
-    setHasSearched(false);
-    setLoading(false);
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    if (!hasSearched || !selectedItem) return;
-    void loadReport(nextPage, false);
-  };
-
-  const totalPages =
-    report && report.pageSize > 0
-      ? Math.max(1, Math.ceil(report.totalCount / report.pageSize))
-      : 1;
+    setSearch("");
+    setMatches([]);
+  }, []);
 
   if (!sessionReady) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="space-y-4">
+        <Skeleton className="h-10 w-full max-w-xl" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
 
   return (
     <PageGuard permission={PERMISSIONS.sales.view}>
-      <div className="space-y-4 p-4">
+      <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Item Card</h1>
-          <p className="text-sm text-muted-foreground">
-            Inventory movement history from reporting data (base units).
+          <h2 className="text-lg font-semibold">Item Card</h2>
+          <p className="text-muted-foreground text-sm">
+            Item movement history from the reporting database, with opening and
+            closing balances.
           </p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Filters</CardTitle>
-            <CardDescription>Select an item and date range, then search.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Search className="size-5" />
+              Filters
+            </CardTitle>
+            <CardDescription>
+              Leave Item, Document Type, Store, or Branch on All to skip that
+              restriction.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap items-end gap-4">
-              <div className="relative min-w-[280px] flex-1 space-y-1">
-                <Label htmlFor="item-search">Item</Label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="item-card-from">Date From</Label>
                 <Input
-                  id="item-search"
-                  value={
-                    selectedItem
-                      ? [selectedItem.itmCode, selectedItem.itmNameAr ?? selectedItem.itmNameEn]
-                          .filter(Boolean)
-                          .join(" — ")
-                      : itemSearch
-                  }
-                  readOnly={!!selectedItem}
-                  placeholder="Search by code, name, or barcode..."
-                  onChange={(event) => {
-                    setSelectedItem(null);
-                    setItemSearch(event.target.value);
-                    setHasSearched(false);
-                    setReport(null);
-                  }}
-                  autoComplete="off"
+                  id="item-card-from"
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
                 />
-                {selectedItem ? (
-                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                    <div className="font-medium">
-                      {selectedItem.itmCode ?? `#${selectedItem.id}`}
-                    </div>
-                    <div>{selectedItem.itmNameAr ?? selectedItem.itmNameEn ?? "—"}</div>
-                    {selectedItem.itmNameEn && selectedItem.itmNameAr ? (
-                      <div className="text-muted-foreground">{selectedItem.itmNameEn}</div>
-                    ) : null}
-                    <button
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="item-card-to">Date To</Label>
+                <Input
+                  id="item-card-to"
+                  type="date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="item-card-search">Item</Label>
+                <div className="relative">
+                  <Input
+                    id="item-card-search"
+                    value={selectedItem ? itemDisplayLabel(selectedItem) : search}
+                    onChange={(event) => {
+                      setSelectedItem(null);
+                      setSearch(event.target.value);
+                    }}
+                    placeholder="Search code, Arabic, English, or barcode"
+                    autoComplete="off"
+                  />
+                  {selectedItem ? (
+                    <Button
                       type="button"
-                      className="mt-1 text-xs text-muted-foreground underline"
-                      onClick={() => {
-                        setSelectedItem(null);
-                        setItemSearch("");
-                        setHasSearched(false);
-                        setReport(null);
-                      }}
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1/2 right-1 size-7 -translate-y-1/2"
+                      onClick={clearSelectedItem}
+                      aria-label="Clear item"
                     >
-                      Clear item
-                    </button>
-                  </div>
-                ) : null}
-                {itemLookupOpen && !selectedItem ? (
-                  <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-background shadow-md">
+                      <X className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
+                {!selectedItem && (itemLookupLoading || matches.length > 0) ? (
+                  <div className="border-border max-h-48 overflow-auto rounded-md border">
                     {itemLookupLoading ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Searching...</div>
+                      <p className="text-muted-foreground px-3 py-2 text-sm">
+                        Searching…
+                      </p>
                     ) : null}
-                    {!itemLookupLoading && itemResults.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No items found.</div>
-                    ) : null}
-                    {itemResults.map((item) => (
+                    {matches.map((item) => (
                       <button
                         key={item.id}
                         type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        className="hover:bg-muted w-full px-3 py-2 text-left text-sm"
                         onClick={() => {
                           setSelectedItem(item);
-                          setItemLookupOpen(false);
-                          setHasSearched(false);
-                          setReport(null);
+                          setSearch("");
+                          setMatches([]);
                         }}
                       >
-                        <div className="font-medium">{item.itmCode ?? `#${item.id}`}</div>
-                        <div>{item.itmNameAr ?? item.itmNameEn ?? "—"}</div>
+                        <span className="block font-medium">
+                          {itemDisplayLabel(item)}
+                        </span>
                       </button>
                     ))}
                   </div>
                 ) : null}
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="from-date">From Date</Label>
-                <Input
-                  id="from-date"
-                  type="date"
-                  value={fromDate}
-                  onChange={(event) => {
-                    setFromDate(event.target.value);
-                    setHasSearched(false);
-                  }}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="to-date">To Date</Label>
-                <Input
-                  id="to-date"
-                  type="date"
-                  value={toDate}
-                  onChange={(event) => {
-                    setToDate(event.target.value);
-                    setHasSearched(false);
-                  }}
-                />
-              </div>
-
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label>Document Type</Label>
-                <Select
+                <SearchableCombobox
                   value={documentType}
-                  onValueChange={(value) => {
-                    setDocumentType(value);
-                    setHasSearched(false);
-                  }}
-                >
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    {ITEM_CARD_DOCUMENT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onValueChange={setDocumentType}
+                  options={ITEM_CARD_DOCUMENT_TYPES}
+                  placeholder="All Document Types"
+                  searchPlaceholder="Search document type..."
+                  emptyMessage="No document types."
+                />
               </div>
 
-              <Button onClick={handleSearch} disabled={loading || !selectedItem}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <Search className="mr-2 h-4 w-4" />
-                    Search
-                  </>
-                )}
-              </Button>
-              <Button variant="outline" onClick={handleReset} disabled={loading}>
-                Reset
-              </Button>
+              <div className="space-y-2">
+                <Label>Store</Label>
+                <SearchableCombobox
+                  value={storeId}
+                  onValueChange={setStoreId}
+                  options={storeOptions}
+                  placeholder={lookupsLoading ? "Loading stores..." : "All Stores"}
+                  searchPlaceholder="Search store..."
+                  emptyMessage={
+                    lookupsLoading ? "Loading stores..." : "No stores."
+                  }
+                  disabled={lookupsLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Branch</Label>
+                <SearchableCombobox
+                  value={branchId}
+                  onValueChange={setBranchId}
+                  options={branchOptions}
+                  placeholder={
+                    lookupsLoading ? "Loading branches..." : "All Branches"
+                  }
+                  searchPlaceholder="Search branch..."
+                  emptyMessage={
+                    lookupsLoading ? "Loading branches..." : "No branches."
+                  }
+                  disabled={lookupsLoading}
+                />
+              </div>
             </div>
+            <Button
+              type="button"
+              onClick={() => void loadCard(1)}
+              disabled={loading}
+            >
+              {loading ? "Searching…" : "Search"}
+            </Button>
           </CardContent>
         </Card>
 
-        {!selectedItem && !hasSearched ? (
-          <p className="text-sm text-muted-foreground">
-            Select an item to view its movement history.
-          </p>
-        ) : null}
-
-        {report ? (
+        {result ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <SummaryCard label="Opening Balance" value={report.openingBalance} />
-              <SummaryCard label="Total IN" value={report.totalIn} />
-              <SummaryCard label="Total OUT" value={report.totalOut} />
-              <SummaryCard label="Closing Balance" value={report.closingBalance} />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <SummaryTile
+                label="Opening"
+                value={formatQtyWithUnit(
+                  result.openingBalance,
+                  result.displayUnitName
+                )}
+              />
+              <SummaryTile
+                label="Total in"
+                value={formatQtyWithUnit(result.totalIn, result.displayUnitName)}
+              />
+              <SummaryTile
+                label="Total out"
+                value={formatQtyWithUnit(result.totalOut, result.displayUnitName)}
+              />
+              <SummaryTile
+                label="Net"
+                value={formatQtyWithUnit(result.net, result.displayUnitName)}
+              />
+              <SummaryTile
+                label="Closing"
+                value={formatQtyWithUnit(
+                  result.closingBalance,
+                  result.displayUnitName
+                )}
+              />
             </div>
 
             <Card>
               <CardHeader>
-                <CardTitle>Movement History</CardTitle>
+                <CardTitle>Movements</CardTitle>
+                <CardDescription>
+                  {result.totalCount} row{result.totalCount === 1 ? "" : "s"}
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                {report.items.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No inventory movements found for the selected period.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Document Type</TableHead>
-                          <TableHead>Document No</TableHead>
-                          <TableHead>Store</TableHead>
-                          <TableHead>Branch</TableHead>
-                          <TableHead>Movement</TableHead>
-                          <TableHead className="text-right">IN</TableHead>
-                          <TableHead className="text-right">OUT</TableHead>
-                          <TableHead className="text-right">Balance</TableHead>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Doc #</TableHead>
+                      <TableHead>Store</TableHead>
+                      <TableHead>Direction</TableHead>
+                      <TableHead className="text-right">In</TableHead>
+                      <TableHead className="text-right">Out</TableHead>
+                      <TableHead className="text-right">Unit</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.items.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-muted-foreground">
+                          No movements in this range.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      result.items.map((row) => (
+                        <TableRow key={`${row.reportingKey}-${row.lineNo}`}>
+                          <TableCell>{formatDate(row.date)}</TableCell>
+                          <TableCell>{row.documentType || "—"}</TableCell>
+                          <TableCell>{row.documentNo ?? row.documentId}</TableCell>
+                          <TableCell>{row.storeName || row.storeId || "—"}</TableCell>
+                          <TableCell>{row.movementDirection || "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {formatQtyWithUnit(row.quantityIn, row.unitName)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatQtyWithUnit(row.quantityOut, row.unitName)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.unitName?.trim() || "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatQtyWithUnit(
+                              row.balance,
+                              result.displayUnitName
+                            )}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {report.items.map((row) => (
-                          <TableRow key={row.reportingKey}>
-                            <TableCell>{formatItemCardDate(row.date)}</TableCell>
-                            <TableCell>{row.documentType}</TableCell>
-                            <TableCell>{row.documentNo ?? row.documentId}</TableCell>
-                            <TableCell>{row.storeName ?? "—"}</TableCell>
-                            <TableCell>{row.branchName ?? "—"}</TableCell>
-                            <TableCell>{row.movementDirection || "—"}</TableCell>
-                            <TableCell className="text-right">
-                              {formatItemCardQuantity(row.quantityIn)}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {formatItemCardQuantity(row.quantityOut)}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {formatItemCardQuantity(row.balance)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                {report.totalCount > report.pageSize ? (
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <p className="text-sm text-muted-foreground">
-                      Page {report.page} of {totalPages} ({report.totalCount} rows)
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={loading || report.page <= 1}
-                        onClick={() => handlePageChange(report.page - 1)}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={loading || report.page >= totalPages}
-                        onClick={() => handlePageChange(report.page + 1)}
-                      >
-                        Next
-                      </Button>
-                    </div>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                {pageCount > 1 ? (
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loading || page <= 1}
+                      onClick={() => void loadCard(page - 1)}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-muted-foreground text-sm">
+                      Page {page} of {pageCount}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={loading || page >= pageCount}
+                      onClick={() => void loadCard(page + 1)}
+                    >
+                      Next
+                    </Button>
                   </div>
                 ) : null}
               </CardContent>
@@ -448,5 +555,16 @@ export function ItemCardPageContent() {
         ) : null}
       </div>
     </PageGuard>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-xl">{value}</CardTitle>
+      </CardHeader>
+    </Card>
   );
 }

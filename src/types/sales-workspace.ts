@@ -87,6 +87,8 @@ export type SalesWorkspaceLine = {
   discountValue: number;
   /** When multiple batches match, user must pick one StockId. */
   pendingStocks?: SalesItemSearchStock[];
+  /** Batch net qty in Unit 1 at selection time (Sales Return display hint). */
+  batchDisplayAvailableQty?: number;
 };
 
 export type SalesWorkspaceTab = {
@@ -127,6 +129,28 @@ export type SalesWorkspaceTab = {
   /** Selected SalesKind for pharmacy-scoped payment methods. */
   salesKindId: number | null;
   payments: Record<number, string>;
+};
+
+export type CreateSalesReturnRequest = {
+  empId: number;
+  custId: number;
+  customerName: string | null;
+  customerTel: string | null;
+  customerAddress: string | null;
+  globalDiscountMode: string | null;
+  globalDiscountPercent: number;
+  globalDiscountValue: number;
+  lines: Array<{
+    itemCatalogId: number;
+    stockId: number;
+    quantity: number;
+    unitId: number;
+    unitSellPrice: number;
+    discountMode: string | null;
+    discountPercent: number;
+    discountValue: number;
+  }>;
+  payments: null;
 };
 
 export type CreateSaleRequest = {

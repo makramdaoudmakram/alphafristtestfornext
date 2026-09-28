@@ -7,7 +7,7 @@ import { SalesItemStockSheet } from "@/components/sales/SalesItemStockSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
-import { getUnitConversionInfo } from "@/lib/api-client";
+import { getSalesItemPharmacyStock, getUnitConversionInfo } from "@/lib/api-client";
 import {
   buildRowUnitComboboxOptions,
   formatUnitOptionLabel,
@@ -56,6 +56,12 @@ type SalesDetailsGridProps = {
   rowDiscDisabled: boolean;
   /** Egypt server date yyyy-MM-dd (or display string) for expiry discount windows. */
   egyptDateDisplay?: string | null;
+  /** When true, do not cap quantity by available stock. */
+  skipStockAvailabilityCheck?: boolean;
+  /** When true with Catalog scope (legacy Sales Return), catalog hits add return lines via pharmacy stock lookup. */
+  catalogSelectionAddsLines?: boolean;
+  /** Sales Return: lines are added only via batch stock search (no catalog autocomplete). */
+  batchStockSelection?: boolean;
   onUpdateLines: (
     tabId: string,
     updater: (prev: SalesWorkspaceLine[]) => SalesWorkspaceLine[]
@@ -158,6 +164,9 @@ export function SalesDetailsGrid({
   canAddItems,
   rowDiscDisabled,
   egyptDateDisplay,
+  skipStockAvailabilityCheck = false,
+  catalogSelectionAddsLines = false,
+  batchStockSelection = false,
   onUpdateLines,
   onToast,
 }: SalesDetailsGridProps) {
@@ -204,14 +213,17 @@ export function SalesDetailsGrid({
       qtySeqRef.current.set(line.key, requestId);
 
       const unitName = unitShortName(line.unitId, units);
-      const sync = checkInvoiceStockAllocation(allLines, line, unitName);
-      if (!sync.ok) {
-        patchLine(line.key, { qtyError: sync.message });
+      if (!skipStockAvailabilityCheck) {
+        const sync = checkInvoiceStockAllocation(allLines, line, unitName);
+        if (!sync.ok) {
+          patchLine(line.key, { qtyError: sync.message });
+        } else {
+          patchLine(line.key, { qtyError: null });
+        }
       } else {
         patchLine(line.key, { qtyError: null });
       }
 
-      // Optional factor check via UnitConversion API; compare vs invoice remaining.
       if (!token) return;
 
       try {
@@ -231,37 +243,37 @@ export function SalesDetailsGrid({
           return;
         }
 
-        const remainingBase = invoiceRemainingBaseForStock(
-          allLines,
-          line.stockId,
-          line.availableQty,
-          line.key
-        );
-        if (info.quantityNet > remainingBase) {
-          const remainingSelected = invoiceRemainingInSelectedUnit(
+        if (!skipStockAvailabilityCheck) {
+          const remainingBase = invoiceRemainingBaseForStock(
             allLines,
-            line,
+            line.stockId,
+            line.availableQty,
             line.key
           );
-          patchLine(line.key, {
-            qtyError: formatInvoiceStockInsufficientMessage(
+          if (info.quantityNet > remainingBase) {
+            const remainingSelected = invoiceRemainingInSelectedUnit(
+              allLines,
               line,
-              remainingSelected,
-              remainingBase,
-              info.unitName?.trim() || unitName
-            ),
-          });
-          return;
+              line.key
+            );
+            patchLine(line.key, {
+              qtyError: formatInvoiceStockInsufficientMessage(
+                line,
+                remainingSelected,
+                remainingBase,
+                info.unitName?.trim() || unitName
+              ),
+            });
+            return;
+          }
         }
 
-        if (sync.ok) {
-          patchLine(line.key, { qtyError: null });
-        }
+        patchLine(line.key, { qtyError: null });
       } catch {
         if (qtySeqRef.current.get(line.key) !== requestId) return;
       }
     },
-    [token, patchLine, units]
+    [token, patchLine, units, skipStockAvailabilityCheck]
   );
 
   const applyUnitPrice = useCallback(
@@ -337,35 +349,15 @@ export function SalesDetailsGrid({
     validateQtyAgainstStock,
   ]);
 
-  const handleHitSelected = (rowIndex: number, hit: SalesItemSearchHit) => {
+  const applyHitWithStocks = (
+    rowIndex: number,
+    hit: SalesItemSearchHit,
+    stocks: SalesItemSearchStock[]
+  ) => {
     const line = lines[rowIndex];
-    if (!line || disabled) return;
-    if (!canAddItems) {
-      onToast?.("error", "Resolve Sales Man before adding items.");
-      return;
-    }
+    if (!line) return;
 
-    if (stockScope === "Catalog") {
-      onToast?.(
-        "error",
-        "Catalog search is for price lookup. Switch to Current Pharmacy to add a sellable stock line."
-      );
-      const name = salesItemPrimaryLabel(hit, language);
-      patchLine(line.key, {
-        searchText: name,
-        itemName: name,
-        itmNameAr: hit.itmNameAr,
-        itmNameEn: hit.itmNameEn,
-        itemCode: hit.itmCode,
-        itemCatalogId: 0,
-        stockId: 0,
-        pendingStocks: undefined,
-        qtyError: null,
-      });
-      return;
-    }
-
-    if (hit.stocks.length === 0) {
+    if (stocks.length === 0) {
       onToast?.("error", "No stock rows for this item in the selected scope.");
       return;
     }
@@ -383,13 +375,15 @@ export function SalesDetailsGrid({
       return;
     }
 
-    if (hit.stocks.length === 1) {
-      const filled = applyStockToLine(line, hit, hit.stocks[0], language);
-      const unitName = unitShortName(filled.unitId, units);
-      const alloc = checkInvoiceStockAllocation(lines, filled, unitName);
-      if (!alloc.ok) {
-        onToast?.("error", alloc.message);
-        return;
+    if (stocks.length === 1) {
+      const filled = applyStockToLine(line, hit, stocks[0], language);
+      if (!skipStockAvailabilityCheck) {
+        const unitName = unitShortName(filled.unitId, units);
+        const alloc = checkInvoiceStockAllocation(lines, filled, unitName);
+        if (!alloc.ok) {
+          onToast?.("error", alloc.message);
+          return;
+        }
       }
       const next = lines.map((l, i) => (i === rowIndex ? filled : l));
       replaceLines(ensureTrailingDraft(next));
@@ -424,10 +418,60 @@ export function SalesDetailsGrid({
       unitSellPrice: catalogBase,
       priceQtyNet: 1,
       qtyError: null,
-      pendingStocks: hit.stocks,
+      pendingStocks: stocks,
     };
     const next = lines.map((l, i) => (i === rowIndex ? pending : l));
     replaceLines(ensureTrailingDraft(next));
+  };
+
+  const handleHitSelected = (rowIndex: number, hit: SalesItemSearchHit) => {
+    const line = lines[rowIndex];
+    if (!line || disabled) return;
+    if (!canAddItems) {
+      onToast?.("error", "Resolve Sales Man before adding items.");
+      return;
+    }
+
+    if (stockScope === "Catalog") {
+      if (catalogSelectionAddsLines) {
+        if (!token) {
+          onToast?.("error", "Sign in is required.");
+          return;
+        }
+        void (async () => {
+          try {
+            const data = await getSalesItemPharmacyStock(token, hit.itemCatalogId);
+            const pharmacyStocks = data.stocks.filter(
+              (s) => s.storId === data.currentStorId
+            );
+            applyHitWithStocks(rowIndex, hit, pharmacyStocks);
+          } catch {
+            onToast?.("error", "Unable to load stock for the selected item.");
+          }
+        })();
+        return;
+      }
+
+      onToast?.(
+        "error",
+        "Catalog search is for price lookup. Switch to Current Pharmacy to add a sellable stock line."
+      );
+      const name = salesItemPrimaryLabel(hit, language);
+      patchLine(line.key, {
+        searchText: name,
+        itemName: name,
+        itmNameAr: hit.itmNameAr,
+        itmNameEn: hit.itmNameEn,
+        itemCode: hit.itmCode,
+        itemCatalogId: 0,
+        stockId: 0,
+        pendingStocks: undefined,
+        qtyError: null,
+      });
+      return;
+    }
+
+    applyHitWithStocks(rowIndex, hit, hit.stocks);
   };
 
   const pickBatch = (line: SalesWorkspaceLine, stockId: number) => {
@@ -447,11 +491,13 @@ export function SalesDetailsGrid({
       qtyError: null,
     };
 
-    const unitName = unitShortName(withStock.unitId, units);
-    const alloc = checkInvoiceStockAllocation(lines, withStock, unitName);
-    if (!alloc.ok) {
-      onToast?.("error", alloc.message);
-      return;
+    if (!skipStockAvailabilityCheck) {
+      const unitName = unitShortName(withStock.unitId, units);
+      const alloc = checkInvoiceStockAllocation(lines, withStock, unitName);
+      if (!alloc.ok) {
+        onToast?.("error", alloc.message);
+        return;
+      }
     }
 
     const limit = lineDiscountLimit(
@@ -527,6 +573,10 @@ export function SalesDetailsGrid({
                       <div className="px-1 py-1.5 font-medium">
                         {displayName(line, language)}
                       </div>
+                    ) : batchStockSelection ? (
+                      <span className="text-muted-foreground px-1 py-1.5 text-xs">
+                        Use batch search above
+                      </span>
                     ) : (
                       <SalesItemAutocompleteCell
                         rowIndex={rowIndex}
@@ -568,27 +618,31 @@ export function SalesDetailsGrid({
                       >
                         <option value="">Select batch…</option>
                         {line.pendingStocks.map((s) => {
-                          const probe = {
-                            ...line,
-                            stockId: s.stockId,
-                            batchNo: s.batchNo,
-                            availableQty: s.availableQty,
-                          };
-                          const rem = invoiceRemainingInSelectedUnit(
-                            lines,
-                            probe,
-                            line.key
-                          );
-                          const unitLabel = unitShortName(line.unitId, units);
-                          const remLabel =
-                            rem != null
-                              ? ` · left ${rem} ${unitLabel}`
-                              : ` · Avail ${s.availableQty}`;
+                          let remLabel = "";
+                          if (!skipStockAvailabilityCheck) {
+                            const probe = {
+                              ...line,
+                              stockId: s.stockId,
+                              batchNo: s.batchNo,
+                              availableQty: s.availableQty,
+                            };
+                            const rem = invoiceRemainingInSelectedUnit(
+                              lines,
+                              probe,
+                              line.key
+                            );
+                            const unitLabel = unitShortName(line.unitId, units);
+                            remLabel =
+                              rem != null
+                                ? ` · left ${rem} ${unitLabel}`
+                                : ` · Avail ${s.availableQty}`;
+                          }
                           return (
                             <option key={s.stockId} value={s.stockId}>
                               {s.batchNo || "—"}
                               {remLabel}
-                              {s.pharmacyName || s.storName
+                              {!skipStockAvailabilityCheck &&
+                              (s.pharmacyName || s.storName)
                                 ? ` · ${s.pharmacyName || s.storName}`
                                 : ""}
                             </option>
@@ -624,6 +678,13 @@ export function SalesDetailsGrid({
                     </select>
                   </td>
                   <td className="p-2">
+                    {sellable &&
+                    batchStockSelection &&
+                    line.batchDisplayAvailableQty != null ? (
+                      <div className="text-muted-foreground mb-0.5 text-[10px] tabular-nums">
+                        Net {line.batchDisplayAvailableQty}
+                      </div>
+                    ) : null}
                     <Input
                       className={cn(
                         gridInputClass,
@@ -633,7 +694,7 @@ export function SalesDetailsGrid({
                       type="number"
                       min={1}
                       max={
-                        sellable
+                        sellable && !skipStockAvailabilityCheck
                           ? (invoiceRemainingInSelectedUnit(
                               lines,
                               line,
@@ -648,20 +709,22 @@ export function SalesDetailsGrid({
                           1,
                           Math.trunc(Number(e.target.value) || 1)
                         );
-                        const candidate = { ...line, quantity: nextQty };
-                        const unitName = unitShortName(line.unitId, units);
-                        const alloc = checkInvoiceStockAllocation(
-                          lines,
-                          candidate,
-                          unitName
-                        );
-                        if (!alloc.ok) {
-                          onToast?.("error", alloc.message);
-                          patchLine(line.key, {
-                            quantity: nextQty,
-                            qtyError: alloc.message,
-                          });
-                          return;
+                        if (!skipStockAvailabilityCheck) {
+                          const candidate = { ...line, quantity: nextQty };
+                          const unitName = unitShortName(line.unitId, units);
+                          const alloc = checkInvoiceStockAllocation(
+                            lines,
+                            candidate,
+                            unitName
+                          );
+                          if (!alloc.ok) {
+                            onToast?.("error", alloc.message);
+                            patchLine(line.key, {
+                              quantity: nextQty,
+                              qtyError: alloc.message,
+                            });
+                            return;
+                          }
                         }
                         patchLine(line.key, {
                           quantity: nextQty,
@@ -669,7 +732,7 @@ export function SalesDetailsGrid({
                         });
                       }}
                     />
-                    {sellable ? (
+                    {sellable && !skipStockAvailabilityCheck ? (
                       <div className="text-muted-foreground text-xs">
                         {(() => {
                           const remaining = invoiceRemainingInSelectedUnit(

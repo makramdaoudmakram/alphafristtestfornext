@@ -44,6 +44,14 @@ export interface ReturnItemStockSearchItem {
   transferQty?: number;
   /** Available unreserved quantity for the group (Unit1 display units). */
   availableQty?: number;
+  /** Sum(Stock.AvailableQty) in stock base units (Unit3), from API. */
+  baseAvailableQty?: number;
+  /** Unit conversion snapshot from ItemCatalog (same row as stock search). */
+  itmUnit1?: number | null;
+  itmUnit2?: number | null;
+  itmUnit3?: number | null;
+  itmUnit1Unit2?: number | null;
+  itmUnit1Unit3?: number | null;
   salesPrice: number;
   /** Stock unit cost for the batch (CostPrice, else PurshPrice from API). */
   costPrice: number;

@@ -53,6 +53,49 @@ export function mmYyyyToExpDate(input: string): string {
   return "";
 }
 
+/** First day of the current calendar month (YYYY-MM-01), using local time. */
+export function firstDayOfCurrentMonth(referenceDate = new Date()): string {
+  const year = referenceDate.getFullYear();
+  const month = String(referenceDate.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
+}
+
+export function isExpDatePresent(value: string): boolean {
+  return Boolean(expDateToMonthInput(value));
+}
+
+/** True when stored expiry month is >= the current calendar month. */
+export function isExpDateOnOrAfterCurrentMonth(
+  value: string,
+  referenceDate = new Date()
+): boolean {
+  const month = expDateToMonthInput(value);
+  if (!month) return false;
+  const stored = monthInputToExpDate(month);
+  if (!stored) return false;
+  return stored >= firstDayOfCurrentMonth(referenceDate);
+}
+
+export const EXP_DATE_REQUIRED_BEFORE_ADD_ROW =
+  "Expiry Date is required before adding another row.";
+
+export const EXP_DATE_BEFORE_CURRENT_MONTH =
+  "Expiry Date must be the current month or later.";
+
+/** Validates the last existing PurD row before allowing Add Row. Returns an error message or null. */
+export function validatePurchaseDetailExpDateForNewRow(
+  expDate: string,
+  referenceDate = new Date()
+): string | null {
+  if (!isExpDatePresent(expDate)) {
+    return EXP_DATE_REQUIRED_BEFORE_ADD_ROW;
+  }
+  if (!isExpDateOnOrAfterCurrentMonth(expDate, referenceDate)) {
+    return EXP_DATE_BEFORE_CURRENT_MONTH;
+  }
+  return null;
+}
+
 /** Allow digits and one slash while typing (max MM/YYYY length) */
 export function sanitizeMmYyyyTyping(raw: string): string {
   let out = "";
