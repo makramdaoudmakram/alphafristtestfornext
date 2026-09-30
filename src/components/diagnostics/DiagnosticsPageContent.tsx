@@ -30,6 +30,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { DiagnosticsLookupCombobox } from "@/components/diagnostics/DiagnosticsLookupCombobox";
+import { DiagnosticsMultiItemPicker } from "@/components/diagnostics/DiagnosticsMultiItemPicker";
 import {
   checkDiagnosticsEnabled,
   diagnosticsBenchmark,
@@ -41,6 +43,11 @@ import {
   diagnosticsSamplePayload,
   DiagnosticsDisabledError,
 } from "@/lib/diagnostics/diagnostics-api";
+import {
+  customerToEntry,
+  itemToEntry as mapItemToEntry,
+  vendorToEntry,
+} from "@/lib/diagnostics/diagnostics-picker-utils";
 import {
   computeNetworkMs,
   formatN1Top,
@@ -570,11 +577,26 @@ export function DiagnosticsPageContent() {
     toast.success("Results copied as text table");
   }
 
-  function toggleItem(id: number) {
-    setSelectedItemIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
+  const initialVendors = useMemo(
+    () => options?.vendors.map(vendorToEntry) ?? [],
+    [options?.vendors]
+  );
+  const initialCustomers = useMemo(
+    () => options?.customers.map(customerToEntry) ?? [],
+    [options?.customers]
+  );
+  const initialStores = useMemo(
+    () => options?.stores.map(mapItemToEntry) ?? [],
+    [options?.stores]
+  );
+  const initialItems = useMemo(
+    () => options?.items.map(mapItemToEntry) ?? [],
+    [options?.items]
+  );
+  const initialMovements = useMemo(
+    () => options?.movements.map(mapItemToEntry) ?? [],
+    [options?.movements]
+  );
 
   const warmSummaries = useMemo(
     () => summarizeWarmByOperationLines(results),
@@ -760,90 +782,70 @@ export function DiagnosticsPageContent() {
 
             <div className="space-y-2">
               <Label>Items</Label>
-              <div className="max-h-32 overflow-y-auto rounded-md border p-2">
-                {options?.items.map((item) => (
-                  <label
-                    key={item.id}
-                    className="flex items-center gap-2 py-1 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedItemIds.includes(item.id)}
-                      onChange={() => toggleItem(item.id)}
-                    />
-                    {item.name} (#{item.id})
-                  </label>
-                ))}
-              </div>
+              <DiagnosticsMultiItemPicker
+                token={token}
+                initialEntries={initialItems}
+                selectedIds={selectedItemIds}
+                onSelectedIdsChange={setSelectedItemIds}
+                disabled={!options}
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               {currentOp?.needsMovement ? (
                 <div className="space-y-2">
                   <Label>Movement</Label>
-                  <Select value={movmentRowId} onValueChange={setMovmentRowId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Movement" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options?.movements.map((m) => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DiagnosticsLookupCombobox
+                    token={token}
+                    kind="movement"
+                    initialEntries={initialMovements}
+                    value={movmentRowId}
+                    onValueChange={setMovmentRowId}
+                    placeholder="Movement"
+                    disabled={!options}
+                  />
                 </div>
               ) : null}
               {currentOp?.needsVendor ? (
                 <div className="space-y-2">
                   <Label>Vendor</Label>
-                  <Select value={vendorId} onValueChange={setVendorId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Vendor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options?.vendors.map((v) => (
-                        <SelectItem key={v.id} value={v.id}>
-                          {v.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DiagnosticsLookupCombobox
+                    token={token}
+                    kind="vendor"
+                    initialEntries={initialVendors}
+                    value={vendorId}
+                    onValueChange={setVendorId}
+                    placeholder="Vendor"
+                    disabled={!options}
+                  />
                 </div>
               ) : null}
               {currentOp?.needsStock || currentOp?.needsPharmacyScope ? (
                 <div className="space-y-2">
                   <Label>Store</Label>
-                  <Select value={storeId} onValueChange={setStoreId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Store" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options?.stores.map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DiagnosticsLookupCombobox
+                    token={token}
+                    kind="store"
+                    initialEntries={initialStores}
+                    value={storeId}
+                    onValueChange={setStoreId}
+                    placeholder="Store"
+                    disabled={!options}
+                  />
                 </div>
               ) : null}
               {currentOp?.needsCustomer ? (
                 <div className="space-y-2">
                   <Label>Customer</Label>
-                  <Select value={customerId} onValueChange={setCustomerId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {options?.customers.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <DiagnosticsLookupCombobox
+                    token={token}
+                    kind="customer"
+                    initialEntries={initialCustomers}
+                    value={customerId}
+                    onValueChange={setCustomerId}
+                    placeholder="Customer"
+                    disabled={!options}
+                  />
                 </div>
               ) : null}
             </div>

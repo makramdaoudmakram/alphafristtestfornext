@@ -1,8 +1,10 @@
 import { API_BASE_URL } from "@/lib/api-config";
 import type {
+  DiagnosticsApiErrorBody,
   DiagnosticsBenchmarkRequest,
   DiagnosticsBenchmarkResponse,
   DiagnosticsDbPingResponse,
+  DiagnosticsLookupEntry,
   DiagnosticsOptionsResponse,
   DiagnosticsPingResponse,
   DiagnosticsQueueLagResponse,
@@ -31,17 +33,53 @@ function alfaApiUrl(path: string): string {
   return `${API_BASE_URL}/${normalized}`;
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+export function formatDiagnosticsApiError(
+  body: DiagnosticsApiErrorBody
+): string {
+  const message = body.message?.trim();
+  const type = body.exceptionType?.trim();
+  if (message && type) return `${message} (${type})`;
+  if (message) return message;
+  if (type) return type;
+  return "Request failed.";
+}
+
+async function readApiErrorBody(
+  response: Response
+): Promise<DiagnosticsApiErrorBody & { status: number }> {
   const text = await response.text();
-  if (!text) return `HTTP ${response.status}`;
+  if (!text) return { status: response.status, message: `HTTP ${response.status}` };
   try {
     const body = JSON.parse(text) as Record<string, unknown>;
-    const message = body.message ?? body.Message ?? body.title ?? body.detail;
-    if (typeof message === "string" && message.trim()) return message;
+    const message =
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.Message === "string"
+          ? body.Message
+          : typeof body.title === "string"
+            ? body.title
+            : typeof body.detail === "string"
+              ? body.detail
+              : undefined;
+    const exceptionType =
+      typeof body.exceptionType === "string" ? body.exceptionType : undefined;
+    const innerMessage =
+      typeof body.innerMessage === "string" ? body.innerMessage : undefined;
+    if (message || exceptionType) {
+      return { status: response.status, message, exceptionType, innerMessage };
+    }
   } catch {
-    return text.slice(0, 200) || `HTTP ${response.status}`;
+    return {
+      status: response.status,
+      message: text.slice(0, 200) || `HTTP ${response.status}`,
+    };
   }
-  return `HTTP ${response.status}`;
+  return { status: response.status, message: `HTTP ${response.status}` };
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const body = await readApiErrorBody(response);
+  return formatDiagnosticsApiError(body);
 }
 
 export function parseXDiagHeaders(response: Response): DiagnosticsXDiagHeaders {
@@ -120,6 +158,40 @@ export async function diagnosticsDbPing(
   if (response.status === 404) throw new DiagnosticsDisabledError();
   if (!response.ok) throw new Error(await readErrorMessage(response));
   return response.json() as Promise<DiagnosticsDbPingResponse>;
+}
+
+export type DiagnosticsLookupKind =
+  | "vendor"
+  | "customer"
+  | "store"
+  | "item"
+  | "movement";
+
+export async function diagnosticsLookup(
+  token: string,
+  kind: DiagnosticsLookupKind,
+  q?: string,
+  take = 50,
+  signal?: AbortSignal
+): Promise<DiagnosticsLookupEntry[]> {
+  const params = new URLSearchParams({
+    kind,
+    take: String(take),
+  });
+  const term = q?.trim();
+  if (term) params.set("q", term);
+
+  const response = await fetch(
+    diagnosticsUrl(`lookup?${params.toString()}`),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    }
+  );
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsLookupEntry[]>;
 }
 
 export async function diagnosticsOptions(

@@ -22,16 +22,32 @@ export type DiagnosticsDbPingResponse = {
 export type DiagnosticsLookupItem = {
   id: number;
   name: string;
+  code?: string | null;
 };
 
 export type DiagnosticsLookupVendor = {
   id: string;
   name: string;
+  code?: string | null;
 };
 
 export type DiagnosticsLookupCustomer = {
   id: number;
   name: string;
+  code?: string | null;
+};
+
+/** Unified row shape from GET /Diagnostics/lookup */
+export type DiagnosticsLookupEntry = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+export type DiagnosticsApiErrorBody = {
+  message?: string;
+  exceptionType?: string;
+  innerMessage?: string;
 };
 
 export type DiagnosticsOperationInfo = {
