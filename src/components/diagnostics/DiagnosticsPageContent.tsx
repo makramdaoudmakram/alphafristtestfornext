@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Copy } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { DiagnosticsAdminGuard } from "@/components/diagnostics/DiagnosticsAdminGuard";
@@ -66,6 +67,109 @@ import type {
 
 function newRowId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+type ParsedBenchmarkRunError = {
+  exceptionType?: string;
+  message?: string;
+  innerMessage?: string;
+  stackTop?: string[];
+};
+
+function parseBenchmarkRunError(raw: string): ParsedBenchmarkRunError | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed !== "object" || parsed == null) return null;
+
+    const hasStructured =
+      typeof parsed.message === "string" ||
+      typeof parsed.exceptionType === "string" ||
+      typeof parsed.innerMessage === "string" ||
+      Array.isArray(parsed.stackTop);
+    if (!hasStructured) return null;
+
+    return {
+      exceptionType:
+        typeof parsed.exceptionType === "string"
+          ? parsed.exceptionType
+          : undefined,
+      message: typeof parsed.message === "string" ? parsed.message : undefined,
+      innerMessage:
+        typeof parsed.innerMessage === "string"
+          ? parsed.innerMessage
+          : undefined,
+      stackTop: Array.isArray(parsed.stackTop)
+        ? parsed.stackTop.filter(
+            (line): line is string => typeof line === "string"
+          )
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function formatBenchmarkRunErrorText(raw: string): string {
+  const parsed = parseBenchmarkRunError(raw);
+  if (!parsed) return raw;
+
+  const lines: string[] = [];
+  if (parsed.exceptionType) {
+    lines.push(`exceptionType: ${parsed.exceptionType}`);
+  }
+  if (parsed.message) {
+    lines.push(`message: ${parsed.message}`);
+  }
+  if (parsed.innerMessage) {
+    lines.push(`innerMessage: ${parsed.innerMessage}`);
+  }
+  if (parsed.stackTop?.length) {
+    lines.push("stackTop:");
+    for (const frame of parsed.stackTop) {
+      lines.push(`  ${frame}`);
+    }
+  }
+
+  return lines.length > 0 ? lines.join("\n") : raw;
+}
+
+function BenchmarkRunErrorDetail({ row }: { row: DiagnosticsResultRow }) {
+  const fullText = useMemo(
+    () => formatBenchmarkRunErrorText(row.error ?? ""),
+    [row.error]
+  );
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(fullText);
+      toast.success("Error copied to clipboard");
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
+  }
+
+  return (
+    <div className="border-destructive/30 bg-destructive/5 space-y-2 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-destructive text-sm font-medium">
+          {row.operation} — run {row.phase}
+          {row.skipped ? " (skipped)" : ""}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void handleCopy()}
+        >
+          <Copy className="size-4" />
+          Copy
+        </Button>
+      </div>
+      <pre className="text-destructive max-h-[320px] overflow-auto font-mono text-xs break-words whitespace-pre-wrap">
+        {fullText}
+      </pre>
+    </div>
+  );
 }
 
 function LatencyStatBlock({
@@ -603,6 +707,13 @@ export function DiagnosticsPageContent() {
     [results]
   );
   const n1ByOp = useMemo(() => topN1ByOperation(results), [results]);
+  const benchmarkErrorRows = useMemo(
+    () =>
+      results.filter(
+        (row) => row.source === "benchmark" && Boolean(row.error?.trim())
+      ),
+    [results]
+  );
 
   const inProcessPurchase = useMemo(() => {
     return results.find(
@@ -1056,6 +1167,15 @@ export function DiagnosticsPageContent() {
                 ) : null}
               </TableBody>
             </Table>
+
+            {benchmarkErrorRows.length > 0 ? (
+              <div className="space-y-3">
+                <p className="font-medium text-sm">Benchmark run errors</p>
+                {benchmarkErrorRows.map((row) => (
+                  <BenchmarkRunErrorDetail key={row.id} row={row} />
+                ))}
+              </div>
+            ) : null}
 
             {warmSummaries.length > 0 ? (
               <div className="space-y-2">
