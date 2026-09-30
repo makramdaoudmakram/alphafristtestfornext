@@ -1,3 +1,4 @@
+import { DIAGNOSTICS_NAV_PERMISSION } from "@/lib/diagnostics/diagnostics-types";
 import { PERMISSIONS } from "@/lib/route-permissions";
 
 export type NavLinkItem = {
@@ -94,6 +95,11 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Pharmacy Scope",
             href: "/dashboard/admin/pharmacy-scope",
+          },
+          {
+            title: "Diagnostics",
+            href: "/dashboard/diagnostics",
+            permission: DIAGNOSTICS_NAV_PERMISSION,
           },
           {
             title: "Role Permissions",
@@ -276,6 +282,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             permission: PERMISSIONS.sales.view,
           },
           {
+            title: "Pharm-to-Store",
+            href: "/dashboard/pharm/transactions/pharm-to-store",
+            permission: PERMISSIONS.sales.view,
+          },
+          {
             title: "Pharmacy Transfer",
             href: "/dashboard/pharm/transactions/pharmacy-transfer",
             permission: PERMISSIONS.sales.view,
@@ -353,6 +364,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales/item-card": "Item Card",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
+  "/dashboard/diagnostics": "Diagnostics",
   "/dashboard/customers": "Customers",
   "/dashboard/item-formats": "Dosage Form",
   "/dashboard/item-origins": "Item Origins",
@@ -362,6 +374,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/transactions/pharmacy-purchase": "Pharmacy Purchase",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Pharmacy Acceptance",
   "/dashboard/pharm/transactions/stor-to-pharm": "Store-to-Pharm",
+  "/dashboard/pharm/transactions/pharm-to-store": "Pharm-to-Store",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",

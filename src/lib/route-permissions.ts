@@ -45,6 +45,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
+  "/dashboard/pharm/transactions/pharm-to-store": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Sales.View",
   "/dashboard/transactions/purchase/reversal": null,
   "/dashboard/transactions/purchase/invoice-draft": null,

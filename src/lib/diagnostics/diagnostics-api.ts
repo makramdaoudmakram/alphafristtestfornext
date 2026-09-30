@@ -1,0 +1,266 @@
+import { API_BASE_URL } from "@/lib/api-config";
+import type {
+  DiagnosticsBenchmarkRequest,
+  DiagnosticsBenchmarkResponse,
+  DiagnosticsDbPingResponse,
+  DiagnosticsOptionsResponse,
+  DiagnosticsPingResponse,
+  DiagnosticsQueueLagResponse,
+  DiagnosticsSamplePayloadResponse,
+  DiagnosticsXDiagHeaders,
+} from "./diagnostics-types";
+
+export { DIAGNOSTICS_NAV_PERMISSION } from "./diagnostics-types";
+
+export function isDiagnosticsAdmin(roles: string[]): boolean {
+  return roles.some((role) => {
+    const normalized = role.toLowerCase();
+    return normalized === "admin" || normalized === "superadmin";
+  });
+}
+
+function diagnosticsUrl(path: string): string {
+  const normalized = path.startsWith("/") ? path.slice(1) : path;
+  return `${API_BASE_URL}/Diagnostics/${normalized}`;
+}
+
+function alfaApiUrl(path: string): string {
+  let normalized = path.trim();
+  normalized = normalized.replace(/^\/api\/?/i, "");
+  normalized = normalized.replace(/^\//, "");
+  return `${API_BASE_URL}/${normalized}`;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) return `HTTP ${response.status}`;
+  try {
+    const body = JSON.parse(text) as Record<string, unknown>;
+    const message = body.message ?? body.Message ?? body.title ?? body.detail;
+    if (typeof message === "string" && message.trim()) return message;
+  } catch {
+    return text.slice(0, 200) || `HTTP ${response.status}`;
+  }
+  return `HTTP ${response.status}`;
+}
+
+export function parseXDiagHeaders(response: Response): DiagnosticsXDiagHeaders {
+  const get = (name: string) => response.headers.get(name);
+  const serverMsRaw = get("X-Diag-ServerMs");
+  const serverMs = serverMsRaw != null ? Number(serverMsRaw) : null;
+  const exposed =
+    serverMsRaw != null ||
+    get("X-Diag-Commands") != null ||
+    get("X-Diag-ServerMs") != null;
+
+  return {
+    serverMs: serverMs != null && !Number.isNaN(serverMs) ? serverMs : null,
+    commands: numberHeader(get("X-Diag-Commands")),
+    saveChanges: numberHeader(get("X-Diag-SaveChanges")),
+    dbMs: numberHeader(get("X-Diag-DbMs")),
+    transactionMs: numberHeader(get("X-Diag-TransactionMs")),
+    authCommands: numberHeader(get("X-Diag-AuthCommands")),
+    n1Top: get("X-Diag-N1Top"),
+    exposed,
+  };
+}
+
+function numberHeader(value: string | null): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? null : n;
+}
+
+export async function checkDiagnosticsEnabled(
+  token: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const response = await fetch(diagnosticsUrl("ping"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  return response.status !== 404;
+}
+
+export async function diagnosticsPing(
+  token: string,
+  signal?: AbortSignal
+): Promise<{ data: DiagnosticsPingResponse; browserMs: number }> {
+  const started = performance.now();
+  const response = await fetch(diagnosticsUrl("ping"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  const browserMs = Math.round(performance.now() - started);
+  if (response.status === 404) {
+    throw new DiagnosticsDisabledError();
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+  const data = (await response.json()) as DiagnosticsPingResponse;
+  return { data, browserMs };
+}
+
+export async function diagnosticsDbPing(
+  token: string,
+  count = 20,
+  signal?: AbortSignal
+): Promise<DiagnosticsDbPingResponse> {
+  const response = await fetch(
+    diagnosticsUrl(`db-ping?count=${encodeURIComponent(String(count))}`),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    }
+  );
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsDbPingResponse>;
+}
+
+export async function diagnosticsOptions(
+  token: string,
+  signal?: AbortSignal
+): Promise<DiagnosticsOptionsResponse> {
+  const response = await fetch(diagnosticsUrl("options"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsOptionsResponse>;
+}
+
+export async function diagnosticsBenchmark(
+  token: string,
+  body: DiagnosticsBenchmarkRequest,
+  signal?: AbortSignal
+): Promise<{ data: DiagnosticsBenchmarkResponse; browserMs: number }> {
+  const started = performance.now();
+  const response = await fetch(diagnosticsUrl("benchmark"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const browserMs = Math.round(performance.now() - started);
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  const data = (await response.json()) as DiagnosticsBenchmarkResponse;
+  return { data, browserMs };
+}
+
+export async function diagnosticsQueueLag(
+  token: string,
+  jobKind: string,
+  headerId: number,
+  timeoutSeconds = 15,
+  signal?: AbortSignal
+): Promise<DiagnosticsQueueLagResponse> {
+  const params = new URLSearchParams({
+    jobKind,
+    headerId: String(headerId),
+    timeoutSeconds: String(timeoutSeconds),
+  });
+  const response = await fetch(
+    diagnosticsUrl(`queue-lag?${params.toString()}`),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    }
+  );
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsQueueLagResponse>;
+}
+
+export async function diagnosticsSamplePayload(
+  token: string,
+  query: {
+    operation: string;
+    lines: number;
+    itemIds: number[];
+    vendorId?: string;
+    movmentRowId?: number;
+  },
+  signal?: AbortSignal
+): Promise<DiagnosticsSamplePayloadResponse> {
+  const params = new URLSearchParams({
+    operation: query.operation,
+    lines: String(query.lines),
+  });
+  for (const id of query.itemIds) {
+    params.append("itemIds", String(id));
+  }
+  if (query.vendorId) params.set("vendorId", query.vendorId);
+  if (query.movmentRowId != null) {
+    params.set("movmentRowId", String(query.movmentRowId));
+  }
+
+  const response = await fetch(
+    diagnosticsUrl(`sample-payload?${params.toString()}`),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    }
+  );
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsSamplePayloadResponse>;
+}
+
+export async function diagnosticsRealRequest(
+  token: string,
+  method: string,
+  path: string,
+  body: unknown | undefined,
+  signal?: AbortSignal
+): Promise<{
+  browserMs: number;
+  status: number;
+  headers: DiagnosticsXDiagHeaders;
+  ok: boolean;
+  error?: string;
+}> {
+  const started = performance.now();
+  const headers = new Headers({
+    Authorization: `Bearer ${token}`,
+    "X-Diag": "1",
+  });
+  if (body != null) headers.set("Content-Type", "application/json");
+
+  const response = await fetch(alfaApiUrl(path), {
+    method: method.toUpperCase(),
+    headers,
+    body: body != null ? JSON.stringify(body) : undefined,
+    signal,
+  });
+  const browserMs = Math.round(performance.now() - started);
+  const xDiag = parseXDiagHeaders(response);
+  const ok = response.ok;
+  let error: string | undefined;
+  if (!ok) {
+    error = await readErrorMessage(response);
+  } else {
+    await response.text().catch(() => undefined);
+  }
+
+  return { browserMs, status: response.status, headers: xDiag, ok, error };
+}
+
+export class DiagnosticsDisabledError extends Error {
+  constructor() {
+    super("Diagnostics is disabled on the server");
+    this.name = "DiagnosticsDisabledError";
+  }
+}

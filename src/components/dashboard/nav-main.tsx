@@ -23,10 +23,13 @@ import {
   Pill,
   CreditCard,
   WalletCards,
+  Activity,
 } from "lucide-react";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
+import { isDiagnosticsAdmin } from "@/lib/diagnostics/diagnostics-api";
+import { DIAGNOSTICS_NAV_PERMISSION } from "@/lib/diagnostics/diagnostics-types";
 import {
   SIDEBAR_NAV,
   type NavGroupItem,
@@ -67,6 +70,7 @@ const ICONS: Record<string, ElementType> = {
   "Assign User Roles": UserCog,
   "User Permissions": UserCog,
   "Role Permissions": ListChecks,
+  Diagnostics: Activity,
 };
 
 function NavLeafLink({
@@ -395,11 +399,15 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const hydrated = useHydrated();
-  const { hasPermission, loading } = usePermissions();
+  const { hasPermission, roles, loading } = usePermissions();
   const { collapsed, setCollapsed } = useSidebar();
   const isCollapsed = forceExpanded ? false : collapsed;
 
   const canAccess = (permission?: string | null) => {
+    if (permission === DIAGNOSTICS_NAV_PERMISSION) {
+      if (!hydrated || loading) return false;
+      return isDiagnosticsAdmin(roles);
+    }
     if (!permission) return true;
     if (!hydrated || loading) return true;
     return hasPermission(permission);
