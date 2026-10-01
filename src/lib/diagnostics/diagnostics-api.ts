@@ -9,6 +9,7 @@ import type {
   DiagnosticsPingResponse,
   DiagnosticsQueueLagResponse,
   DiagnosticsSamplePayloadResponse,
+  DiagnosticsSetupCheckItem,
   DiagnosticsSetupCheckResponse,
   DiagnosticsXDiagHeaders,
 } from "./diagnostics-types";
@@ -211,6 +212,38 @@ export async function diagnosticsSetupCheck(
   if (response.status === 404) throw new DiagnosticsDisabledError();
   if (!response.ok) throw new Error(await readErrorMessage(response));
   return response.json() as Promise<DiagnosticsSetupCheckResponse>;
+}
+
+export async function diagnosticsSetupCheckOperation(
+  token: string,
+  operation: string,
+  lines: number,
+  storeId?: number,
+  stockIds?: number[],
+  signal?: AbortSignal
+): Promise<DiagnosticsSetupCheckItem> {
+  const params = new URLSearchParams({
+    operation,
+    lines: String(lines),
+  });
+  if (storeId != null && storeId > 0) {
+    params.set("storeId", String(storeId));
+  }
+  if (stockIds != null && stockIds.length > 0) {
+    params.set("stockIds", stockIds.join(","));
+  }
+
+  const response = await fetch(
+    diagnosticsUrl(`setup-check?${params.toString()}`),
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    }
+  );
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsSetupCheckItem>;
 }
 
 export async function diagnosticsOptions(

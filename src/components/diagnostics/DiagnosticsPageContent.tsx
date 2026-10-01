@@ -43,8 +43,18 @@ import {
   diagnosticsRealRequest,
   diagnosticsSamplePayload,
   diagnosticsSetupCheck,
+  diagnosticsSetupCheckOperation,
   DiagnosticsDisabledError,
 } from "@/lib/diagnostics/diagnostics-api";
+import {
+  capLinesForSales,
+  isSalesBenchmarkOperation,
+  parseDistinctStockCap,
+  parseStockIdsInput,
+  resolveQueueStatusForRun,
+  salesLinesHint,
+  shouldPollQueueLag,
+} from "@/lib/diagnostics/diagnostics-sales";
 import {
   customerToEntry,
   itemToEntry as mapItemToEntry,
@@ -54,18 +64,22 @@ import {
   computeNetworkMs,
   formatSkippedError,
   formatN1Top,
+  formatQueueCell,
   formatUsedDefaultsText,
   isScopeSkipError,
   minAvgMax,
   resultsToTsv,
+  sanitizeResultsForCopy,
   summarizeWarmByOperationLines,
   topN1ByOperation,
+  waitForQueueLagSettlement,
 } from "@/lib/diagnostics/diagnostics-stats";
 import type {
   DiagnosticsBenchmarkRequest,
   DiagnosticsOperationInfo,
   DiagnosticsOptionsResponse,
   DiagnosticsResultRow,
+  DiagnosticsSetupCheckItem,
   DiagnosticsUsedDefault,
 } from "@/lib/diagnostics/diagnostics-types";
 
@@ -77,7 +91,15 @@ function formatUsedDefaultsFromApi(
   used?: DiagnosticsUsedDefault[]
 ): string | null {
   if (!used?.length) return null;
-  return used.map((d) => `${d.name}=${d.value}`).join(", ");
+  const filtered = used.filter(
+    (d) => d.name.toLowerCase() !== "deliverycodeorpassword"
+  );
+  if (!filtered.length) return null;
+  return filtered.map((d) => `${d.name}=${d.value}`).join(", ");
+}
+
+function isStockTransferOperation(op: string): boolean {
+  return op.startsWith("StockTransfer.");
 }
 
 function movementsForOperation(
@@ -254,6 +276,10 @@ export function DiagnosticsPageContent() {
   const [vendorId, setVendorId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [movmentRowId, setMovmentRowId] = useState("");
+  const [deliveryCodeOrPassword, setDeliveryCodeOrPassword] = useState("");
+  const [stockIdsText, setStockIdsText] = useState("");
+  const [salesSetupCheck, setSalesSetupCheck] =
+    useState<DiagnosticsSetupCheckItem | null>(null);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
 
   const [realRepeat, setRealRepeat] = useState("3");
@@ -265,7 +291,12 @@ export function DiagnosticsPageContent() {
   const [customRunning, setCustomRunning] = useState(false);
 
   const [results, setResults] = useState<DiagnosticsResultRow[]>([]);
+  const resultsRef = useRef<DiagnosticsResultRow[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
 
   const lines = useMemo(() => {
     if (linesPreset === "custom") return Math.max(1, Number(customLines) || 1);
@@ -350,13 +381,49 @@ export function DiagnosticsPageContent() {
     });
   }, [operation, currentOp, options]);
 
+  useEffect(() => {
+    if (!token || !isSalesBenchmarkOperation(operation)) {
+      setSalesSetupCheck(null);
+      return;
+    }
+
+    let cancelled = false;
+    const parsedStoreId = storeId ? Number(storeId) : undefined;
+    const stockIds = parseStockIdsInput(stockIdsText);
+
+    void diagnosticsSetupCheckOperation(
+      token,
+      operation,
+      lines,
+      parsedStoreId,
+      stockIds.length > 0 ? stockIds : undefined
+    )
+      .then((check) => {
+        if (!cancelled) setSalesSetupCheck(check);
+      })
+      .catch(() => {
+        if (!cancelled) setSalesSetupCheck(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, operation, lines, storeId, stockIdsText]);
+
   function buildBenchmarkBody(
     op: string,
     lineCount: number
   ): DiagnosticsBenchmarkRequest {
+    const stockIds = parseStockIdsInput(stockIdsText);
+    const effectiveLines = capLinesForSales(
+      op,
+      lineCount,
+      salesSetupCheck ? parseDistinctStockCap(salesSetupCheck.missing) : null
+    );
+
     const body: DiagnosticsBenchmarkRequest = {
       operation: op,
-      lines: lineCount,
+      lines: effectiveLines,
       repeat: 1,
       itemIds: selectedItemIds,
     };
@@ -364,6 +431,15 @@ export function DiagnosticsPageContent() {
     if (storeId) body.storeId = Number(storeId);
     if (customerId) body.customerId = Number(customerId);
     if (movmentRowId) body.movmentRowId = Number(movmentRowId);
+    if (deliveryCodeOrPassword.trim()) {
+      body.deliveryCodeOrPassword = deliveryCodeOrPassword.trim();
+    }
+    if (stockIds.length > 0) {
+      body.stockIds = stockIds;
+      if (isSalesBenchmarkOperation(op)) {
+        body.lines = Math.min(body.lines, stockIds.length);
+      }
+    }
     return body;
   }
 
@@ -505,8 +581,15 @@ export function DiagnosticsPageContent() {
         commandCount: run.commandCount,
         saveChangesCount: run.saveChangesCount,
         n1Top: formatN1Top(run.n1Top),
+        jobKind: run.jobKind ?? null,
+        headerId: run.headerId ?? null,
         queueLagMs: null,
-        queueStatus: null,
+        queueStatus: resolveQueueStatusForRun(
+          op,
+          run.jobKind,
+          run.headerId ?? null,
+          Boolean(run.error)
+        ),
         authCommands: null,
         error: run.error ?? null,
         skipped: false,
@@ -527,8 +610,8 @@ export function DiagnosticsPageContent() {
         return { stop: true, skipped: false };
       }
 
-      if (run.jobKind && run.headerId) {
-        pollQueueLag(rowId, run.jobKind, run.headerId, authToken);
+      if (shouldPollQueueLag(op, run.jobKind, run.headerId ?? null)) {
+        pollQueueLag(rowId, run.jobKind!, run.headerId!, authToken);
       }
       return { stop: false, skipped: false };
     } catch (error) {
@@ -766,13 +849,16 @@ export function DiagnosticsPageContent() {
     }
   }
 
-  function copyJson() {
-    void navigator.clipboard.writeText(JSON.stringify(results, null, 2));
+  async function copyJson() {
+    const settled = await waitForQueueLagSettlement(() => resultsRef.current);
+    const payload = sanitizeResultsForCopy(settled);
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
     toast.success("Results copied as JSON");
   }
 
-  function copyTsv() {
-    void navigator.clipboard.writeText(resultsToTsv(results));
+  async function copyTsv() {
+    const settled = await waitForQueueLagSettlement(() => resultsRef.current);
+    await navigator.clipboard.writeText(resultsToTsv(sanitizeResultsForCopy(settled)));
     toast.success("Results copied as text table");
   }
 
@@ -1062,6 +1148,49 @@ export function DiagnosticsPageContent() {
                   />
                 </div>
               ) : null}
+              {isSalesBenchmarkOperation(operation) ? (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="diag-stock-ids">Stock IDs (optional)</Label>
+                  <Input
+                    id="diag-stock-ids"
+                    type="text"
+                    autoComplete="off"
+                    value={stockIdsText}
+                    onChange={(e) => setStockIdsText(e.target.value)}
+                    placeholder="e.g. 501, 502"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Comma-separated stock row ids. When set, lines are capped to
+                    the number of ids (distinct items still apply via
+                    setup-check).
+                  </p>
+                  {salesLinesHint(operation, lines, salesSetupCheck) ? (
+                    <p className="text-amber-700 text-xs dark:text-amber-400">
+                      {salesLinesHint(operation, lines, salesSetupCheck)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {isStockTransferOperation(operation) ? (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="diag-delivery-code">Delivery code</Label>
+                  <Input
+                    id="diag-delivery-code"
+                    type="text"
+                    autoComplete="off"
+                    value={deliveryCodeOrPassword}
+                    onChange={(e) => setDeliveryCodeOrPassword(e.target.value)}
+                    placeholder="Delivery employee code"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Sent as{" "}
+                    <span className="font-mono">deliveryCodeOrPassword</span>{" "}
+                    on StockTransfer benchmarks. Required for create/update;
+                    receiving auth uses the same value as password. Not stored or
+                    included in copied results.
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -1199,15 +1328,24 @@ export function DiagnosticsPageContent() {
           <CardHeader>
             <CardTitle>5. Results</CardTitle>
             <CardDescription>
-              Copy results to share. Queue lag fills in asynchronously.
+              Copy waits up to 30s for queue cells to settle, then exports.
+              Queue lag fills in asynchronously while results stream in.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={copyJson}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void copyJson()}
+              >
                 Copy results as JSON
               </Button>
-              <Button type="button" variant="secondary" onClick={copyTsv}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void copyTsv()}
+              >
                 Copy results as text table
               </Button>
               <Button
@@ -1256,11 +1394,7 @@ export function DiagnosticsPageContent() {
                     <TableCell>{row.transactionMs ?? "—"}</TableCell>
                     <TableCell>{row.commandCount ?? "—"}</TableCell>
                     <TableCell>{row.saveChangesCount ?? "—"}</TableCell>
-                    <TableCell>
-                      {row.queueLagMs != null
-                        ? `${row.queueLagMs} (${row.queueStatus})`
-                        : row.queueStatus ?? "—"}
-                    </TableCell>
+                    <TableCell>{formatQueueCell(row)}</TableCell>
                     <TableCell className="max-w-[200px] truncate text-destructive">
                       {row.skipped
                         ? formatSkippedError(row.error)

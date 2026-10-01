@@ -68,7 +68,7 @@ const RESULT_TABLE_HEADERS = [
   "Commands",
   "SaveChanges",
   "N+1",
-  "Queue lag ms",
+  "Queue",
   "Used defaults",
   "Error",
 ] as const;
@@ -77,6 +77,76 @@ export function formatUsedDefaultsText(
   usedDefaults: string | null | undefined
 ): string {
   return usedDefaults?.trim() ?? "";
+}
+
+export function isQueueLagPending(row: DiagnosticsResultRow): boolean {
+  if (row.skipped || row.error) return false;
+  if (row.queueStatus === "no job" || row.queueStatus === "not tracked") return false;
+  if (
+    row.queueStatus === "Completed" ||
+    row.queueStatus === "Failed" ||
+    row.queueStatus === "Timeout" ||
+    row.queueStatus === "pending"
+  ) {
+    return false;
+  }
+  if (row.jobKind && row.headerId != null) {
+    if (row.queueStatus === "Pending") return true;
+    if (row.queueLagMs == null && row.queueStatus == null) return true;
+  }
+  return false;
+}
+
+export function formatQueueCell(row: DiagnosticsResultRow): string {
+  if (row.queueStatus === "not tracked") return "not tracked";
+  if (row.queueStatus === "no job") return "no job";
+  if (row.queueStatus === "pending") return "pending";
+  if (row.queueLagMs != null && row.queueStatus) {
+    return `${row.queueLagMs} (${row.queueStatus})`;
+  }
+  if (row.queueStatus) return row.queueStatus;
+  return "—";
+}
+
+export async function waitForQueueLagSettlement(
+  getRows: () => DiagnosticsResultRow[],
+  maxMs = 30000,
+  pollMs = 250
+): Promise<DiagnosticsResultRow[]> {
+  const deadline = Date.now() + maxMs;
+  while (Date.now() < deadline) {
+    if (!getRows().some(isQueueLagPending)) {
+      return getRows();
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return getRows().map((row) =>
+    isQueueLagPending(row) ? { ...row, queueStatus: "pending" } : row
+  );
+}
+
+export function sanitizeResultsForCopy(
+  rows: DiagnosticsResultRow[]
+): DiagnosticsResultRow[] {
+  return rows.map((row) => ({
+    ...row,
+    usedDefaults: stripSensitiveUsedDefaults(row.usedDefaults),
+  }));
+}
+
+function stripSensitiveUsedDefaults(
+  usedDefaults: string | null | undefined
+): string | null {
+  const text = usedDefaults?.trim();
+  if (!text) return null;
+  const filtered = text
+    .split(",")
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part.length > 0 && !part.toLowerCase().startsWith("deliverycodeorpassword=")
+    );
+  return filtered.length > 0 ? filtered.join(", ") : null;
 }
 
 export function formatSkippedError(error: string | null | undefined): string {
@@ -103,7 +173,7 @@ export function resultsToTsv(rows: DiagnosticsResultRow[]): string {
         row.commandCount ?? "",
         row.saveChangesCount ?? "",
         row.n1Top,
-        row.queueLagMs ?? "",
+        formatQueueCell(row),
         formatUsedDefaultsText(row.usedDefaults),
         row.skipped
           ? formatSkippedError(row.error)

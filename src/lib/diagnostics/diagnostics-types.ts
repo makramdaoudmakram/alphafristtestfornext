@@ -181,6 +181,8 @@ export type DiagnosticsResultRow = {
   commandCount: number | null;
   saveChangesCount: number | null;
   n1Top: string;
+  jobKind?: string | null;
+  headerId?: number | null;
   queueLagMs: number | null;
   queueStatus: string | null;
   authCommands: number | null;
