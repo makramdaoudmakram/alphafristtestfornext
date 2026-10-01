@@ -69,8 +69,23 @@ const RESULT_TABLE_HEADERS = [
   "SaveChanges",
   "N+1",
   "Queue lag ms",
+  "Used defaults",
   "Error",
 ] as const;
+
+export function formatUsedDefaultsText(
+  usedDefaults: string | null | undefined
+): string {
+  return usedDefaults?.trim() ?? "";
+}
+
+export function formatSkippedError(error: string | null | undefined): string {
+  const text = error?.trim() ?? "";
+  if (!text) return "skipped";
+  return text.toLowerCase().startsWith("skipped:")
+    ? text
+    : `skipped: ${text}`;
+}
 
 export function resultsToTsv(rows: DiagnosticsResultRow[]): string {
   const lines = [RESULT_TABLE_HEADERS.join("\t")];
@@ -89,7 +104,10 @@ export function resultsToTsv(rows: DiagnosticsResultRow[]): string {
         row.saveChangesCount ?? "",
         row.n1Top,
         row.queueLagMs ?? "",
-        row.skipped ? `SKIPPED: ${row.error ?? ""}` : row.error ?? "",
+        formatUsedDefaultsText(row.usedDefaults),
+        row.skipped
+          ? formatSkippedError(row.error)
+          : row.error ?? "",
       ].join("\t")
     );
   }

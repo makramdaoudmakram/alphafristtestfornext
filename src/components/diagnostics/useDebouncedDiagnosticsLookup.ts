@@ -16,6 +16,7 @@ export function useDebouncedDiagnosticsLookup(options: {
   debounceMs?: number;
   take?: number;
   enabled?: boolean;
+  operation?: string;
 }) {
   const {
     token,
@@ -24,6 +25,7 @@ export function useDebouncedDiagnosticsLookup(options: {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     take = 50,
     enabled = true,
+    operation,
   } = options;
 
   const [search, setSearch] = useState("");
@@ -59,7 +61,14 @@ export function useDebouncedDiagnosticsLookup(options: {
       setLoading(true);
       setError(null);
 
-      void diagnosticsLookup(token, kind, term, take, controller.signal)
+      void diagnosticsLookup(
+          token,
+          kind,
+          term,
+          take,
+          controller.signal,
+          operation
+        )
         .then((rows) => {
           if (controller.signal.aborted) return;
           setEntries(rows);
@@ -82,7 +91,7 @@ export function useDebouncedDiagnosticsLookup(options: {
       window.clearTimeout(timer);
       abortRef.current?.abort();
     };
-  }, [debounceMs, enabled, kind, search, take, token]);
+  }, [debounceMs, enabled, kind, operation, search, take, token]);
 
   return {
     search,

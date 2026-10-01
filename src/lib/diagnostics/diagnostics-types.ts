@@ -50,6 +50,11 @@ export type DiagnosticsApiErrorBody = {
   innerMessage?: string;
 };
 
+export type DiagnosticsUsedDefault = {
+  name: string;
+  value: string;
+};
+
 export type DiagnosticsOperationInfo = {
   key: string;
   label: string;
@@ -59,6 +64,18 @@ export type DiagnosticsOperationInfo = {
   needsStock: boolean;
   needsMovement: boolean;
   needsEmployee: boolean;
+  movements?: DiagnosticsLookupItem[];
+};
+
+export type DiagnosticsSetupCheckItem = {
+  operation: string;
+  runnable: boolean;
+  missing: string[];
+  usedDefaults: DiagnosticsUsedDefault[];
+};
+
+export type DiagnosticsSetupCheckResponse = {
+  operations: DiagnosticsSetupCheckItem[];
 };
 
 export type DiagnosticsOptionsResponse = {
@@ -120,6 +137,7 @@ export type DiagnosticsBenchmarkResponse = {
     commandCount: { min: number; median: number; max: number };
     dbWaitMs: { min: number; median: number; max: number };
   } | null;
+  usedDefaults?: DiagnosticsUsedDefault[];
 };
 
 export type DiagnosticsQueueLagResponse = {
@@ -168,4 +186,5 @@ export type DiagnosticsResultRow = {
   authCommands: number | null;
   error: string | null;
   skipped: boolean;
+  usedDefaults: string | null;
 };

@@ -9,6 +9,7 @@ import type {
   DiagnosticsPingResponse,
   DiagnosticsQueueLagResponse,
   DiagnosticsSamplePayloadResponse,
+  DiagnosticsSetupCheckResponse,
   DiagnosticsXDiagHeaders,
 } from "./diagnostics-types";
 
@@ -172,7 +173,8 @@ export async function diagnosticsLookup(
   kind: DiagnosticsLookupKind,
   q?: string,
   take = 50,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  operation?: string
 ): Promise<DiagnosticsLookupEntry[]> {
   const params = new URLSearchParams({
     kind,
@@ -180,6 +182,9 @@ export async function diagnosticsLookup(
   });
   const term = q?.trim();
   if (term) params.set("q", term);
+  if (kind === "movement" && operation?.trim()) {
+    params.set("operation", operation.trim());
+  }
 
   const response = await fetch(
     diagnosticsUrl(`lookup?${params.toString()}`),
@@ -192,6 +197,20 @@ export async function diagnosticsLookup(
   if (response.status === 404) throw new DiagnosticsDisabledError();
   if (!response.ok) throw new Error(await readErrorMessage(response));
   return response.json() as Promise<DiagnosticsLookupEntry[]>;
+}
+
+export async function diagnosticsSetupCheck(
+  token: string,
+  signal?: AbortSignal
+): Promise<DiagnosticsSetupCheckResponse> {
+  const response = await fetch(diagnosticsUrl("setup-check"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsSetupCheckResponse>;
 }
 
 export async function diagnosticsOptions(

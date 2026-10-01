@@ -69,6 +69,7 @@ export function DiagnosticsLookupCombobox({
   placeholder = "Select…",
   disabled = false,
   className,
+  operation,
 }: {
   token: string | undefined;
   kind: DiagnosticsLookupKind;
@@ -78,6 +79,7 @@ export function DiagnosticsLookupCombobox({
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  operation?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [position, setPosition] = React.useState<DropdownPosition | null>(null);
@@ -91,6 +93,7 @@ export function DiagnosticsLookupCombobox({
       kind,
       initialEntries,
       enabled: open,
+      operation,
     });
 
   const selectedEntry = React.useMemo(() => {

@@ -42,6 +42,7 @@ import {
   diagnosticsQueueLag,
   diagnosticsRealRequest,
   diagnosticsSamplePayload,
+  diagnosticsSetupCheck,
   DiagnosticsDisabledError,
 } from "@/lib/diagnostics/diagnostics-api";
 import {
@@ -51,7 +52,9 @@ import {
 } from "@/lib/diagnostics/diagnostics-picker-utils";
 import {
   computeNetworkMs,
+  formatSkippedError,
   formatN1Top,
+  formatUsedDefaultsText,
   isScopeSkipError,
   minAvgMax,
   resultsToTsv,
@@ -63,10 +66,26 @@ import type {
   DiagnosticsOperationInfo,
   DiagnosticsOptionsResponse,
   DiagnosticsResultRow,
+  DiagnosticsUsedDefault,
 } from "@/lib/diagnostics/diagnostics-types";
 
 function newRowId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function formatUsedDefaultsFromApi(
+  used?: DiagnosticsUsedDefault[]
+): string | null {
+  if (!used?.length) return null;
+  return used.map((d) => `${d.name}=${d.value}`).join(", ");
+}
+
+function movementsForOperation(
+  op: DiagnosticsOperationInfo | undefined,
+  fallback: DiagnosticsOptionsResponse["movements"]
+) {
+  if (op?.movements?.length) return op.movements;
+  return fallback;
 }
 
 type ParsedBenchmarkRunError = {
@@ -286,8 +305,15 @@ export function DiagnosticsPageContent() {
           if (opts.vendors.length > 0) {
             setVendorId(opts.vendors[0]!.id);
           }
-          if (opts.movements.length > 0) {
-            setMovmentRowId(String(opts.movements[0]!.id));
+          const initialOp =
+            opts.operations.find((o) => o.key === operation) ??
+            opts.operations[0];
+          const initialMovements = movementsForOperation(
+            initialOp,
+            opts.movements
+          );
+          if (initialMovements.length > 0) {
+            setMovmentRowId(String(initialMovements[0]!.id));
           }
           if (opts.stores.length > 0) {
             setStoreId(String(opts.stores[0]!.id));
@@ -311,6 +337,19 @@ export function DiagnosticsPageContent() {
     };
   }, [status, token]);
 
+  useEffect(() => {
+    if (!options || !currentOp?.needsMovement) return;
+    const list = movementsForOperation(currentOp, options.movements);
+    if (list.length === 0) {
+      setMovmentRowId("");
+      return;
+    }
+    setMovmentRowId((current) => {
+      const stillValid = list.some((m) => String(m.id) === current);
+      return stillValid ? current : String(list[0]!.id);
+    });
+  }, [operation, currentOp, options]);
+
   function buildBenchmarkBody(
     op: string,
     lineCount: number
@@ -326,6 +365,18 @@ export function DiagnosticsPageContent() {
     if (customerId) body.customerId = Number(customerId);
     if (movmentRowId) body.movmentRowId = Number(movmentRowId);
     return body;
+  }
+
+  function buildBenchmarkBodyForRunAll(
+    op: string,
+    lineCount: number
+  ): DiagnosticsBenchmarkRequest {
+    return {
+      operation: op,
+      lines: lineCount,
+      repeat: 1,
+      itemIds: [],
+    };
   }
 
   function appendResult(row: DiagnosticsResultRow) {
@@ -403,14 +454,16 @@ export function DiagnosticsPageContent() {
     lineCount: number,
     phase: string,
     authToken: string,
-    signal: AbortSignal
+    signal: AbortSignal,
+    bodyOverride?: DiagnosticsBenchmarkRequest
   ): Promise<{ stop: boolean; skipped: boolean }> {
     try {
       const { data, browserMs } = await diagnosticsBenchmark(
         authToken,
-        buildBenchmarkBody(op, lineCount),
+        bodyOverride ?? buildBenchmarkBody(op, lineCount),
         signal
       );
+      const usedDefaultsText = formatUsedDefaultsFromApi(data.usedDefaults);
       const run = data.runs[0];
       if (!run) {
         appendResult({
@@ -432,6 +485,7 @@ export function DiagnosticsPageContent() {
           authCommands: null,
           error: "Empty benchmark response",
           skipped: false,
+          usedDefaults: usedDefaultsText,
         });
         return { stop: true, skipped: false };
       }
@@ -456,6 +510,7 @@ export function DiagnosticsPageContent() {
         authCommands: null,
         error: run.error ?? null,
         skipped: false,
+        usedDefaults: usedDefaultsText,
       });
 
       if (run.error) {
@@ -499,6 +554,7 @@ export function DiagnosticsPageContent() {
         authCommands: null,
         error: message,
         skipped: false,
+        usedDefaults: null,
       });
       return { stop: true, skipped: false };
     }
@@ -527,7 +583,43 @@ export function DiagnosticsPageContent() {
           if (stop) break;
         }
       } else {
+        const setup = await diagnosticsSetupCheck(token, controller.signal);
+        const setupByOp = new Map(
+          setup.operations.map((item) => [item.operation, item])
+        );
+
         for (const op of options.operations) {
+          if (controller.signal.aborted) break;
+
+          const check = setupByOp.get(op.key);
+          if (!check?.runnable) {
+            const reason =
+              check?.missing.filter(Boolean).join("; ") ||
+              "Operation is not runnable.";
+            appendResult({
+              id: newRowId(),
+              source: "benchmark",
+              operation: op.key,
+              lines: 0,
+              phase: "skipped",
+              browserTotalMs: 0,
+              serverMs: null,
+              networkMs: null,
+              dbWaitMs: null,
+              transactionMs: null,
+              commandCount: null,
+              saveChangesCount: null,
+              n1Top: "",
+              queueLagMs: null,
+              queueStatus: null,
+              authCommands: null,
+              error: reason,
+              skipped: true,
+              usedDefaults: formatUsedDefaultsFromApi(check?.usedDefaults),
+            });
+            continue;
+          }
+
           for (const lineCount of [3, 30]) {
             for (let i = 0; i < 3; i++) {
               if (controller.signal.aborted) break;
@@ -537,7 +629,8 @@ export function DiagnosticsPageContent() {
                 lineCount,
                 phase,
                 token,
-                controller.signal
+                controller.signal,
+                buildBenchmarkBodyForRunAll(op.key, lineCount)
               );
               if (stop) break;
             }
@@ -611,6 +704,7 @@ export function DiagnosticsPageContent() {
           authCommands: headers.authCommands,
           error: result.error ?? null,
           skipped: false,
+          usedDefaults: null,
         });
       }
     } catch (error) {
@@ -661,6 +755,7 @@ export function DiagnosticsPageContent() {
         authCommands: result.headers.authCommands,
         error: result.error ?? null,
         skipped: false,
+        usedDefaults: null,
       });
     } catch (error) {
       toast.error(
@@ -700,6 +795,13 @@ export function DiagnosticsPageContent() {
   const initialMovements = useMemo(
     () => options?.movements.map(mapItemToEntry) ?? [],
     [options?.movements]
+  );
+  const operationMovements = useMemo(
+    () =>
+      movementsForOperation(currentOp, options?.movements ?? []).map(
+        mapItemToEntry
+      ),
+    [currentOp, options?.movements]
   );
 
   const warmSummaries = useMemo(
@@ -909,11 +1011,12 @@ export function DiagnosticsPageContent() {
                   <DiagnosticsLookupCombobox
                     token={token}
                     kind="movement"
-                    initialEntries={initialMovements}
+                    initialEntries={operationMovements}
                     value={movmentRowId}
                     onValueChange={setMovmentRowId}
                     placeholder="Movement"
                     disabled={!options}
+                    operation={operation}
                   />
                 </div>
               ) : null}
@@ -1136,8 +1239,13 @@ export function DiagnosticsPageContent() {
               <TableBody>
                 {results.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="max-w-[140px] truncate">
-                      {row.operation}
+                    <TableCell className="max-w-[140px]">
+                      <div className="truncate">{row.operation}</div>
+                      {formatUsedDefaultsText(row.usedDefaults) ? (
+                        <p className="text-muted-foreground mt-0.5 truncate text-xs">
+                          defaults: {formatUsedDefaultsText(row.usedDefaults)}
+                        </p>
+                      ) : null}
                     </TableCell>
                     <TableCell>{row.lines || "—"}</TableCell>
                     <TableCell>{row.phase}</TableCell>
@@ -1154,7 +1262,9 @@ export function DiagnosticsPageContent() {
                         : row.queueStatus ?? "—"}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-destructive">
-                      {row.skipped ? `skipped: ${row.error}` : row.error ?? ""}
+                      {row.skipped
+                        ? formatSkippedError(row.error)
+                        : row.error ?? ""}
                     </TableCell>
                   </TableRow>
                 ))}
