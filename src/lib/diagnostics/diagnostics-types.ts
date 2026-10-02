@@ -104,7 +104,8 @@ export type DiagnosticsBenchmarkRequest = {
   salesServiceId?: number;
   paymentMethodId?: number;
   salesKindId?: number;
-  deliveryCodeOrPassword?: string;
+  deliveryEmployeeCode?: string;
+  receivingEmployeePassword?: string;
 };
 
 export type DiagnosticsN1Entry = {

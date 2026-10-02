@@ -44,11 +44,23 @@ import {
   diagnosticsSamplePayload,
   diagnosticsSetupCheck,
   diagnosticsSetupCheckOperation,
+  diagnosticsQueueHealth,
   DiagnosticsDisabledError,
 } from "@/lib/diagnostics/diagnostics-api";
 import {
+  BENCHMARK_REQUEST_TIMEOUT_MS,
+  createTimeoutSignal,
+  isSetupNeededMessage,
+  isStockTransferOperation,
+  mergeAbortSignals,
+  needsDeliveryEmployeeFields,
+  QUEUE_LAG_TIMEOUT_SECONDS,
+} from "@/lib/diagnostics/diagnostics-run";
+import {
   capLinesForSales,
+  formatSalesReturnSetupReport,
   isSalesBenchmarkOperation,
+  isSalesReturnBenchmarkOperation,
   parseDistinctStockCap,
   parseStockIdsInput,
   resolveQueueStatusForRun,
@@ -91,15 +103,16 @@ function formatUsedDefaultsFromApi(
   used?: DiagnosticsUsedDefault[]
 ): string | null {
   if (!used?.length) return null;
-  const filtered = used.filter(
-    (d) => d.name.toLowerCase() !== "deliverycodeorpassword"
-  );
+  const filtered = used.filter((d) => {
+    const name = d.name.toLowerCase();
+    return (
+      name !== "deliverycodeorpassword" &&
+      name !== "deliveryemployeecode" &&
+      name !== "receivingemployeepassword"
+    );
+  });
   if (!filtered.length) return null;
   return filtered.map((d) => `${d.name}=${d.value}`).join(", ");
-}
-
-function isStockTransferOperation(op: string): boolean {
-  return op.startsWith("StockTransfer.");
 }
 
 function movementsForOperation(
@@ -276,11 +289,20 @@ export function DiagnosticsPageContent() {
   const [vendorId, setVendorId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [movmentRowId, setMovmentRowId] = useState("");
-  const [deliveryCodeOrPassword, setDeliveryCodeOrPassword] = useState("");
+  const [deliveryEmployeeCode, setDeliveryEmployeeCode] = useState("");
+  const [receivingEmployeePassword, setReceivingEmployeePassword] = useState("");
   const [stockIdsText, setStockIdsText] = useState("");
   const [salesSetupCheck, setSalesSetupCheck] =
     useState<DiagnosticsSetupCheckItem | null>(null);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const [benchmarkProgress, setBenchmarkProgress] = useState<{
+    current: number;
+    total: number;
+    label: string;
+  } | null>(null);
+  const [queueHealth, setQueueHealth] = useState<Awaited<
+    ReturnType<typeof diagnosticsQueueHealth>
+  > | null>(null);
 
   const [realRepeat, setRealRepeat] = useState("3");
   const [realRunning, setRealRunning] = useState(false);
@@ -382,7 +404,7 @@ export function DiagnosticsPageContent() {
   }, [operation, currentOp, options]);
 
   useEffect(() => {
-    if (!token || !isSalesBenchmarkOperation(operation)) {
+    if (!token || (!isSalesBenchmarkOperation(operation) && !isSalesReturnBenchmarkOperation(operation))) {
       setSalesSetupCheck(null);
       return;
     }
@@ -410,6 +432,26 @@ export function DiagnosticsPageContent() {
     };
   }, [token, operation, lines, storeId, stockIdsText]);
 
+  useEffect(() => {
+    if (!token) {
+      setQueueHealth(null);
+      return;
+    }
+
+    let cancelled = false;
+    void diagnosticsQueueHealth(token)
+      .then((health) => {
+        if (!cancelled) setQueueHealth(health);
+      })
+      .catch(() => {
+        if (!cancelled) setQueueHealth(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, benchmarkRunning]);
+
   function buildBenchmarkBody(
     op: string,
     lineCount: number
@@ -431,8 +473,11 @@ export function DiagnosticsPageContent() {
     if (storeId) body.storeId = Number(storeId);
     if (customerId) body.customerId = Number(customerId);
     if (movmentRowId) body.movmentRowId = Number(movmentRowId);
-    if (deliveryCodeOrPassword.trim()) {
-      body.deliveryCodeOrPassword = deliveryCodeOrPassword.trim();
+    if (deliveryEmployeeCode.trim()) {
+      body.deliveryEmployeeCode = deliveryEmployeeCode.trim();
+    }
+    if (receivingEmployeePassword.trim()) {
+      body.receivingEmployeePassword = receivingEmployeePassword.trim();
     }
     if (stockIds.length > 0) {
       body.stockIds = stockIds;
@@ -447,12 +492,19 @@ export function DiagnosticsPageContent() {
     op: string,
     lineCount: number
   ): DiagnosticsBenchmarkRequest {
-    return {
+    const body: DiagnosticsBenchmarkRequest = {
       operation: op,
       lines: lineCount,
       repeat: 1,
       itemIds: [],
     };
+    if (deliveryEmployeeCode.trim()) {
+      body.deliveryEmployeeCode = deliveryEmployeeCode.trim();
+    }
+    if (receivingEmployeePassword.trim()) {
+      body.receivingEmployeePassword = receivingEmployeePassword.trim();
+    }
+    return body;
   }
 
   function appendResult(row: DiagnosticsResultRow) {
@@ -463,9 +515,16 @@ export function DiagnosticsPageContent() {
     rowId: string,
     jobKind: string,
     headerId: number,
-    authToken: string
+    authToken: string,
+    signal?: AbortSignal
   ) {
-    void diagnosticsQueueLag(authToken, jobKind, headerId, 15)
+    void diagnosticsQueueLag(
+      authToken,
+      jobKind,
+      headerId,
+      QUEUE_LAG_TIMEOUT_SECONDS,
+      signal
+    )
       .then((lag) => {
         setResults((prev) =>
           prev.map((r) =>
@@ -532,12 +591,43 @@ export function DiagnosticsPageContent() {
     authToken: string,
     signal: AbortSignal,
     bodyOverride?: DiagnosticsBenchmarkRequest
-  ): Promise<{ stop: boolean; skipped: boolean }> {
+  ): Promise<{ stop: boolean; skipped: boolean; timedOut: boolean }> {
+    if (
+      isStockTransferOperation(op) &&
+      (!deliveryEmployeeCode.trim() || !receivingEmployeePassword.trim())
+    ) {
+      appendResult({
+        id: newRowId(),
+        source: "benchmark",
+        operation: op,
+        lines: lineCount,
+        phase,
+        browserTotalMs: 0,
+        serverMs: null,
+        networkMs: null,
+        dbWaitMs: null,
+        transactionMs: null,
+        commandCount: null,
+        saveChangesCount: null,
+        n1Top: "",
+        queueLagMs: null,
+        queueStatus: null,
+        authCommands: null,
+        error:
+          "deliveryEmployeeCode and receivingEmployeePassword are required for stock transfer benchmarks.",
+        skipped: true,
+        usedDefaults: null,
+      });
+      return { stop: true, skipped: true, timedOut: false };
+    }
+
+    const timeout = createTimeoutSignal(BENCHMARK_REQUEST_TIMEOUT_MS);
     try {
+      const requestSignal = mergeAbortSignals(signal, timeout.signal);
       const { data, browserMs } = await diagnosticsBenchmark(
         authToken,
         bodyOverride ?? buildBenchmarkBody(op, lineCount),
-        signal
+        requestSignal
       );
       const usedDefaultsText = formatUsedDefaultsFromApi(data.usedDefaults);
       const run = data.runs[0];
@@ -563,7 +653,7 @@ export function DiagnosticsPageContent() {
           skipped: false,
           usedDefaults: usedDefaultsText,
         });
-        return { stop: true, skipped: false };
+        return { stop: true, skipped: false, timedOut: false };
       }
 
       const rowId = newRowId();
@@ -605,17 +695,41 @@ export function DiagnosticsPageContent() {
                 : r
             )
           );
-          return { stop: false, skipped: true };
+          return { stop: false, skipped: true, timedOut: false };
         }
-        return { stop: true, skipped: false };
+        return { stop: true, skipped: false, timedOut: false };
       }
 
       if (shouldPollQueueLag(op, run.jobKind, run.headerId ?? null)) {
-        pollQueueLag(rowId, run.jobKind!, run.headerId!, authToken);
+        pollQueueLag(rowId, run.jobKind!, run.headerId!, authToken, signal);
       }
-      return { stop: false, skipped: false };
+      return { stop: false, skipped: false, timedOut: false };
     } catch (error) {
-      if (signal.aborted) return { stop: true, skipped: false };
+      if (signal.aborted) return { stop: true, skipped: false, timedOut: false };
+      if (timeout.signal.aborted) {
+        appendResult({
+          id: newRowId(),
+          source: "benchmark",
+          operation: op,
+          lines: lineCount,
+          phase,
+          browserTotalMs: BENCHMARK_REQUEST_TIMEOUT_MS,
+          serverMs: null,
+          networkMs: null,
+          dbWaitMs: null,
+          transactionMs: null,
+          commandCount: null,
+          saveChangesCount: null,
+          n1Top: "",
+          queueLagMs: null,
+          queueStatus: null,
+          authCommands: null,
+          error: `Benchmark timed out after ${BENCHMARK_REQUEST_TIMEOUT_MS / 1000}s.`,
+          skipped: false,
+          usedDefaults: null,
+        });
+        return { stop: true, skipped: false, timedOut: true };
+      }
       const message =
         error instanceof Error ? error.message : "Benchmark failed.";
       appendResult({
@@ -639,7 +753,9 @@ export function DiagnosticsPageContent() {
         skipped: false,
         usedDefaults: null,
       });
-      return { stop: true, skipped: false };
+      return { stop: true, skipped: false, timedOut: false };
+    } finally {
+      timeout.clear();
     }
   }
 
@@ -649,13 +765,24 @@ export function DiagnosticsPageContent() {
     const controller = new AbortController();
     abortRef.current = controller;
     setBenchmarkRunning(true);
+    setBenchmarkProgress(null);
 
     try {
       if (mode === "single") {
         const repeats = Math.max(1, Number(repeatCount) || 1);
+        setBenchmarkProgress({
+          current: 0,
+          total: repeats,
+          label: operation,
+        });
         for (let i = 0; i < repeats; i++) {
           if (controller.signal.aborted) break;
           const phase = i === 0 ? "cold" : "warm";
+          setBenchmarkProgress({
+            current: i + 1,
+            total: repeats,
+            label: `${operation} (${phase})`,
+          });
           const { stop } = await runSingleBenchmark(
             operation,
             lines,
@@ -670,6 +797,11 @@ export function DiagnosticsPageContent() {
         const setupByOp = new Map(
           setup.operations.map((item) => [item.operation, item])
         );
+        const runnableOps = options.operations.filter(
+          (op) => setupByOp.get(op.key)?.runnable
+        );
+        const totalRuns = runnableOps.length * 2 * 3;
+        let completedRuns = 0;
 
         for (const op of options.operations) {
           if (controller.signal.aborted) break;
@@ -679,12 +811,14 @@ export function DiagnosticsPageContent() {
             const reason =
               check?.missing.filter(Boolean).join("; ") ||
               "Operation is not runnable.";
+            const setupNeeded =
+              check?.missing.some((m) => isSetupNeededMessage(m)) ?? false;
             appendResult({
               id: newRowId(),
               source: "benchmark",
               operation: op.key,
               lines: 0,
-              phase: "skipped",
+              phase: setupNeeded ? "setup-needed" : "skipped",
               browserTotalMs: 0,
               serverMs: null,
               networkMs: null,
@@ -703,11 +837,19 @@ export function DiagnosticsPageContent() {
             continue;
           }
 
+          let opTimedOut = false;
           for (const lineCount of [3, 30]) {
+            if (opTimedOut) break;
             for (let i = 0; i < 3; i++) {
-              if (controller.signal.aborted) break;
+              if (controller.signal.aborted || opTimedOut) break;
               const phase = i === 0 ? "cold" : "warm";
-              const { stop } = await runSingleBenchmark(
+              completedRuns += 1;
+              setBenchmarkProgress({
+                current: completedRuns,
+                total: totalRuns,
+                label: `${op.key} ${lineCount}L ${phase}`,
+              });
+              const { stop, timedOut } = await runSingleBenchmark(
                 op.key,
                 lineCount,
                 phase,
@@ -715,6 +857,10 @@ export function DiagnosticsPageContent() {
                 controller.signal,
                 buildBenchmarkBodyForRunAll(op.key, lineCount)
               );
+              if (timedOut) {
+                opTimedOut = true;
+                break;
+              }
               if (stop) break;
             }
           }
@@ -722,7 +868,13 @@ export function DiagnosticsPageContent() {
       }
     } finally {
       setBenchmarkRunning(false);
+      setBenchmarkProgress(null);
       abortRef.current = null;
+      if (token) {
+        void diagnosticsQueueHealth(token)
+          .then(setQueueHealth)
+          .catch(() => setQueueHealth(null));
+      }
     }
   }
 
@@ -1148,6 +1300,13 @@ export function DiagnosticsPageContent() {
                   />
                 </div>
               ) : null}
+              {isSalesReturnBenchmarkOperation(operation) && salesSetupCheck ? (
+                <div className="space-y-2 md:col-span-2">
+                  <p className="text-muted-foreground text-xs">
+                    {formatSalesReturnSetupReport(salesSetupCheck)}
+                  </p>
+                </div>
+              ) : null}
               {isSalesBenchmarkOperation(operation) ? (
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="diag-stock-ids">Stock IDs (optional)</Label>
@@ -1171,29 +1330,55 @@ export function DiagnosticsPageContent() {
                   ) : null}
                 </div>
               ) : null}
-              {isStockTransferOperation(operation) ? (
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="diag-delivery-code">Delivery code</Label>
-                  <Input
-                    id="diag-delivery-code"
-                    type="text"
-                    autoComplete="off"
-                    value={deliveryCodeOrPassword}
-                    onChange={(e) => setDeliveryCodeOrPassword(e.target.value)}
-                    placeholder="Delivery employee code"
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    Sent as{" "}
-                    <span className="font-mono">deliveryCodeOrPassword</span>{" "}
-                    on StockTransfer benchmarks. Required for create/update;
-                    receiving auth uses the same value as password. Not stored or
-                    included in copied results.
-                  </p>
-                </div>
+              {needsDeliveryEmployeeFields(operation) ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="diag-delivery-employee-code">
+                      Delivery employee code
+                    </Label>
+                    <Input
+                      id="diag-delivery-employee-code"
+                      type="text"
+                      autoComplete="off"
+                      value={deliveryEmployeeCode}
+                      onChange={(e) => setDeliveryEmployeeCode(e.target.value)}
+                      placeholder="Delivery employee code"
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Sent as{" "}
+                      <span className="font-mono">deliveryEmployeeCode</span>{" "}
+                      to StockTransfer and Sales.Delivery. Kept in page state
+                      only. Not stored or included in copied results.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="diag-receiving-employee-password">
+                      Receiving employee password
+                    </Label>
+                    <Input
+                      id="diag-receiving-employee-password"
+                      type="password"
+                      autoComplete="off"
+                      value={receivingEmployeePassword}
+                      onChange={(e) =>
+                        setReceivingEmployeePassword(e.target.value)
+                      }
+                      placeholder="Receiving employee password"
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Sent as{" "}
+                      <span className="font-mono">
+                        receivingEmployeePassword
+                      </span>{" "}
+                      to StockTransfer and Sales.Delivery. Kept in page state
+                      only. Not stored or included in copied results.
+                    </p>
+                  </div>
+                </>
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 disabled={benchmarkRunning || !token}
@@ -1217,6 +1402,12 @@ export function DiagnosticsPageContent() {
               >
                 Stop
               </Button>
+              {benchmarkProgress ? (
+                <span className="text-muted-foreground text-sm">
+                  {benchmarkProgress.current} of {benchmarkProgress.total}
+                  {benchmarkProgress.label ? ` — ${benchmarkProgress.label}` : ""}
+                </span>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -1333,6 +1524,31 @@ export function DiagnosticsPageContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {queueHealth ? (
+              <div className="bg-muted/40 rounded-md border p-3 text-sm">
+                <p className="font-medium">Reporting queue</p>
+                <ul className="mt-2 space-y-1">
+                  <li>
+                    Worker running: {queueHealth.workerRunning ? "yes" : "no"}
+                  </li>
+                  <li>
+                    Pending / processing / failed: {queueHealth.pendingCount} /{" "}
+                    {queueHealth.processingCount} / {queueHealth.failedCount}
+                  </li>
+                  <li>
+                    Stuck processing: {queueHealth.stuckProcessingCount}
+                    {queueHealth.oldestPendingAgeSeconds > 0
+                      ? ` · oldest pending ${queueHealth.oldestPendingAgeSeconds}s`
+                      : ""}
+                  </li>
+                  {queueHealth.stuckReason ? (
+                    <li className="text-amber-700 dark:text-amber-400">
+                      {queueHealth.stuckReason}
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"

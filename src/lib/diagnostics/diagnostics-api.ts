@@ -220,6 +220,7 @@ export async function diagnosticsSetupCheckOperation(
   lines: number,
   storeId?: number,
   stockIds?: number[],
+  employeeId?: number,
   signal?: AbortSignal
 ): Promise<DiagnosticsSetupCheckItem> {
   const params = new URLSearchParams({
@@ -231,6 +232,9 @@ export async function diagnosticsSetupCheckOperation(
   }
   if (stockIds != null && stockIds.length > 0) {
     params.set("stockIds", stockIds.join(","));
+  }
+  if (employeeId != null && employeeId > 0) {
+    params.set("employeeId", String(employeeId));
   }
 
   const response = await fetch(
@@ -282,11 +286,36 @@ export async function diagnosticsBenchmark(
   return { data, browserMs };
 }
 
+export type DiagnosticsQueueHealthResponse = {
+  workerRunning: boolean;
+  pendingCount: number;
+  processingCount: number;
+  retryPendingCount: number;
+  failedCount: number;
+  oldestPendingAgeSeconds: number;
+  stuckProcessingCount: number;
+  stuckReason: string | null;
+};
+
+export async function diagnosticsQueueHealth(
+  token: string,
+  signal?: AbortSignal
+): Promise<DiagnosticsQueueHealthResponse> {
+  const response = await fetch(diagnosticsUrl("queue-health"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsQueueHealthResponse>;
+}
+
 export async function diagnosticsQueueLag(
   token: string,
   jobKind: string,
   headerId: number,
-  timeoutSeconds = 15,
+  timeoutSeconds = 20,
   signal?: AbortSignal
 ): Promise<DiagnosticsQueueLagResponse> {
   const params = new URLSearchParams({

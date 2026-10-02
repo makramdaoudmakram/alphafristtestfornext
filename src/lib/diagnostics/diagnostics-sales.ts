@@ -1,5 +1,37 @@
 import type { DiagnosticsSetupCheckItem } from "./diagnostics-types";
 
+export function isSalesReturnBenchmarkOperation(operation: string): boolean {
+  return operation === "SalesReturn.Create";
+}
+
+export function isSalesFlowBenchmarkOperation(operation: string): boolean {
+  return isSalesBenchmarkOperation(operation) || isSalesReturnBenchmarkOperation(operation);
+}
+
+export function formatSalesReturnSetupReport(
+  setup: DiagnosticsSetupCheckItem | null
+): string | null {
+  if (!setup || !isSalesReturnBenchmarkOperation(setup.operation)) return null;
+  const parts: string[] = [];
+  for (const key of [
+    "employeeId",
+    "openShiftId",
+    "movementMovId",
+    "movementName",
+    "movParint",
+  ]) {
+    const entry = setup.usedDefaults.find((d) => d.name === key);
+    if (entry) parts.push(`${key}=${entry.value}`);
+  }
+  const report = parts.length > 0 ? `Shift check: ${parts.join(", ")}` : "";
+  const missing =
+    !setup.runnable && setup.missing.length > 0
+      ? setup.missing.join("; ")
+      : "";
+  const combined = [report, missing].filter(Boolean).join(" — ");
+  return combined || null;
+}
+
 export function isSalesBenchmarkOperation(operation: string): boolean {
   return (
     operation.startsWith("Sales.") &&
@@ -28,7 +60,7 @@ export function resolveQueueStatusForRun(
     return "not tracked";
   }
   if (jobKind == null || jobKind === "") return "no job";
-  if (jobKind && headerId != null) return "Pending";
+  if (jobKind && headerId != null) return "polling";
   return null;
 }
 

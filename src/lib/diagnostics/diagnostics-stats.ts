@@ -86,12 +86,13 @@ export function isQueueLagPending(row: DiagnosticsResultRow): boolean {
     row.queueStatus === "Completed" ||
     row.queueStatus === "Failed" ||
     row.queueStatus === "Timeout" ||
-    row.queueStatus === "pending"
+    row.queueStatus === "pending" ||
+    row.queueStatus === "Processing"
   ) {
     return false;
   }
   if (row.jobKind && row.headerId != null) {
-    if (row.queueStatus === "Pending") return true;
+    if (row.queueStatus === "polling" || row.queueStatus === "Pending") return true;
     if (row.queueLagMs == null && row.queueStatus == null) return true;
   }
   return false;
@@ -100,6 +101,7 @@ export function isQueueLagPending(row: DiagnosticsResultRow): boolean {
 export function formatQueueCell(row: DiagnosticsResultRow): string {
   if (row.queueStatus === "not tracked") return "not tracked";
   if (row.queueStatus === "no job") return "no job";
+  if (row.queueStatus === "polling") return "polling…";
   if (row.queueStatus === "pending") return "pending";
   if (row.queueLagMs != null && row.queueStatus) {
     return `${row.queueLagMs} (${row.queueStatus})`;
@@ -152,6 +154,7 @@ function stripSensitiveUsedDefaults(
 export function formatSkippedError(error: string | null | undefined): string {
   const text = error?.trim() ?? "";
   if (!text) return "skipped";
+  if (text.toLowerCase().startsWith("setup needed:")) return text;
   return text.toLowerCase().startsWith("skipped:")
     ? text
     : `skipped: ${text}`;
