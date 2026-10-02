@@ -1,5 +1,6 @@
 export const BENCHMARK_REQUEST_TIMEOUT_MS = 20_000;
-export const QUEUE_LAG_TIMEOUT_SECONDS = 20;
+export const QUEUE_LAG_TIMEOUT_SECONDS = 30;
+export const CONCURRENCY_REQUEST_TIMEOUT_MS = 12 * 60 * 1000;
 
 export class BenchmarkTimeoutError extends Error {
   constructor(message = "Benchmark timed out after 20s.") {

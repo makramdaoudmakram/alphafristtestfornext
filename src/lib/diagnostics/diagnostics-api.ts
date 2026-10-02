@@ -3,6 +3,8 @@ import type {
   DiagnosticsApiErrorBody,
   DiagnosticsBenchmarkRequest,
   DiagnosticsBenchmarkResponse,
+  DiagnosticsConcurrencyRequest,
+  DiagnosticsConcurrencyResponse,
   DiagnosticsDbPingResponse,
   DiagnosticsLookupEntry,
   DiagnosticsOptionsResponse,
@@ -286,6 +288,28 @@ export async function diagnosticsBenchmark(
   return { data, browserMs };
 }
 
+export async function diagnosticsConcurrency(
+  token: string,
+  body: DiagnosticsConcurrencyRequest,
+  signal?: AbortSignal
+): Promise<{ data: DiagnosticsConcurrencyResponse; browserMs: number }> {
+  const started = performance.now();
+  const response = await fetch(diagnosticsUrl("concurrency"), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const browserMs = Math.round(performance.now() - started);
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  const data = (await response.json()) as DiagnosticsConcurrencyResponse;
+  return { data, browserMs };
+}
+
 export type DiagnosticsQueueHealthResponse = {
   workerRunning: boolean;
   pendingCount: number;
@@ -315,7 +339,7 @@ export async function diagnosticsQueueLag(
   token: string,
   jobKind: string,
   headerId: number,
-  timeoutSeconds = 20,
+  timeoutSeconds = 30,
   signal?: AbortSignal
 ): Promise<DiagnosticsQueueLagResponse> {
   const params = new URLSearchParams({

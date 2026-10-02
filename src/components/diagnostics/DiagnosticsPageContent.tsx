@@ -36,6 +36,7 @@ import { DiagnosticsMultiItemPicker } from "@/components/diagnostics/Diagnostics
 import {
   checkDiagnosticsEnabled,
   diagnosticsBenchmark,
+  diagnosticsConcurrency,
   diagnosticsDbPing,
   diagnosticsOptions,
   diagnosticsPing,
@@ -49,6 +50,7 @@ import {
 } from "@/lib/diagnostics/diagnostics-api";
 import {
   BENCHMARK_REQUEST_TIMEOUT_MS,
+  CONCURRENCY_REQUEST_TIMEOUT_MS,
   createTimeoutSignal,
   isSetupNeededMessage,
   isStockTransferOperation,
@@ -88,6 +90,7 @@ import {
 } from "@/lib/diagnostics/diagnostics-stats";
 import type {
   DiagnosticsBenchmarkRequest,
+  DiagnosticsConcurrencyResponse,
   DiagnosticsOperationInfo,
   DiagnosticsOptionsResponse,
   DiagnosticsResultRow,
@@ -303,6 +306,18 @@ export function DiagnosticsPageContent() {
   const [queueHealth, setQueueHealth] = useState<Awaited<
     ReturnType<typeof diagnosticsQueueHealth>
   > | null>(null);
+
+  const [concurrencyOperation, setConcurrencyOperation] =
+    useState("Sales.Create");
+  const [concurrencyTotalSales, setConcurrencyTotalSales] = useState("1000");
+  const [concurrencyDegree, setConcurrencyDegree] = useState("57");
+  const [concurrencyRunning, setConcurrencyRunning] = useState(false);
+  const [concurrencyError, setConcurrencyError] = useState<string | null>(null);
+  const [concurrencyResult, setConcurrencyResult] =
+    useState<DiagnosticsConcurrencyResponse | null>(null);
+  const [concurrencyBrowserMs, setConcurrencyBrowserMs] = useState<number | null>(
+    null
+  );
 
   const [realRepeat, setRealRepeat] = useState("3");
   const [realRunning, setRealRunning] = useState(false);
@@ -883,6 +898,58 @@ export function DiagnosticsPageContent() {
     setBenchmarkRunning(false);
     setRealRunning(false);
     setCustomRunning(false);
+    setConcurrencyRunning(false);
+  }
+
+  async function runConcurrency() {
+    if (!token) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setConcurrencyRunning(true);
+    setConcurrencyError(null);
+    setConcurrencyResult(null);
+    setConcurrencyBrowserMs(null);
+
+    const timeout = createTimeoutSignal(CONCURRENCY_REQUEST_TIMEOUT_MS);
+    const signal = mergeAbortSignals(controller.signal, timeout.signal);
+    const body = {
+      operation: concurrencyOperation,
+      totalSales: Math.max(1, Number(concurrencyTotalSales) || 1000),
+      concurrency: Math.max(1, Number(concurrencyDegree) || 57),
+      ...(deliveryEmployeeCode.trim()
+        ? { deliveryEmployeeCode: deliveryEmployeeCode.trim() }
+        : {}),
+      ...(receivingEmployeePassword.trim()
+        ? { receivingEmployeePassword: receivingEmployeePassword.trim() }
+        : {}),
+    };
+
+    try {
+      const { data, browserMs } = await diagnosticsConcurrency(
+        token,
+        body,
+        signal
+      );
+      setConcurrencyResult(data);
+      setConcurrencyBrowserMs(browserMs);
+    } catch (error) {
+      if (controller.signal.aborted && !timeout.signal.aborted) {
+        setConcurrencyError("Concurrency run stopped.");
+      } else if (timeout.signal.aborted) {
+        setConcurrencyError(
+          `Concurrency timed out after ${CONCURRENCY_REQUEST_TIMEOUT_MS / 1000}s.`
+        );
+      } else {
+        setConcurrencyError(
+          error instanceof Error ? error.message : "Concurrency run failed."
+        );
+      }
+    } finally {
+      timeout.clear();
+      setConcurrencyRunning(false);
+      if (abortRef.current === controller) abortRef.current = null;
+    }
   }
 
   async function runRealRequestLoop() {
@@ -1409,6 +1476,159 @@ export function DiagnosticsPageContent() {
                 </span>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Concurrency</CardTitle>
+            <CardDescription>
+              Server-side parallel sales against batch 000000000000148 (store 8,
+              employee 3). Uses the normal save path. Does not change benchmark
+              runs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="diag-concurrency-operation">Operation</Label>
+                <Select
+                  value={concurrencyOperation}
+                  onValueChange={setConcurrencyOperation}
+                >
+                  <SelectTrigger id="diag-concurrency-operation" className="w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sales.Create">Sales.Create</SelectItem>
+                    <SelectItem value="Sales.Delivery">Sales.Delivery</SelectItem>
+                    <SelectItem value="Sales.PaymentFinalize">
+                      Sales.PaymentFinalize
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="diag-concurrency-total">Total sales</Label>
+                <Input
+                  id="diag-concurrency-total"
+                  type="number"
+                  min={1}
+                  className="w-28"
+                  value={concurrencyTotalSales}
+                  onChange={(e) => setConcurrencyTotalSales(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="diag-concurrency-degree">Concurrency</Label>
+                <Input
+                  id="diag-concurrency-degree"
+                  type="number"
+                  min={1}
+                  className="w-28"
+                  value={concurrencyDegree}
+                  onChange={(e) => setConcurrencyDegree(e.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={concurrencyRunning || !token}
+                onClick={() => void runConcurrency()}
+              >
+                {concurrencyRunning ? "Running…" : "Run"}
+              </Button>
+            </div>
+            {concurrencyOperation === "Sales.Delivery" ? (
+              <p className="text-muted-foreground text-xs">
+                Delivery uses the employee fields above (page state only).
+              </p>
+            ) : null}
+            {concurrencyError ? (
+              <p className="text-destructive text-sm">{concurrencyError}</p>
+            ) : null}
+            {concurrencyResult ? (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Metric</TableHead>
+                      <TableHead>Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[
+                      ["Run id", concurrencyResult.runId],
+                      ["Operation", concurrencyResult.operation],
+                      ["Batch", concurrencyResult.batchNo],
+                      ["Store / employee", `${concurrencyResult.storeId} / ${concurrencyResult.employeeId}`],
+                      ["Total / concurrency", `${concurrencyResult.totalSales} / ${concurrencyResult.concurrency}`],
+                      ["Units per sale", String(concurrencyResult.unitsPerSale)],
+                      ["Successes", String(concurrencyResult.successes)],
+                      ["Failures", String(concurrencyResult.failures)],
+                      ["Deadlock 1205", String(concurrencyResult.deadlock1205Count)],
+                      ["Lock timeout", String(concurrencyResult.lockTimeoutCount)],
+                      ["p50 / p95 / p99 / max ms", `${concurrencyResult.p50ServerMs} / ${concurrencyResult.p95ServerMs} / ${concurrencyResult.p99ServerMs} / ${concurrencyResult.maxServerMs}`],
+                      ["Wall seconds", String(concurrencyResult.totalWallSeconds)],
+                      ["Sales / sec", String(concurrencyResult.salesPerSecond)],
+                      ["Stock before → after", `${concurrencyResult.stockBefore} → ${concurrencyResult.stockAfter}`],
+                      ["Distinct movements", String(concurrencyResult.distinctMovementNumbers)],
+                      ["Duplicate movements", String(concurrencyResult.duplicateMovementNumbers)],
+                      ["SQLite DocumentHeader", String(concurrencyResult.sqliteDocumentHeaderCount)],
+                      ["Browser ms", concurrencyBrowserMs != null ? String(concurrencyBrowserMs) : "—"],
+                    ].map(([label, value]) => (
+                      <TableRow key={label}>
+                        <TableCell className="font-medium">{label}</TableCell>
+                        <TableCell className="font-mono text-sm">{value}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {concurrencyResult.failuresByMessage.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Failure message</TableHead>
+                        <TableHead>Count</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {concurrencyResult.failuresByMessage.map((row) => (
+                        <TableRow key={row.message}>
+                          <TableCell className="whitespace-pre-wrap text-sm">
+                            {row.message}
+                          </TableCell>
+                          <TableCell>{row.count}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : null}
+                {concurrencyResult.queueSamples.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Queue s</TableHead>
+                        <TableHead>Pending</TableHead>
+                        <TableHead>Processing</TableHead>
+                        <TableHead>Failed</TableHead>
+                        <TableHead>Completed</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {concurrencyResult.queueSamples.map((sample, index) => (
+                        <TableRow key={`${sample.elapsedSeconds}-${index}`}>
+                          <TableCell>{sample.elapsedSeconds}</TableCell>
+                          <TableCell>{sample.pending}</TableCell>
+                          <TableCell>{sample.processing}</TableCell>
+                          <TableCell>{sample.failed}</TableCell>
+                          <TableCell>{sample.completed}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : null}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

@@ -150,6 +150,56 @@ export type DiagnosticsQueueLagResponse = {
   lastError: string | null;
 };
 
+export type DiagnosticsConcurrencyRequest = {
+  operation: string;
+  totalSales: number;
+  concurrency: number;
+  deliveryEmployeeCode?: string;
+  receivingEmployeePassword?: string;
+};
+
+export type DiagnosticsConcurrencyFailureGroup = {
+  message: string;
+  count: number;
+};
+
+export type DiagnosticsConcurrencyQueueSample = {
+  elapsedSeconds: number;
+  pending: number;
+  processing: number;
+  failed: number;
+  completed: number;
+};
+
+export type DiagnosticsConcurrencyResponse = {
+  operation: string;
+  runId: string;
+  batchNo: string;
+  storeId: number;
+  employeeId: number;
+  totalSales: number;
+  concurrency: number;
+  unitsPerSale: number;
+  successes: number;
+  failures: number;
+  failuresByMessage: DiagnosticsConcurrencyFailureGroup[];
+  deadlock1205Count: number;
+  lockTimeoutCount: number;
+  p50ServerMs: number;
+  p95ServerMs: number;
+  p99ServerMs: number;
+  maxServerMs: number;
+  totalWallSeconds: number;
+  salesPerSecond: number;
+  stockBefore: number;
+  stockAfter: number;
+  distinctMovementNumbers: number;
+  duplicateMovementNumbers: number;
+  sqliteDocumentHeaderCount: number;
+  queueSamples: DiagnosticsConcurrencyQueueSample[];
+  usedDefaults?: DiagnosticsUsedDefault[];
+};
+
 export type DiagnosticsSamplePayloadResponse = {
   operation: string;
   payload: unknown;
