@@ -46,6 +46,7 @@ import {
   diagnosticsSetupCheck,
   diagnosticsSetupCheckOperation,
   diagnosticsQueueHealth,
+  diagnosticsOpenTransactions,
   DiagnosticsDisabledError,
 } from "@/lib/diagnostics/diagnostics-api";
 import {
@@ -58,6 +59,7 @@ import {
   needsDeliveryEmployeeFields,
   QUEUE_LAG_TIMEOUT_SECONDS,
 } from "@/lib/diagnostics/diagnostics-run";
+import type { DiagnosticsOpenTransactionsResponse } from "@/lib/diagnostics/diagnostics-types";
 import {
   capLinesForSales,
   formatSalesReturnSetupReport,
@@ -307,6 +309,9 @@ export function DiagnosticsPageContent() {
     ReturnType<typeof diagnosticsQueueHealth>
   > | null>(null);
 
+  const [openTransactions, setOpenTransactions] =
+    useState<DiagnosticsOpenTransactionsResponse | null>(null);
+
   const [concurrencyOperation, setConcurrencyOperation] =
     useState("Sales.Create");
   const [concurrencyScenario, setConcurrencyScenario] = useState("default");
@@ -335,6 +340,25 @@ export function DiagnosticsPageContent() {
   useEffect(() => {
     resultsRef.current = results;
   }, [results]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const snapshot = await diagnosticsOpenTransactions(token);
+        if (!cancelled) setOpenTransactions(snapshot);
+      } catch {
+        if (!cancelled) setOpenTransactions(null);
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [token]);
 
   const lines = useMemo(() => {
     if (linesPreset === "custom") return Math.max(1, Number(customLines) || 1);
@@ -1480,6 +1504,67 @@ export function DiagnosticsPageContent() {
                 </span>
               ) : null}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Open document transactions</CardTitle>
+            <CardDescription>
+              Live SQL document saves. Rows older than 10s are highlighted. Pool
+              shows connections in use versus Max Pool Size.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              SQL pool{" "}
+              <span className="font-medium text-foreground">
+                {openTransactions
+                  ? `${openTransactions.pool.inUse} / ${openTransactions.pool.max}`
+                  : "—"}
+              </span>
+            </p>
+            {openTransactions && openTransactions.transactions.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Store</TableHead>
+                    <TableHead>SPID</TableHead>
+                    <TableHead>Age</TableHead>
+                    <TableHead>Request</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {openTransactions.transactions.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className={
+                        row.ageSeconds >= 10
+                          ? "bg-destructive/15 text-destructive"
+                          : undefined
+                      }
+                    >
+                      <TableCell>{row.documentType}</TableCell>
+                      <TableCell>{row.action}</TableCell>
+                      <TableCell>{row.stage}</TableCell>
+                      <TableCell>{row.store ?? "—"}</TableCell>
+                      <TableCell>{row.spid ?? "—"}</TableCell>
+                      <TableCell>{row.ageSeconds.toFixed(1)}s</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {row.requestId ?? "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No open document transactions.
+              </p>
+            )}
           </CardContent>
         </Card>
 

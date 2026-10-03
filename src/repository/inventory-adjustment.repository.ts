@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import { mapDocumentFromApi } from "@/lib/inventory-adjustment.mapper";
 import type {
   InventoryAdjustmentDocument,
@@ -111,7 +112,7 @@ export class InventoryAdjustmentRepository {
   }
 
   async getById(id: number): Promise<InventoryAdjustmentDocument> {
-    const response = await fetch(this.url(`InventoryH/${id}`), {
+    const response = await timedFetch(this.url(`InventoryH/${id}`), {
       headers: this.authHeaders(),
     });
     const raw = await this.handle<Record<string, unknown>>(response);
@@ -119,7 +120,7 @@ export class InventoryAdjustmentRepository {
   }
 
   async create(payload: InventoryAdjustmentUpsertPayload): Promise<InventoryAdjustmentDocument> {
-    const response = await fetch(this.url("InventoryH"), {
+    const response = await timedFetch(this.url("InventoryH"), {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(payload),
@@ -132,7 +133,7 @@ export class InventoryAdjustmentRepository {
     id: number,
     payload: InventoryAdjustmentUpsertPayload
   ): Promise<InventoryAdjustmentDocument> {
-    const response = await fetch(this.url(`InventoryH/${id}`), {
+    const response = await timedFetch(this.url(`InventoryH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
       body: JSON.stringify(payload),
@@ -142,7 +143,7 @@ export class InventoryAdjustmentRepository {
   }
 
   async delete(id: number): Promise<void> {
-    const response = await fetch(this.url(`InventoryH/${id}`), {
+    const response = await timedFetch(this.url(`InventoryH/${id}`), {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${this.token}`,
@@ -170,7 +171,7 @@ export class InventoryAdjustmentRepository {
       params.set("storeId", query.storeId.trim());
     }
 
-    const response = await fetch(
+    const response = await timedFetch(
       this.url(`InventoryH/pending-for-posting?${params.toString()}`),
       { headers: this.authHeaders() }
     );
@@ -179,7 +180,7 @@ export class InventoryAdjustmentRepository {
   }
 
   async post(id: number): Promise<InventoryAdjustmentDocument> {
-    const response = await fetch(this.url(`InventoryH/${id}/post`), {
+    const response = await timedFetch(this.url(`InventoryH/${id}/post`), {
       method: "POST",
       headers: this.authHeaders(),
     });

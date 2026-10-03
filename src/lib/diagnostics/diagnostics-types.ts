@@ -227,6 +227,29 @@ export type DiagnosticsXDiagHeaders = {
   exposed: boolean;
 };
 
+export type DiagnosticsOpenTransaction = {
+  id: string;
+  documentType: string;
+  action: string;
+  store?: string | null;
+  userId?: string | null;
+  requestId?: string | null;
+  spid?: number | null;
+  startedUtc: string;
+  stage: string;
+  ageSeconds: number;
+};
+
+export type DiagnosticsSqlPoolUsage = {
+  inUse: number;
+  max: number;
+};
+
+export type DiagnosticsOpenTransactionsResponse = {
+  transactions: DiagnosticsOpenTransaction[];
+  pool: DiagnosticsSqlPoolUsage;
+};
+
 export type DiagnosticsResultRow = {
   id: string;
   source: "benchmark" | "real-request" | "custom";

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import type {
   DiagnosticsApiErrorBody,
   DiagnosticsBenchmarkRequest,
@@ -7,6 +8,7 @@ import type {
   DiagnosticsConcurrencyResponse,
   DiagnosticsDbPingResponse,
   DiagnosticsLookupEntry,
+  DiagnosticsOpenTransactionsResponse,
   DiagnosticsOptionsResponse,
   DiagnosticsPingResponse,
   DiagnosticsQueueLagResponse,
@@ -250,6 +252,20 @@ export async function diagnosticsSetupCheckOperation(
   if (response.status === 404) throw new DiagnosticsDisabledError();
   if (!response.ok) throw new Error(await readErrorMessage(response));
   return response.json() as Promise<DiagnosticsSetupCheckItem>;
+}
+
+export async function diagnosticsOpenTransactions(
+  token: string,
+  signal?: AbortSignal
+): Promise<DiagnosticsOpenTransactionsResponse> {
+  const response = await timedFetch(diagnosticsUrl("open-transactions"), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
+  if (response.status === 404) throw new DiagnosticsDisabledError();
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<DiagnosticsOpenTransactionsResponse>;
 }
 
 export async function diagnosticsOptions(

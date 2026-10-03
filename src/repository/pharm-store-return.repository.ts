@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import type {
   PharmStoreReturnAcceptResult,
   PharmStoreReturnPendingPage,
@@ -145,7 +146,7 @@ async function request<T>(
   init?: RequestInit,
   map?: (raw: unknown) => T
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}/${path.replace(/^\//, "")}`, {
+  const response = await timedFetch(`${API_BASE_URL}/${path.replace(/^\//, "")}`, {
     ...init,
     cache: "no-store",
     headers: {

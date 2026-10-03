@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import {
   mapDocumentFromApi,
   mapSearchResultFromApi,
@@ -131,7 +132,7 @@ export class PharmPurchaseRepository {
   }
 
   async getContext(): Promise<PharmPurchaseContext> {
-    const response = await fetch(this.url("PharmPurchaseH/context"), {
+    const response = await timedFetch(this.url("PharmPurchaseH/context"), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -140,7 +141,7 @@ export class PharmPurchaseRepository {
   }
 
   async search(filters: PurchaseSearchFilters): Promise<PurchaseSearchResult[]> {
-    const response = await fetch(
+    const response = await timedFetch(
       this.url("PharmPurchaseH/search", {
         pthId: filters.pthId,
         venBillNo: filters.venBillNo,
@@ -162,7 +163,7 @@ export class PharmPurchaseRepository {
   }
 
   async listIds(): Promise<number[]> {
-    const response = await fetch(this.url("PharmPurchaseH/ids"), {
+    const response = await timedFetch(this.url("PharmPurchaseH/ids"), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -173,7 +174,7 @@ export class PharmPurchaseRepository {
   }
 
   async getById(id: number): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PharmPurchaseH/${id}`), {
+    const response = await timedFetch(this.url(`PharmPurchaseH/${id}`), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -226,7 +227,7 @@ export class PharmPurchaseRepository {
   }
 
   async create(payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
-    const response = await fetch(this.url("PharmPurchaseH"), {
+    const response = await timedFetch(this.url("PharmPurchaseH"), {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -236,7 +237,7 @@ export class PharmPurchaseRepository {
   }
 
   async update(id: number, payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PharmPurchaseH/${id}`), {
+    const response = await timedFetch(this.url(`PharmPurchaseH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -246,7 +247,7 @@ export class PharmPurchaseRepository {
   }
 
   async post(id: number): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PharmPurchaseH/${id}/post`), {
+    const response = await timedFetch(this.url(`PharmPurchaseH/${id}/post`), {
       method: "POST",
       headers: this.authHeaders(),
     });
@@ -255,7 +256,7 @@ export class PharmPurchaseRepository {
   }
 
   async delete(id: number): Promise<void> {
-    const response = await fetch(this.url(`PharmPurchaseH/${id}`), {
+    const response = await timedFetch(this.url(`PharmPurchaseH/${id}`), {
       method: "DELETE",
       headers: this.authHeaders(false),
     });

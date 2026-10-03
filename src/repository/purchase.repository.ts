@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import {
   mapDocumentFromApi,
   mapSaveResponseFromApi,
@@ -127,7 +128,7 @@ export class PurchaseRepository {
   }
 
   async search(filters: PurchaseSearchFilters): Promise<PurchaseSearchResult[]> {
-    const response = await fetch(
+    const response = await timedFetch(
       this.url("PurTransH/search", {
         pthId: filters.pthId,
         venBillNo: filters.venBillNo,
@@ -155,7 +156,7 @@ export class PurchaseRepository {
   }
 
   async listIds(): Promise<number[]> {
-    const response = await fetch(this.url("PurTransH/ids"), {
+    const response = await timedFetch(this.url("PurTransH/ids"), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -175,7 +176,7 @@ export class PurchaseRepository {
   }
 
   async getById(id: number): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PurTransH/${id}`), {
+    const response = await timedFetch(this.url(`PurTransH/${id}`), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -238,7 +239,7 @@ export class PurchaseRepository {
   }
 
   async create(payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
-    const response = await fetch(this.url("PurTransH"), {
+    const response = await timedFetch(this.url("PurTransH"), {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -248,7 +249,7 @@ export class PurchaseRepository {
   }
 
   async update(id: number, payload: PurchaseUpsertPayload): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PurTransH/${id}`), {
+    const response = await timedFetch(this.url(`PurTransH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -258,7 +259,7 @@ export class PurchaseRepository {
   }
 
   async delete(id: number): Promise<void> {
-    const response = await fetch(this.url(`PurTransH/${id}`), {
+    const response = await timedFetch(this.url(`PurTransH/${id}`), {
       method: "DELETE",
       headers: this.authHeaders(false),
     });
@@ -275,7 +276,7 @@ export class PurchaseRepository {
   }
 
   async post(id: number): Promise<PurchaseDocument> {
-    const response = await fetch(this.url(`PurTransH/${id}/post`), {
+    const response = await timedFetch(this.url(`PurTransH/${id}/post`), {
       method: "POST",
       headers: this.authHeaders(),
     });

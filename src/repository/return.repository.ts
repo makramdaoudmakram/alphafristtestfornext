@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import {
   mapDocumentFromApi,
   mapSaveResponseFromApi,
@@ -125,7 +126,7 @@ export class ReturnRepository {
   }
 
   async search(filters: ReturnSearchFilters): Promise<ReturnSearchResult[]> {
-    const response = await fetch(
+    const response = await timedFetch(
       this.url("ReturnTransH/search", {
         pthId: filters.pthId,
         venBillNo: filters.venBillNo,
@@ -153,7 +154,7 @@ export class ReturnRepository {
   }
 
   async listIds(): Promise<number[]> {
-    const response = await fetch(this.url("ReturnTransH/ids"), {
+    const response = await timedFetch(this.url("ReturnTransH/ids"), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -173,7 +174,7 @@ export class ReturnRepository {
   }
 
   async getById(id: number): Promise<ReturnDocument> {
-    const response = await fetch(this.url(`ReturnTransH/${id}`), {
+    const response = await timedFetch(this.url(`ReturnTransH/${id}`), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -236,7 +237,7 @@ export class ReturnRepository {
   }
 
   async create(payload: ReturnUpsertPayload): Promise<ReturnDocument> {
-    const response = await fetch(this.url("ReturnTransH"), {
+    const response = await timedFetch(this.url("ReturnTransH"), {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -246,7 +247,7 @@ export class ReturnRepository {
   }
 
   async update(id: number, payload: ReturnUpsertPayload): Promise<ReturnDocument> {
-    const response = await fetch(this.url(`ReturnTransH/${id}`), {
+    const response = await timedFetch(this.url(`ReturnTransH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -256,7 +257,7 @@ export class ReturnRepository {
   }
 
   async delete(id: number): Promise<void> {
-    const response = await fetch(this.url(`ReturnTransH/${id}`), {
+    const response = await timedFetch(this.url(`ReturnTransH/${id}`), {
       method: "DELETE",
       headers: this.authHeaders(false),
     });
@@ -273,7 +274,7 @@ export class ReturnRepository {
   }
 
   async post(id: number): Promise<ReturnDocument> {
-    const response = await fetch(this.url(`ReturnTransH/${id}/post`), {
+    const response = await timedFetch(this.url(`ReturnTransH/${id}/post`), {
       method: "POST",
       headers: this.authHeaders(),
     });

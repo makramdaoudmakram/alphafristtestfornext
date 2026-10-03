@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { timedFetch } from "@/lib/timed-fetch";
 import {
   mapDocumentFromApi,
   mapSaveResponseFromApi,
@@ -151,7 +152,7 @@ export class PharmReciveRepository {
   }
 
   async search(filters: PharmReciveSearchFilters): Promise<PharmReciveSearchResult[]> {
-    const response = await fetch(
+    const response = await timedFetch(
       this.url("PharmReciveH/search", {
         movId: filters.movId,
         dateFrom: filters.dateFrom,
@@ -175,7 +176,7 @@ export class PharmReciveRepository {
   }
 
   async getServerDate(): Promise<string> {
-    const response = await fetch(this.url("PharmReciveH/server-date"), {
+    const response = await timedFetch(this.url("PharmReciveH/server-date"), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -185,7 +186,7 @@ export class PharmReciveRepository {
   }
 
   async listIds(): Promise<number[]> {
-    const response = await fetch(this.url("PharmReciveH/ids", { pageSize: "5000" }), {
+    const response = await timedFetch(this.url("PharmReciveH/ids", { pageSize: "5000" }), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -195,7 +196,7 @@ export class PharmReciveRepository {
   }
 
   async getById(id: number): Promise<PharmReciveDocument> {
-    const response = await fetch(this.url(`PharmReciveH/${id}`), {
+    const response = await timedFetch(this.url(`PharmReciveH/${id}`), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -204,7 +205,7 @@ export class PharmReciveRepository {
   }
 
   async getAuditHistory(id: number): Promise<PharmReciveAuditHistoryItem[]> {
-    const response = await fetch(this.url(`PharmReciveH/${id}/audit-history`), {
+    const response = await timedFetch(this.url(`PharmReciveH/${id}/audit-history`), {
       headers: this.authHeaders(),
       cache: "no-store",
     });
@@ -251,7 +252,7 @@ export class PharmReciveRepository {
   }
 
   async create(payload: PharmReciveUpsertPayload): Promise<PharmReciveDocument> {
-    const response = await fetch(this.url("PharmReciveH"), {
+    const response = await timedFetch(this.url("PharmReciveH"), {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -261,7 +262,7 @@ export class PharmReciveRepository {
   }
 
   async update(id: number, payload: PharmReciveUpsertPayload): Promise<PharmReciveDocument> {
-    const response = await fetch(this.url(`PharmReciveH/${id}`), {
+    const response = await timedFetch(this.url(`PharmReciveH/${id}`), {
       method: "PUT",
       headers: this.authHeaders(),
       body: JSON.stringify(this.toApiBody(payload)),
@@ -271,7 +272,7 @@ export class PharmReciveRepository {
   }
 
   async delete(id: number): Promise<void> {
-    const response = await fetch(this.url(`PharmReciveH/${id}`), {
+    const response = await timedFetch(this.url(`PharmReciveH/${id}`), {
       method: "DELETE",
       headers: this.authHeaders(false),
     });

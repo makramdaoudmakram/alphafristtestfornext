@@ -1,7 +1,10 @@
 import http from "node:http";
 import https from "node:https";
 import { getAlfaApiUrl } from "@/lib/api-config";
+import { API_CLIENT_TIMEOUT_MS, REQUEST_ID_HEADER, newRequestId } from "@/lib/timed-fetch";
 import { NextRequest, NextResponse } from "next/server";
+
+export const maxDuration = 60;
 
 async function nodeProxyRequest(
   targetUrl: string,
@@ -44,6 +47,14 @@ async function nodeProxyRequest(
       }
     );
 
+    req.setTimeout(API_CLIENT_TIMEOUT_MS, () => {
+      req.destroy();
+      reject(
+        new Error(
+          `Alfa API did not respond within ${Math.round(API_CLIENT_TIMEOUT_MS / 1000)} seconds. This is not a Vercel 504 — the proxy stopped waiting.`
+        )
+      );
+    });
     req.on("error", reject);
     if (body) req.write(body);
     req.end();
@@ -63,6 +74,9 @@ async function proxyRequest(
   const auth = request.headers.get("authorization");
   const contentType = request.headers.get("content-type");
 
+  const requestId =
+    request.headers.get(REQUEST_ID_HEADER)?.trim() || newRequestId();
+  headers[REQUEST_ID_HEADER] = requestId;
   if (auth) headers.Authorization = auth;
   if (contentType) headers["Content-Type"] = contentType;
 
@@ -91,7 +105,9 @@ async function proxyRequest(
       return new NextResponse(null, { status: response.status });
     }
 
-    const responseHeaders: Record<string, string> = {};
+    const responseHeaders: Record<string, string> = {
+      [REQUEST_ID_HEADER]: requestId,
+    };
     if (response.contentType) {
       responseHeaders["Content-Type"] = response.contentType;
     }
@@ -107,12 +123,16 @@ async function proxyRequest(
     const message =
       error instanceof Error ? error.message : "Proxy request failed";
 
+    const timedOut = /did not respond within/i.test(message);
     return NextResponse.json(
       {
         isSuccess: false,
-        message: `Cannot reach Alfa API at ${alfaApiUrl}. ${message}`,
+        message: timedOut
+          ? message
+          : `Cannot reach Alfa API at ${alfaApiUrl}. ${message}`,
+        requestId,
       },
-      { status: 502 }
+      { status: timedOut ? 503 : 502 }
     );
   }
 }

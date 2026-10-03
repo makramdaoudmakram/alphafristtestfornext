@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "./api-config";
+import { ApiTimeoutError, timedFetch } from "./timed-fetch";
 import type { AuthResponse } from "@/types/auth";
 import type {
   CreatePermissionRequest,
@@ -986,10 +987,18 @@ export async function apiFetch<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(alfaUrl(path), {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await timedFetch(alfaUrl(path), {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof ApiTimeoutError) {
+      throw new ApiError(408, error.message);
+    }
+    throw error;
+  }
 
   if (response.status === 401) {
     clearAuthToken();
@@ -1017,7 +1026,7 @@ export async function loginWithAlfaApi(
   password: string
 ): Promise<AuthResponse> {
   try {
-    const response = await fetch(alfaUrl("Auth/login"), {
+    const response = await timedFetch(alfaUrl("Auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1061,7 +1070,7 @@ export async function registerWithAlfaApi(input: {
   userName?: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await fetch(alfaUrl("Auth/register"), {
+    const response = await timedFetch(alfaUrl("Auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -4129,7 +4138,7 @@ export async function uploadVoucherAttachment(
   formData.append("voucherId", String(voucherId));
   formData.append("file", file);
 
-  const response = await fetch(alfaUrl("voucher-attachments/upload"), {
+  const response = await timedFetch(alfaUrl("voucher-attachments/upload"), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -4162,7 +4171,7 @@ export async function downloadVoucherAttachmentBlob(
   id: number,
   token: string
 ): Promise<{ blob: Blob; fileName: string; contentType: string }> {
-  const response = await fetch(alfaUrl(`voucher-attachments/${id}/download`), {
+  const response = await timedFetch(alfaUrl(`voucher-attachments/${id}/download`), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -4797,7 +4806,7 @@ export async function downloadExcelTemplate(
   request: ExcelTemplateRequest,
   token: string
 ): Promise<ExcelTemplateDownload> {
-  const response = await fetch(
+  const response = await timedFetch(
     alfaUrl(`Excel/template/${encodeURIComponent(entityName)}`),
     {
       method: "POST",
@@ -4831,7 +4840,7 @@ export async function downloadExcelTemplate(
 export async function downloadPurTransDExcelTemplate(
   token: string
 ): Promise<ExcelTemplateDownload> {
-  const response = await fetch(alfaUrl("PurTransH/excel-template"), {
+  const response = await timedFetch(alfaUrl("PurTransH/excel-template"), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -5030,7 +5039,7 @@ export async function previewExcelImport(
   formData.append("file", file);
   formData.append("mode", String(excelImportModeToApiValue(mode)));
 
-  const response = await fetch(
+  const response = await timedFetch(
     alfaUrl(`Excel/import/${encodeURIComponent(entityName)}/preview`),
     {
       method: "POST",
@@ -5105,7 +5114,7 @@ export async function commitExcelImport(
   importSessionId: string,
   token: string
 ): Promise<ExcelImportCommitResponse> {
-  const response = await fetch(
+  const response = await timedFetch(
     alfaUrl(`Excel/import/${encodeURIComponent(entityName)}/commit`),
     {
       method: "POST",
@@ -5142,7 +5151,7 @@ export async function getExcelImportJobStatus(
   importJobId: string,
   token: string
 ): Promise<ExcelImportJobStatus> {
-  const response = await fetch(
+  const response = await timedFetch(
     alfaUrl(
       `Excel/import/${encodeURIComponent(entityName)}/jobs/${encodeURIComponent(importJobId)}`
     ),
