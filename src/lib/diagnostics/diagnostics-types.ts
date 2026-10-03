@@ -152,6 +152,7 @@ export type DiagnosticsQueueLagResponse = {
 
 export type DiagnosticsConcurrencyRequest = {
   operation: string;
+  scenario?: string;
   totalSales: number;
   concurrency: number;
   deliveryEmployeeCode?: string;
@@ -169,6 +170,13 @@ export type DiagnosticsConcurrencyQueueSample = {
   processing: number;
   failed: number;
   completed: number;
+};
+
+export type DiagnosticsConcurrencySqlFailure = {
+  stage: string;
+  commandText: string;
+  elapsedMs: number;
+  message: string;
 };
 
 export type DiagnosticsConcurrencyResponse = {
@@ -197,6 +205,7 @@ export type DiagnosticsConcurrencyResponse = {
   duplicateMovementNumbers: number;
   sqliteDocumentHeaderCount: number;
   queueSamples: DiagnosticsConcurrencyQueueSample[];
+  sqlFailures?: DiagnosticsConcurrencySqlFailure[];
   usedDefaults?: DiagnosticsUsedDefault[];
 };
 

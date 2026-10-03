@@ -309,6 +309,7 @@ export function DiagnosticsPageContent() {
 
   const [concurrencyOperation, setConcurrencyOperation] =
     useState("Sales.Create");
+  const [concurrencyScenario, setConcurrencyScenario] = useState("default");
   const [concurrencyTotalSales, setConcurrencyTotalSales] = useState("1000");
   const [concurrencyDegree, setConcurrencyDegree] = useState("57");
   const [concurrencyRunning, setConcurrencyRunning] = useState(false);
@@ -915,6 +916,9 @@ export function DiagnosticsPageContent() {
     const signal = mergeAbortSignals(controller.signal, timeout.signal);
     const body = {
       operation: concurrencyOperation,
+      ...(concurrencyScenario !== "default"
+        ? { scenario: concurrencyScenario }
+        : {}),
       totalSales: Math.max(1, Number(concurrencyTotalSales) || 1000),
       concurrency: Math.max(1, Number(concurrencyDegree) || 57),
       ...(deliveryEmployeeCode.trim()
@@ -1509,6 +1513,26 @@ export function DiagnosticsPageContent() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label htmlFor="diag-concurrency-scenario">Stock scenario</Label>
+                <Select
+                  value={concurrencyScenario}
+                  onValueChange={setConcurrencyScenario}
+                >
+                  <SelectTrigger id="diag-concurrency-scenario" className="w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default (current Sales.Create)</SelectItem>
+                    <SelectItem value="lock-order">
+                      Opposite line order (no deadlock)
+                    </SelectItem>
+                    <SelectItem value="insufficient">
+                      Oversell same batch
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="diag-concurrency-total">Total sales</Label>
                 <Input
                   id="diag-concurrency-total"
@@ -1598,6 +1622,28 @@ export function DiagnosticsPageContent() {
                             {row.message}
                           </TableCell>
                           <TableCell>{row.count}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : null}
+                {(concurrencyResult.sqlFailures?.length ?? 0) > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>SQL stage</TableHead>
+                        <TableHead>Elapsed ms</TableHead>
+                        <TableHead>Command</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {concurrencyResult.sqlFailures!.map((row, index) => (
+                        <TableRow key={`${row.stage}-${index}`}>
+                          <TableCell className="font-mono text-sm">{row.stage}</TableCell>
+                          <TableCell>{row.elapsedMs}</TableCell>
+                          <TableCell className="whitespace-pre-wrap font-mono text-xs">
+                            {row.commandText}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
