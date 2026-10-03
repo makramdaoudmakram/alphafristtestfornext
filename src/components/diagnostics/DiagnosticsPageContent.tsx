@@ -266,6 +266,18 @@ function LatencyStatBlock({
   );
 }
 
+type OpenTransactionRow = {
+  state?: string;
+  activeCommandText?: string | null;
+  activeCommandAgeSeconds?: number | null;
+  connections?: Array<{
+    role: string;
+    kind: string;
+    isDocument: boolean;
+    spid?: number | null;
+  }>;
+};
+
 export function DiagnosticsPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
@@ -1530,15 +1542,26 @@ export function DiagnosticsPageContent() {
                   <TableRow>
                     <TableHead>Type</TableHead>
                     <TableHead>Action</TableHead>
+                    <TableHead>State</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead>Store</TableHead>
                     <TableHead>SPID</TableHead>
                     <TableHead>Age</TableHead>
+                    <TableHead>Active command</TableHead>
+                    <TableHead>Command age</TableHead>
+                    <TableHead>Connections</TableHead>
                     <TableHead>Request</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {openTransactions.transactions.map((row) => (
+                  {openTransactions.transactions.map((row) => {
+                    const live = row as OpenTransactionRow;
+                    const commandAge =
+                      live.activeCommandAgeSeconds == null
+                        ? "—"
+                        : `${live.activeCommandAgeSeconds.toFixed(1)}s`;
+                    const connections = live.connections ?? [];
+                    return (
                     <TableRow
                       key={row.id}
                       className={
@@ -1549,15 +1572,29 @@ export function DiagnosticsPageContent() {
                     >
                       <TableCell>{row.documentType}</TableCell>
                       <TableCell>{row.action}</TableCell>
+                      <TableCell>{live.state ?? "Active"}</TableCell>
                       <TableCell>{row.stage}</TableCell>
                       <TableCell>{row.store ?? "—"}</TableCell>
                       <TableCell>{row.spid ?? "—"}</TableCell>
                       <TableCell>{row.ageSeconds.toFixed(1)}s</TableCell>
+                      <TableCell className="max-w-[280px] truncate font-mono text-xs" title={live.activeCommandText ?? ""}>
+                        {live.activeCommandText ?? "—"}
+                      </TableCell>
+                      <TableCell>{commandAge}</TableCell>
+                      <TableCell className="text-xs">
+                        {connections.length === 0
+                          ? "—"
+                          : connections
+                              .map((item) =>
+                                `${item.isDocument ? "document" : item.role} ${item.kind}${item.spid ? ` spid ${item.spid}` : ""}`)
+                              .join("; ")}
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         {row.requestId ?? "—"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (
