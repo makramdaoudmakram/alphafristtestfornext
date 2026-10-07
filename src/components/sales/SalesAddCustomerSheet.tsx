@@ -20,7 +20,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { createCustomer, getNextCustomerAccount } from "@/lib/customer-api";
+import { createSalesCustomer, getNextCustomerCode } from "@/lib/customer-api";
 import { getScopePharmacies } from "@/lib/pharmacy-scope-api";
 import type { CustomerItem } from "@/types/customer";
 import type { PharmacyScopeItem } from "@/types/pharmacy-scope";
@@ -63,12 +63,12 @@ export function SalesAddCustomerSheet({
 
     void (async () => {
       try {
-        const [nextAccount, scope] = await Promise.all([
-          getNextCustomerAccount(token),
+        const [nextCodePreview, scope] = await Promise.all([
+          getNextCustomerCode(token),
           getScopePharmacies(token),
         ]);
         if (cancelled) return;
-        setNextCode(nextAccount.nextAccountCode);
+        setNextCode(String(nextCodePreview.nextCustCode));
         setPharmacies(scope.pharmacies);
         const defaultPharm =
           currentParmId?.trim() ||
@@ -107,16 +107,13 @@ export function SalesAddCustomerSheet({
 
     setSaving(true);
     try {
-      const created = await createCustomer(
+      const created = await createSalesCustomer(
         {
           custNameEn: name,
           custNameAr: name,
           custMobile: mobile.trim() || null,
           custAddress: address.trim() || null,
           pharmCode: pharmCode.trim(),
-          accountId: nextCode.trim() || null,
-          custActive: true,
-          custPayment: 0,
         },
         token
       );

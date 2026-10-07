@@ -36,38 +36,84 @@ export const SIDEBAR_NAV: NavItem[] = [
     permission: PERMISSIONS.sales.view,
   },
   {
-    title: "Sales",
+    title: "صيدليات",
     permission: PERMISSIONS.sales.view,
     items: [
       {
-        title: "Sales",
+        title: "المبيعات",
         href: "/dashboard/sales",
         permission: PERMISSIONS.sales.view,
       },
       {
-        title: "Sales Return",
+        title: "مرتجع المبيعات",
         href: "/dashboard/sales-return",
         permission: PERMISSIONS.sales.view,
       },
       {
-        title: "Pharm Expenses",
+        title: "المصاريف",
         href: "/dashboard/sales/pharm-expenses",
         permission: PERMISSIONS.sales.view,
       },
       {
-        title: "Item Card",
+        title: "كارت الصنف",
         href: "/dashboard/sales/item-card",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
+        title: "العملاء",
+        href: "/dashboard/sales/customers",
+        permission: PERMISSIONS.customer.view,
+      },
+      {
+        title: "مشتريات الفرع",
+        href: "/dashboard/pharm/transactions/pharmacy-purchase",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
+        title: "التحويلات من الصيدليات",
+        href: "/dashboard/pharm/transactions/pharmacy-acceptance",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
+        title: "التحويلات من المخزن",
+        href: "/dashboard/pharm/transactions/stor-to-pharm",
+        permission: PERMISSIONS.sales.view,
+      },
+     
+      {
+        title: "تحويل الصيدليات",
+        href: "/dashboard/pharm/transactions/pharmacy-transfer",
         permission: PERMISSIONS.sales.view,
       },
     ],
   },
   {
-    title: "System Audit Center",
-    href: "/dashboard/audit",
-    permission: PERMISSIONS.permissions.manage,
+    title: "Audit",
+    items: [
+      {
+        title: "System Audit Center",
+        href: "/dashboard/audit",
+        permission: PERMISSIONS.permissions.manage,
+      },
+      {
+        title: "Diagnostics",
+        href: "/dashboard/diagnostics",
+        permission: DIAGNOSTICS_NAV_PERMISSION,
+      },
+      {
+        title: "Commit Documents",
+        href: "/dashboard/reporting/commit-documents",
+        permission: DIAGNOSTICS_NAV_PERMISSION,
+      },
+      {
+        title: "Batch Traceability",
+        href: "/dashboard/batch-traceability",
+        permission: PERMISSIONS.batchTraceability.view,
+      },
+    ],
   },
   {
-    title: "Settings",
+    title: "الاعدادات",
     groups: [
       {
         title: "Permission Setting",
@@ -97,26 +143,21 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/admin/pharmacy-scope",
           },
           {
-            title: "Diagnostics",
-            href: "/dashboard/diagnostics",
-            permission: DIAGNOSTICS_NAV_PERMISSION,
-          },
-          {
             title: "Role Permissions",
             href: "/dashboard/permissions",
           },
         ],
       },
       {
-        title: "Product Setting",
+        title: "البيانات الرئيسية",
         items: [
           {
-            title: "Units",
+            title: "الوحدات",
             href: "/dashboard/units",
             permission: PERMISSIONS.unit.view,
           },
           {
-            title: "Dosage Form",
+            title: "شكل الجرعة",
             href: "/dashboard/item-formats",
             permission: PERMISSIONS.itemFormat.view,
           },
@@ -143,55 +184,89 @@ export const SIDEBAR_NAV: NavItem[] = [
         ],
       },
       {
-        title: "TransSetting",
+        title: "اعداد الحركات",
         items: [
           {
-            title: "Move Parient",
+            title: "نوع العمليات",
             href: "/dashboard/item-transactions",
             permission: PERMISSIONS.movParient.view,
           },
           {
-            title: "Movement Setting",
+            title: "تحديد حركات المخزون",
             href: "/dashboard/movement-setting",
             permission: PERMISSIONS.movment.view,
           },
           {
-            title: "Sales Movement",
+            title: "حركات المبيعات ",
             href: "/dashboard/sales-movement-setting",
             permission: PERMISSIONS.salesMovment.view,
           },
           {
-            title: "Sales Push List",
+            title: "بوش ليست",
             href: "/dashboard/settings/sales-push-list",
+          },
+          {
+            title: "نوع البيع",
+            href: "/dashboard/sales-kind",
+          },
+          {
+            title: "تخصيص نوع البيع",
+            href: "/dashboard/sales-kind-assignment",
+            permission: PERMISSIONS.salesKindAssignment.view,
+          },
+          {
+            title: "طرق الدفع للمبيعات",
+            href: "/dashboard/sales-pay-method",
+            permission: PERMISSIONS.salesPayMethod.view,
+          },
+          {
+            title: "تخصيص طرق الدفع",
+            href: "/dashboard/sales-payment-assiment",
+            permission: PERMISSIONS.salesPaymentAssiment.view,
+          },
+          {
+            title: "خدمات الصيدليات",
+            href: "/dashboard/sales-service",
+            permission: PERMISSIONS.salesService.view,
+          },
+          {
+            title: "خدمات الصيدليات تخصيص ",
+            href: "/dashboard/sales-service-assignment",
+            permission: PERMISSIONS.salesServiceAssignment.view,
           },
         ],
       },
-      {
-        title: "Account Setting",
+  
+    ],
+  },
+   {
+    title: "الحسابات",
+  
+   
         items: [
           {
-            title: "Pharm",
+            title: "الصيدليات",
             href: "/dashboard/pharm",
           },
           {
-            title: "Company",
+            title: "الشركات",
             href: "/dashboard/companies",
             permission: PERMISSIONS.company.view,
           },
           {
-            title: "Accounts Chart",
+            title: "شجره الحسابات",
             href: "/dashboard/accounts-chart",
           },
           {
-            title: "Collection Voucher",
+            title: "التحصيلات",
             href: "/dashboard/collection-voucher",
           },
           {
-            title: "Payment Voucher",
+            title: "المدفوعات",
             href: "/dashboard/payment-voucher",
           },
           {
-            title: "Pending Vouchers",
+            title: "الاذون المعلقه",
             href: "/dashboard/pending-vouchers",
           },
           {
@@ -207,143 +282,78 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/ledger",
           },
           {
-            title: "Cost Centers",
+            title: "مراكز التكلفه",
             href: "/dashboard/cost-centers",
           },
           {
-            title: "Employee Info",
+            title: "بيانات الموظف",
             href: "/dashboard/employ-info",
           },
           {
-            title: "Stores",
+            title: "المخازن",
             href: "/dashboard/stores",
           },
+         
           {
-            title: "Customers",
-            href: "/dashboard/customers",
-            permission: PERMISSIONS.customer.view,
-          },
-          {
-            title: "Vendors",
+            title: "الموردين",
             href: "/dashboard/vendors",
           },
-          {
-            title: "Sales Kind",
-            href: "/dashboard/sales-kind",
-          },
-          {
-            title: "Sales Kind Assignment",
-            href: "/dashboard/sales-kind-assignment",
-            permission: PERMISSIONS.salesKindAssignment.view,
-          },
-          {
-            title: "Sales Payment Method",
-            href: "/dashboard/sales-pay-method",
-            permission: PERMISSIONS.salesPayMethod.view,
-          },
-          {
-            title: "Sales Payment Assignment",
-            href: "/dashboard/sales-payment-assiment",
-            permission: PERMISSIONS.salesPaymentAssiment.view,
-          },
-          {
-            title: "Sales Service",
-            href: "/dashboard/sales-service",
-            permission: PERMISSIONS.salesService.view,
-          },
-          {
-            title: "Sales Service Assignment",
-            href: "/dashboard/sales-service-assignment",
-            permission: PERMISSIONS.salesServiceAssignment.view,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Store Management",
-    groups: [
-      {
-        title: "Pharmacy",
-        items: [
-          {
-            title: "Pharmacy Purchase",
-            href: "/dashboard/pharm/transactions/pharmacy-purchase",
-            permission: PERMISSIONS.sales.view,
-          },
-          {
-            title: "Pharmacy Acceptance",
-            href: "/dashboard/pharm/transactions/pharmacy-acceptance",
-            permission: PERMISSIONS.sales.view,
-          },
-          {
-            title: "Store-to-Pharm",
-            href: "/dashboard/pharm/transactions/stor-to-pharm",
-            permission: PERMISSIONS.sales.view,
-          },
-          {
-            title: "Pharm-to-Store",
-            href: "/dashboard/pharm/transactions/pharm-to-store",
-            permission: PERMISSIONS.sales.view,
-          },
-          {
-            title: "Pharmacy Transfer",
-            href: "/dashboard/pharm/transactions/pharmacy-transfer",
-            permission: PERMISSIONS.sales.view,
-          },
-        ],
-      },
-    ],
-    items: [
-      {
-        title: "Purchase",
-        href: "/dashboard/transactions/purchase",
-        permission: null,
-      },
-      {
-        title: "Purchase Invoice Reversal",
+            {
+        title: "تعديل الفواتير المحفوظه",
         href: "/dashboard/transactions/purchase/reversal",
         permission: null,
       },
+        ],
+  
+  },
+  {
+    title: "المخازن ",
+    items: [
       {
-        title: "Invoice Draft",
+        title: "المشتريات",
+        href: "/dashboard/transactions/purchase",
+        permission: null,
+      },
+    
+      {
+        title: "تسويه المشتريات",
         href: "/dashboard/transactions/purchase/invoice-draft",
         permission: null,
       },
       {
-        title: "Return",
+        title: "مرتجع موردين",
         href: "/dashboard/transactions/return",
         permission: null,
       },
       {
-        title: "Pharmacy Receiving",
+        title: "صادر صيدليات",
         href: "/dashboard/transactions/pharm-recive",
         permission: null,
       },
       {
-        title: "Inventory",
+        title: "الارصده",
         href: "/dashboard/inventory",
         permission: PERMISSIONS.stock.view,
       },
       {
-        title: "Batch Management",
+        title: "تعديل الباتشات",
         href: "/dashboard/batch-management",
         permission: PERMISSIONS.stock.view,
       },
       {
-        title: "Batch Traceability",
-        href: "/dashboard/batch-traceability",
-        permission: PERMISSIONS.batchTraceability.view,
-      },
-      {
-        title: "Inventory Adjustment",
+        title: "جرود",
         href: "/dashboard/transactions/inventory-adjustment",
         permission: PERMISSIONS.stock.view,
       },
       {
-        title: "Inventory Adjustment Posting",
+        title: "تسويات الجرود",
         href: "/dashboard/transactions/inventory-adjustment/posting",
         permission: PERMISSIONS.stock.view,
+      },
+       {
+        title: "التحويل من الصيدليات",
+        href: "/dashboard/pharm/transactions/pharm-to-store",
+        permission: PERMISSIONS.sales.view,
       },
     ],
   },
@@ -362,6 +372,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales": "Sales",
   "/dashboard/sales/pharm-expenses": "Pharm Expenses",
   "/dashboard/sales/item-card": "Item Card",
+  "/dashboard/sales/customers": "Customers",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/diagnostics": "Diagnostics",

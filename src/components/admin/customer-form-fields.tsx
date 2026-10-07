@@ -151,17 +151,36 @@ export function CustomerFormFields({
   values,
   onChange,
   accountRequired = false,
+  previewCustCode = null,
+  editCustCode = null,
 }: {
   values: CustomerFormValues;
   onChange: (values: CustomerFormValues) => void;
   accountRequired?: boolean;
+  previewCustCode?: number | null;
+  editCustCode?: number | null;
 }) {
   function setField<K extends keyof CustomerFormValues>(key: K, value: CustomerFormValues[K]) {
     onChange({ ...values, [key]: value });
   }
 
+  const displayedCustCode = editCustCode ?? previewCustCode;
+
   return (
     <div className="grid gap-4">
+      {displayedCustCode != null && displayedCustCode > 0 ? (
+        <div className="space-y-2">
+          <Label htmlFor="customer-code">Customer Code</Label>
+          <Input
+            id="customer-code"
+            readOnly
+            disabled
+            value={String(displayedCustCode)}
+            className="bg-muted"
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           id="customer-account"

@@ -4,6 +4,8 @@ import type {
   CustomerCreateRequest,
   CustomerItem,
   CustomerNextAccount,
+  CustomerNextCode,
+  CustomerPagedResult,
 } from "@/types/customer";
 
 function readString(obj: Record<string, unknown>, ...keys: string[]): string {
@@ -160,23 +162,108 @@ function toApiPayload(data: CustomerCreateRequest): Record<string, unknown> {
   };
 }
 
-export async function getCustomers(token: string, search?: string): Promise<CustomerItem[]> {
-  const params = new URLSearchParams();
-  params.set("pageNumber", "1");
-  params.set("pageSize", "200");
-  params.set("sortBy", "custNameEn");
-  if (search?.trim()) params.set("search", search.trim());
-
-  const data = await apiFetch<Record<string, unknown>>(`Customer?${params.toString()}`, {}, token);
-  const items = (data.items ?? data.Items) as unknown;
-  return Array.isArray(items)
-    ? items.map((item) => normalizeCustomer(item as Record<string, unknown>))
+function normalizeCustomerPagedResult(data: Record<string, unknown>): CustomerPagedResult {
+  const itemsRaw = (data.items ?? data.Items) as unknown;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((item) => normalizeCustomer(item as Record<string, unknown>))
     : [];
+
+  return {
+    items,
+    totalCount: readNumber(data, "totalCount", "TotalCount"),
+    pageNumber: readNumber(data, "pageNumber", "PageNumber", "page", "Page") || 1,
+    pageSize: readNumber(data, "pageSize", "PageSize") || items.length,
+  };
+}
+
+export async function getCustomersPaged(
+  token: string,
+  options?: {
+    pageNumber?: number;
+    pageSize?: number;
+    search?: string;
+    sortBy?: string;
+    sortDesc?: boolean;
+  }
+): Promise<CustomerPagedResult> {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(options?.pageNumber ?? 1));
+  params.set("pageSize", String(options?.pageSize ?? 20));
+  params.set("sortBy", options?.sortBy ?? "custNameEn");
+  if (options?.sortDesc) params.set("sortDesc", "true");
+  if (options?.search?.trim()) params.set("search", options.search.trim());
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `Customer?${params.toString()}`,
+    {},
+    token
+  );
+  return normalizeCustomerPagedResult(data);
+}
+
+export async function getCustomers(token: string, search?: string): Promise<CustomerItem[]> {
+  const page = await getCustomersPaged(token, {
+    pageNumber: 1,
+    pageSize: 200,
+    search,
+    sortBy: "custNameEn",
+  });
+  return page.items;
+}
+
+export async function getCustomerById(
+  custCode: number,
+  token: string
+): Promise<CustomerItem> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `Customer/${custCode}`,
+    {},
+    token
+  );
+  return normalizeCustomer(data);
 }
 
 export async function getNextCustomerAccount(token: string): Promise<CustomerNextAccount> {
   const data = await apiFetch<Record<string, unknown>>("Customer/next-account", {}, token);
   return normalizeCustomerNextAccount(data);
+}
+
+export async function getNextCustomerCode(token: string): Promise<CustomerNextCode> {
+  const data = await apiFetch<Record<string, unknown>>("Customer/next-code", {}, token);
+  return {
+    nextCustCode: readNumber(data, "nextCustCode", "NextCustCode"),
+  };
+}
+
+/** Minimal create payload for Sales Add Customer (form fields only). */
+export type SalesCustomerCreateRequest = {
+  custNameEn: string;
+  custNameAr: string;
+  custMobile?: string | null;
+  custAddress?: string | null;
+  pharmCode: string;
+};
+
+export async function createSalesCustomer(
+  data: SalesCustomerCreateRequest,
+  token: string
+): Promise<CustomerItem> {
+  const result = await apiFetch<Record<string, unknown>>(
+    "Customer",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        CustNameEn: data.custNameEn,
+        CustNameAr: data.custNameAr,
+        CustMobile: data.custMobile || null,
+        CustAddress: data.custAddress || null,
+        PharmCode: data.pharmCode,
+      }),
+    },
+    token
+  );
+
+  return normalizeCustomer(result);
 }
 
 export async function createCustomer(
@@ -222,4 +309,29 @@ export async function saveCustomerByAccountId(
   );
 
   return normalizeCustomer(result);
+}
+
+export async function updateCustomer(
+  custCode: number,
+  data: CustomerCreateRequest,
+  token: string
+): Promise<CustomerItem> {
+  await apiFetch<void>(
+    `Customer/${custCode}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(toApiPayload(data)),
+    },
+    token
+  );
+
+  return getCustomerById(custCode, token);
+}
+
+export async function deleteCustomer(custCode: number, token: string): Promise<void> {
+  await apiFetch<void>(
+    `Customer/${custCode}`,
+    { method: "DELETE" },
+    token
+  );
 }

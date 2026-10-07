@@ -5591,15 +5591,24 @@ export async function lookupSalesManByCode(token: string, code: string) {
 
 export async function lookupSalesManByPassword(token: string, password: string) {
   try {
-    const data = await apiFetch<Record<string, unknown>>(
-      "EmployInfo/lookup-by-password",
+    // Same transport as Pharmacy Transfer lookupEmployeeByPassword.
+    const response = await fetch(
+      `${API_BASE_URL}/EmployInfo/lookup-by-password`,
       {
         method: "POST",
-        // Same body shape as Pharmacy Transfer employee password lookup
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ password: password.trim() }),
-      },
-      token
+      }
     );
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new ApiError(response.status, await parseError(response));
+    }
+    const data = (await response.json()) as Record<string, unknown>;
     return {
       id: readNumber(data, "id", "Id"),
       code: readNullableString(data, "code", "Code"),

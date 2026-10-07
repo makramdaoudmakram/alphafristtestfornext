@@ -543,8 +543,7 @@ export function PharmTransferPageContent() {
           onNext={() => void navigate("next")}
           onLast={() => void navigate("last")}
           onSearch={() => setSearchOpen(true)}
-          onCreateExcelTemplate={() => undefined}
-          excelImportHref="#"
+    
         />
 
         <Card>

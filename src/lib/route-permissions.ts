@@ -58,6 +58,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/sales-return": "Sales.View",
   "/dashboard/sales/pharm-expenses": "Sales.View",
   "/dashboard/sales/item-card": "Sales.View",
+  "/dashboard/sales/customers": "Customer.View",
   "/dashboard/shift": "Sales.View",
 };
 

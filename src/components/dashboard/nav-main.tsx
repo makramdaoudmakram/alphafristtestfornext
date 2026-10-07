@@ -48,6 +48,8 @@ const ICONS: Record<string, ElementType> = {
   Company: Building2,
   Pharm: Pill,
   Pharmacy: Pill,
+  صيدليات: Pill,
+  Audit: Shield,
   Customers: Users,
   Vendors: Building2,
   "Sales Payment Method": CreditCard,
@@ -71,6 +73,7 @@ const ICONS: Record<string, ElementType> = {
   "User Permissions": UserCog,
   "Role Permissions": ListChecks,
   Diagnostics: Activity,
+  "Commit Documents": Activity,
 };
 
 function NavLeafLink({

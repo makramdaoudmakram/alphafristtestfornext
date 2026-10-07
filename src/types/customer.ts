@@ -55,7 +55,18 @@ export type CustomerNextAccount = {
   nextAccountCode: string;
 };
 
+export type CustomerNextCode = {
+  nextCustCode: number;
+};
+
 export type AccountChartCodeName = {
   accCode: string;
   accName: string;
+};
+
+export type CustomerPagedResult = {
+  items: CustomerItem[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
 };

@@ -3,7 +3,7 @@
 /**
  * Sales customer autocomplete — same portal/debounce UX pattern as
  * SalesItemAutocompleteCell / Purchase ItemCatalogAutocompleteCell.
- * Uses existing getCustomers(token, search) for name or code.
+ * Uses GET /api/Customer (dbo.Customer) via getCustomers(token, search).
  */
 
 import {

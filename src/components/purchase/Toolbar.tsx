@@ -53,6 +53,7 @@ type ToolbarProps = {
   onEdit: () => void;
   onDelete: () => void;
   onPrint: () => void;
+  printing?: boolean;
   onRefresh: () => void;
   onFirst: () => void;
   onPrev: () => void;
@@ -182,6 +183,7 @@ export function Toolbar({
   onEdit,
   onDelete,
   onPrint,
+  printing = false,
   onRefresh,
   onFirst,
   onPrev,
@@ -220,7 +222,12 @@ export function Toolbar({
           disabled={!hasRecord || saving || posting || isPosted}
           variant="destructive"
         />
-        <ToolbarButton label="Print" icon={Printer} onClick={onPrint} disabled={!hasRecord} />
+        <ToolbarButton
+          label="Print Purchase"
+          icon={Printer}
+          onClick={onPrint}
+          disabled={!hasRecord || printing}
+        />
         <ToolbarButton
           label="Refresh"
           icon={RefreshCw}

@@ -29,7 +29,12 @@ import {
 } from "@/components/purchase/HeaderForm";
 import { SearchDialog } from "@/components/purchase/SearchDialog";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
+import { PurchasePrintReport } from "@/components/purchase/PurchasePrintReport";
 import { Toolbar } from "@/components/purchase/Toolbar";
+import {
+  getPurchasePrintReport,
+  type PurchasePrintReport as PurchasePrintReportData,
+} from "@/lib/purchase-print";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { usePermissions } from "@/components/permissions/permission-provider";
@@ -94,6 +99,8 @@ export function PurchasePageContent() {
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const [reverseConfirmOpen, setReverseConfirmOpen] = useState(false);
   const [reversing, setReversing] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [printReport, setPrintReport] = useState<PurchasePrintReportData | null>(null);
   const nextValueAbortRef = useRef<AbortController | null>(null);
   const nextValueRequestRef = useRef(0);
   const movementSyncRequestRef = useRef(0);
@@ -250,6 +257,34 @@ export function PurchasePageContent() {
   const documentNumber = form.watch("pthId");
   const venBillNo = form.watch("venBillNo");
   const pthNetBill = form.watch("pthNetBill");
+
+  const closePrint = useCallback(() => setPrintReport(null), []);
+
+  const handlePrintPurchase = useCallback(async () => {
+    if (documentNumber == null || documentNumber <= 0) {
+      toast.message("Load or save a document before printing.");
+      return;
+    }
+    if (!token) {
+      toast.error("Sign in before printing.");
+      return;
+    }
+
+    setPrinting(true);
+    try {
+      const report = await getPurchasePrintReport(documentNumber, token);
+      setPrintReport(report);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        toast.error("This purchase is not in the reporting database yet.");
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Could not load the purchase print.";
+      toast.error(message);
+    } finally {
+      setPrinting(false);
+    }
+  }, [documentNumber, token]);
 
   const isReverseButtonVisible = useMemo(
     () =>
@@ -616,12 +651,9 @@ export function PurchasePageContent() {
           onPrintBarcode={() => void handlePrintBarcode()}
           onEdit={handleEdit}
           onDelete={confirmDelete}
+          printing={printing}
           onPrint={() => {
-            if (!hasRecord) {
-              toast.message("Load or save a document before printing.");
-              return;
-            }
-            window.print();
+            void handlePrintPurchase();
           }}
           onRefresh={() => {
             void loadItemCatalog();
@@ -809,6 +841,10 @@ export function PurchasePageContent() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {printReport ? (
+          <PurchasePrintReport report={printReport} onClose={closePrint} />
+        ) : null}
       </div>
     </PageGuard>
   );
