@@ -87,8 +87,14 @@ export function ReturnItemStockSearchBox({
   }, []);
 
   useEffect(() => {
-    const q = query.trim();
-    if (!wantList || inputDisabled || !q || !token || !storeId?.trim()) {
+    const rawQuery = query;
+    if (
+      !wantList ||
+      inputDisabled ||
+      !rawQuery.trim() ||
+      !token ||
+      !storeId?.trim()
+    ) {
       setResults([]);
       setLookupLoading(false);
       return;
@@ -98,11 +104,17 @@ export function ReturnItemStockSearchBox({
     const timer = window.setTimeout(async () => {
       setLookupLoading(true);
       try {
-        const rows = await searchReturnItemsWithStock(token, q, storeId, {
-          take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
-          language: itemLanguage,
-          signal: controller.signal,
-        });
+        const rows = await searchReturnItemsWithStock(
+          token,
+          rawQuery,
+          storeId,
+          {
+            take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+            language: itemLanguage,
+            signal: controller.signal,
+            doubleSpaceWildcard: true,
+          }
+        );
         if (controller.signal.aborted) return;
         setResults(rows);
       } catch {

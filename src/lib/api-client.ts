@@ -3169,11 +3169,14 @@ export function searchReturnItemsWithStock(
     take?: number;
     language?: "en" | "ar";
     signal?: AbortSignal;
+    /** Two consecutive spaces in `search` become a SQL LIKE '%' (not trimmed). */
+    doubleSpaceWildcard?: boolean;
   }
 ) {
   const params = new URLSearchParams();
-  const q = search.trim();
-  if (q) params.set("search", q);
+  const useWildcard = options?.doubleSpaceWildcard === true;
+  const q = useWildcard ? search : search.trim();
+  if (q.trim()) params.set("search", q);
   params.set("storeId", storeId.trim());
   if (options?.take != null && options.take > 0) {
     params.set("take", String(options.take));
@@ -3181,6 +3184,7 @@ export function searchReturnItemsWithStock(
   if (options?.language === "en" || options?.language === "ar") {
     params.set("language", options.language);
   }
+  if (useWildcard) params.set("doubleSpaceWildcard", "true");
 
   return apiFetch<unknown>(
     `Stock/return-item-search?${params.toString()}`,

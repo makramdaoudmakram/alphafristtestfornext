@@ -134,6 +134,66 @@ function nearlyEqual(left: number, right: number, epsilon = 0.0001): boolean {
   return Math.abs(left - right) <= epsilon;
 }
 
+function toUnitId(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  const id = Math.trunc(value);
+  return id > 0 ? id : null;
+}
+
+/** Base (Unit3) pieces contained in one unit, mirroring backend ConvertToBaseUnitCore. */
+function unitBaseFactor(item: ItemCatalogItem): { unitId: number; factor: number }[] {
+  const candidates: { unitId: number; factor: number }[] = [];
+  const unit1 = toUnitId(item.itmUnit1);
+  const unit2 = toUnitId(item.itmUnit2);
+  const unit3 = toUnitId(item.itmUnit3);
+  const factor1to3 = item.itmUnit1Unit3;
+  const factor1to2 = item.itmUnit1Unit2;
+
+  // Coarsest first: Unit1 → Unit2 → Unit3(base). Unit3 factor is always 1.
+  if (unit1 && factor1to3 != null && factor1to3 > 0) {
+    candidates.push({ unitId: unit1, factor: factor1to3 });
+  }
+  if (
+    unit2 &&
+    factor1to3 != null &&
+    factor1to3 > 0 &&
+    factor1to2 != null &&
+    factor1to2 > 0
+  ) {
+    candidates.push({ unitId: unit2, factor: factor1to3 / factor1to2 });
+  }
+  if (unit3) candidates.push({ unitId: unit3, factor: 1 });
+  return candidates;
+}
+
+/**
+ * Express a whole base (Unit3) quantity in the largest catalog unit that divides it
+ * exactly, so a partial box never becomes a fractional `0.333 Box`. Never rounds:
+ * the unit is chosen so the quantity is a whole number of that unit.
+ */
+export function resolveUnitForBaseQuantity(
+  item: ItemCatalogItem,
+  baseQty: number
+): { unitId: number; qty: number } | null {
+  if (!Number.isFinite(baseQty) || baseQty <= 0) return null;
+
+  const candidates = unitBaseFactor(item);
+  if (candidates.length === 0) return null;
+
+  for (const candidate of candidates) {
+    const quotient = baseQty / candidate.factor;
+    if (!Number.isFinite(quotient) || quotient <= 0) continue;
+    if (nearlyEqual(quotient, Math.round(quotient))) {
+      return { unitId: candidate.unitId, qty: Math.round(quotient) };
+    }
+  }
+
+  // No unit divides exactly — fall back to the base unit (factor 1) with the raw base qty.
+  const baseUnit = toUnitId(item.itmUnit3) ?? candidates[candidates.length - 1]?.unitId;
+  if (baseUnit != null) return { unitId: baseUnit, qty: baseQty };
+  return null;
+}
+
 export function subtractCommittedPharmReciveStock(
   batches: PharmReciveStockBatch[],
   committedRows: ReadonlyArray<Pick<PharmReciveDetail, "batchNo" | "expDate" | "qnty">>,

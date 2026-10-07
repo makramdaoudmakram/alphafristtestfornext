@@ -14,6 +14,7 @@ import {
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
 import {
+  ensureCatalogItemsForItmCodes,
   findCatalogItemByCode,
   getItemUnitIds,
   indexCatalogItem,
@@ -175,6 +176,27 @@ export function PharmRecivePageContent() {
     [catalogItems, token]
   );
 
+  // Excel-imported rows carry itmId/unitId but not catalog unit metadata; seed itemByCode
+  // so the Unit combobox can resolve itmUnit1/2/3. Does not touch imported qnty/unitId.
+  const seedCatalogForImportedRows = useCallback(
+    async (imported: PharmReciveDetail[]) => {
+      if (!token || imported.length === 0) return;
+      try {
+        const merged = await ensureCatalogItemsForItmCodes(
+          imported.map((row) => ({ itmId: row.itmId })),
+          itemByCodeRef.current,
+          catalogItems,
+          token
+        );
+        itemByCodeRef.current = merged;
+        setItemByCode(merged);
+      } catch {
+        // Catalog stays as-is; unit options resolve once the item is later looked up.
+      }
+    },
+    [catalogItems, token]
+  );
+
   const {
     form,
     mode,
@@ -311,11 +333,18 @@ export function PharmRecivePageContent() {
       if (!row) return;
 
       const itemCode = (patch.itmId ?? row.itmId).trim();
+      const itemChanged =
+        patch.itmId != null && patch.itmId.trim() !== row.itmId.trim();
+      // A row picked from stock search is pinned to that exact batch; editing its
+      // qty/unit must not re-run FIFO allocation across all batches of the item.
+      const hasPinnedBatch = Boolean(row.batchNo.trim()) && !itemChanged;
+
       const triggersAllocation =
         Boolean(itemCode) &&
         (patch.qnty != null ||
           patch.unitId != null ||
-          Boolean(patch.itmId?.trim()));
+          Boolean(patch.itmId?.trim())) &&
+        !hasPinnedBatch;
 
       if (triggersAllocation) {
         const requestedQty = patch.qnty ?? row.qnty;
@@ -393,16 +422,8 @@ export function PharmRecivePageContent() {
         }
         return [...rows, templateRow];
       });
-
-      void allocateDetailRowsAtIndex(
-        targetIndex,
-        templateRow,
-        patch.qnty ?? 1,
-        catalogItem
-      );
     },
     [
-      allocateDetailRowsAtIndex,
       catalogItems,
       details,
       handleCatalogItemApplied,
@@ -625,6 +646,7 @@ export function PharmRecivePageContent() {
     }
     if (transfer?.details.length) {
       importExcelDetails(transfer.details);
+      void seedCatalogForImportedRows(transfer.details);
       toast.success(
         transfer.details.length === 1
           ? "Loaded 1 Excel row into the detail grid."
@@ -632,7 +654,13 @@ export function PharmRecivePageContent() {
       );
     }
     router.replace("/dashboard/transactions/pharm-recive");
-  }, [searchParams, importExcelDetails, router, restorePharmReciveExcelHeader]);
+  }, [
+    searchParams,
+    importExcelDetails,
+    router,
+    restorePharmReciveExcelHeader,
+    seedCatalogForImportedRows,
+  ]);
 
   const handleMovementChange = useCallback(
     async (item: MovmentLookupItem | null) => {

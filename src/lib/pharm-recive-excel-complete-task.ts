@@ -3,6 +3,7 @@ import {
   allocatePharmReciveReceivingQuantityFromPool,
   clonePharmReciveStockBatches,
   fetchPharmReciveStockBatchesForItem,
+  resolveUnitForBaseQuantity,
   type PharmReciveStockBatch,
 } from "@/lib/pharm-recive-stock-allocation";
 import {
@@ -226,19 +227,24 @@ export async function completePharmReciveExcelTask(
     });
 
     for (const line of allocation.lines) {
+      // Re-express each FIFO line's consumed base (Unit3) qty in the largest whole
+      // unit that divides it exactly, so a partial batch never stores `0.333 Box`.
+      const resolvedUnit = resolveUnitForBaseQuantity(item, line.stockUsedBase);
+      const lineUnitId = resolvedUnit?.unitId ?? allocation.unitId;
+      const lineQty = resolvedUnit?.qty ?? line.receivingQty;
       successfulRows.push({
         excelRowNumber: 0,
         sourceExcelRowNumber: row.excelRowNumber,
         itmId: code,
         itmNameAr: row.itmNameAr?.trim() || item.itmNameAr?.trim() || "",
         itmNameEn: row.itmNameEn?.trim() || item.itmNameEn?.trim() || "",
-        qnty: String(line.receivingQty),
+        qnty: String(lineQty),
         expDate: line.expDate,
         batchNo: line.batchNo,
         salesPrice: line.salesPrice,
         purshPrice: line.purshPrice,
         costPrice: line.costPrice,
-        unitId: allocation.unitId,
+        unitId: lineUnitId,
         isValid: true,
         isAllocatedRow: true,
         errors: [],

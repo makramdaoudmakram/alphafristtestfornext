@@ -1,11 +1,14 @@
 import { patchDetailFromCatalogItem } from "@/lib/item-catalog-search";
 import { getItemDefaultUnitId } from "@/lib/item-unit-options";
-import { formatReturnAvailableQty } from "@/lib/return-item-stock-search";
+import {
+  formatReturnAvailableQty,
+  formatReturnItemStockSearchExpDate,
+} from "@/lib/return-item-stock-search";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmReciveDetail, PharmReciveDetailPatch } from "@/types/pharm-recive";
 import type { ReturnItemStockSearchItem } from "@/types/stock";
 
-/** Item search selection — batch/expDate are assigned later by stock allocation. */
+/** Item search selection keeps the picked batch (batchNo / expDate / prices), not all batches. */
 export function patchPharmReciveDetailFromItemSearch(
   catalogItem: ItemCatalogItem,
   searchResult: ReturnItemStockSearchItem
@@ -18,10 +21,16 @@ export function patchPharmReciveDetailFromItemSearch(
     ...patchDetailFromCatalogItem(catalogItem),
     qnty: searchQty,
     unitId: getItemDefaultUnitId(catalogItem),
-    batchNo: "",
-    expDate: "",
-    maxSearchQty: undefined,
-    itmStock: 0,
+    batchNo: searchResult.batchNo?.trim() ?? "",
+    expDate: formatReturnItemStockSearchExpDate(searchResult.expDate),
+    itmSellPrice: Number.isFinite(searchResult.salesPrice)
+      ? searchResult.salesPrice
+      : 0,
+    itemCostPrice: Number.isFinite(searchResult.costPrice)
+      ? searchResult.costPrice
+      : 0,
+    maxSearchQty: searchQty,
+    itmStock: searchQty,
   };
 }
 
