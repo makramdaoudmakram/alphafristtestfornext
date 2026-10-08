@@ -85,6 +85,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/pharm/transactions/pharmacy-transfer",
         permission: PERMISSIONS.sales.view,
       },
+      {
+        title: "مرتجع الصيدلية للمخزن الرئيسي",
+        href: "/dashboard/pharm/transactions/pharm-to-store-send",
+        permission: PERMISSIONS.sales.view,
+      },
     ],
   },
   {
@@ -386,6 +391,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Pharmacy Acceptance",
   "/dashboard/pharm/transactions/stor-to-pharm": "Store-to-Pharm",
   "/dashboard/pharm/transactions/pharm-to-store": "Pharm-to-Store",
+  "/dashboard/pharm/transactions/pharm-to-store-send": "Pharmacy → Main Store Return",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",

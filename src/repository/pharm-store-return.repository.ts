@@ -5,6 +5,10 @@ import type {
   PharmStoreReturnPendingPage,
   PharmStoreReturnPendingSection,
 } from "@/types/pharm-store-return";
+import type {
+  PharmStoreReturnSendPayload,
+  PharmStoreReturnSendResult,
+} from "@/types/pharm-store-return-send";
 
 export class PharmStoreReturnRepositoryError extends Error {
   status: number;
@@ -131,6 +135,24 @@ function mapAcceptResult(raw: unknown): PharmStoreReturnAcceptResult {
   };
 }
 
+function mapSendResult(raw: unknown): PharmStoreReturnSendResult {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const detailsRaw = obj.details ?? obj.Details;
+  return {
+    id: readNullableNumber(obj, "id", "Id") ?? 0,
+    serialNo: readNullableNumber(obj, "serialNo", "SerialNo"),
+    sourceStoreId: readNullableNumber(obj, "sourceStoreId", "SourceStoreId"),
+    sourcePharmacyName: readNullableString(obj, "sourcePharmacyName", "SourcePharmacyName"),
+    destinationStoreId: readNullableNumber(obj, "destinationStoreId", "DestinationStoreId"),
+    destinationStoreName: readNullableString(obj, "destinationStoreName", "DestinationStoreName"),
+    totalQuantity: readNullableNumber(obj, "totalQuantity", "TotalQuantity"),
+    returnDate: readNullableString(obj, "returnDate", "ReturnDate"),
+    status: readNullableNumber(obj, "status", "Status", "movFlag", "MovFlag"),
+    statusText: readNullableString(obj, "statusText", "StatusText"),
+    detailCount: Array.isArray(detailsRaw) ? detailsRaw.length : 0,
+  };
+}
+
 async function parseError(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as Record<string, unknown>;
@@ -178,5 +200,14 @@ export function acceptPharmStoreReturn(token: string, headerId: number) {
     `PharmStoreReturn/${headerId}/accept`,
     { method: "POST" },
     mapAcceptResult
+  );
+}
+
+export function sendPharmStoreReturn(token: string, payload: PharmStoreReturnSendPayload) {
+  return request(
+    token,
+    "PharmStoreReturn",
+    { method: "POST", body: JSON.stringify(payload) },
+    mapSendResult
   );
 }
