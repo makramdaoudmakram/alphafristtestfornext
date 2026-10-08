@@ -75,6 +75,18 @@ function formatTransactionTypeLabel(type: string): string {
       return "Pharm Receive";
     case "InventoryAdjustment":
       return "Inventory Adjustment";
+    case "Transfer":
+      return "Transfer (send)";
+    case "TransferAccept":
+      return "Transfer (accept)";
+    case "StoreReturn":
+      return "Pharmacy-to-store return (send)";
+    case "StoreReturnAccept":
+      return "Pharmacy-to-store return (accept)";
+    case "Sale":
+      return "Sale";
+    case "SalesReturn":
+      return "Sales return";
     default:
       return type;
   }
@@ -345,10 +357,12 @@ export function BatchTraceabilityPageContent() {
             </Card>
 
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Batch history currently shows transaction detail records from the existing
-              Purchase, Return, Pharmacy Receive, and Inventory Adjustment data. Running
-              quantity-after values and historical edit/delete deltas are not included in
-              this version.
+              Batch history shows transaction detail records from Purchase, vendor Return,
+              Pharmacy Receive, Inventory Adjustment, Pharmacy↔Store Transfer (send and
+              accept), Pharmacy→Store Return (send and accept), customer Sale, and Sales
+              Return. The same batch number can exist across multiple stores, so all related
+              stores and events are shown. Running quantity-after values and historical
+              edit/delete deltas are not included in this version.
             </p>
           </>
         ) : null}
