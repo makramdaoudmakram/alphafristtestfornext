@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
+  getCurrentOpenShift,
   getNextMovValue,
   getStors,
 } from "@/lib/api-client";
@@ -16,6 +17,7 @@ import { HeaderPrimaryFields } from "@/components/purchase/HeaderForm";
 import { SearchDialog } from "@/components/purchase/SearchDialog";
 import { Toolbar } from "@/components/purchase/Toolbar";
 import { ItemLanguageToggle } from "@/components/pharm-recive/ItemLanguageToggle";
+import { PharmPurchaseEmployeeShiftFields } from "@/components/pharm-purchase/PharmPurchaseEmployeeShiftFields";
 import { PharmPurchaseHeaderTotals } from "@/components/pharm-purchase/PharmPurchaseHeaderTotals";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
@@ -90,6 +92,7 @@ export function PharmPurchasePageContent() {
   const [itemLanguage, setItemLanguage] =
     useState<PharmPurchaseItemLanguage>("en");
   const [pthIdLoading, setPthIdLoading] = useState(false);
+  const [openShiftNumber, setOpenShiftNumber] = useState<number | null>(null);
   const [auditRefreshKey, setAuditRefreshKey] = useState(0);
 
   const selectedMovement = useMemo<MovmentLookupItem | null>(() => {
@@ -138,6 +141,29 @@ export function PharmPurchasePageContent() {
   useEffect(() => {
     void loadContext();
   }, [loadContext, activePharmacyId]);
+
+  const scopeValid = Boolean(context?.scopeValid);
+
+  // Read-only Shift No. display. Same Shift/current call the Sales page makes;
+  // the save request never carries a shift, the server resolves the open one.
+  useEffect(() => {
+    if (!token || !scopeValid) {
+      setOpenShiftNumber(null);
+      return;
+    }
+    let cancelled = false;
+    void getCurrentOpenShift(token)
+      .then((status) => {
+        if (cancelled) return;
+        setOpenShiftNumber(status.hasOpenShift ? status.scId : null);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenShiftNumber(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, scopeValid]);
 
   const loadItemCatalog = useCallback(async () => {
     if (!token) {
@@ -449,13 +475,22 @@ export function PharmPurchasePageContent() {
                 ) : null}
 
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,26rem)] lg:items-start">
-                  <HeaderPrimaryFields
-                    key={recordId ?? "new"}
-                    form={form}
-                    disabled={!isEditable}
-                    hideVendorBillFields
-                    phtDateReadOnly
-                  />
+                  <div className="space-y-3">
+                    <HeaderPrimaryFields
+                      key={recordId ?? "new"}
+                      form={form}
+                      disabled={!isEditable}
+                      hideVendorBillFields
+                      phtDateReadOnly
+                    />
+                    <PharmPurchaseEmployeeShiftFields
+                      key={`employee-shift-${recordId ?? "new"}`}
+                      form={form}
+                      disabled={!isEditable}
+                      token={token}
+                      openShiftNumber={openShiftNumber}
+                    />
+                  </div>
                   <PharmPurchaseHeaderTotals
                     form={form}
                     totalSalesValue={totalSalesValue}

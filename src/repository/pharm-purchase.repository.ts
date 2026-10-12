@@ -202,6 +202,8 @@ export class PharmPurchaseRepository {
         MovAccounttherd: h.movAccounttherd || null,
         MovAccountfourth: h.movAccountfourth || null,
         PthNotice: h.pthNotice,
+        // No ShitNo: the server stores the shift open for the active pharmacy.
+        EmployCode: h.employCode ?? 0,
       },
       Details: payload.details.map((d) => ({
         Id: d.id && d.id > 0 ? d.id : null,

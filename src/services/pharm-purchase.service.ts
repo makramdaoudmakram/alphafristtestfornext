@@ -1,5 +1,6 @@
 import { computePharmPurchaseHeaderTotals } from "@/lib/pharm-purchase-calculations";
 import { toUpsertPayload } from "@/lib/purchase.mapper";
+import { isExpDatePresent } from "@/lib/purchase-exp-date";
 import {
   createPharmPurchaseRepository,
   PharmPurchaseRepositoryError,
@@ -13,6 +14,21 @@ import type {
 import type { PharmPurchaseContext } from "@/types/pharm-purchase";
 import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
 import { purchaseDocumentSchema } from "@/validation/purchase.schema";
+
+/** Pharmacy Purchase needs an expiry on every item line; the backend enforces the same rule. */
+const pharmPurchaseDocumentSchema = purchaseDocumentSchema.superRefine(
+  (parsed, ctx) => {
+    parsed.details.forEach((detail, index) => {
+      if (detail.itmId.trim() === "") return;
+      if (isExpDatePresent(detail.expDate ?? "")) return;
+      ctx.addIssue({
+        code: "custom",
+        path: ["details", index, "expDate"],
+        message: `Expiry date is required on line ${index + 1} (item ${detail.itmId.trim()}). Enter it as MM/YYYY.`,
+      });
+    });
+  }
+);
 
 export class PharmPurchaseService {
   private repository: ReturnType<typeof createPharmPurchaseRepository>;
@@ -41,7 +57,7 @@ export class PharmPurchaseService {
 
   validateDocument(header: PurchaseHeaderFormValues, details: PurchaseDetail[]) {
     const document = this.buildDocument(header, details);
-    return purchaseDocumentSchema.safeParse(document);
+    return pharmPurchaseDocumentSchema.safeParse(document);
   }
 
   search(filters: PurchaseSearchFilters): Promise<PurchaseSearchResult[]> {

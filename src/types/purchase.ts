@@ -30,6 +30,17 @@ export type PurchaseHeader = {
   pOtherExpenses: number;
   pthNetBill: number;
   pthNotice: string;
+  /** Shift business id (PurTransH.ShitNo = Shift.Sc_Id). null = not assigned. */
+  shitNo: number | null;
+  /**
+   * EmployInfo.Id of the employee resolved from the masked employee code
+   * (PurTransH.EmployCode). The code/PIN itself is never stored or sent.
+   */
+  employCode: number | null;
+  /**
+   * Display name behind EmployCode, returned on retrieval. Display only — never sent back.
+   */
+  employName: string;
   /** 0 = draft/saved, 1 = reversed (editable), 5 = posted to GeneralLedger */
   movStat: number | null;
 };
@@ -207,7 +218,10 @@ export type PurchaseNavigationIds = {
 
 /** Payload sent to Alfa API when endpoints are available */
 export type PurchaseUpsertPayload = {
-  header: Omit<PurchaseHeader, "noOfItems" | "totalQuantity">;
+  header: Omit<
+    PurchaseHeader,
+    "noOfItems" | "totalQuantity" | "employName"
+  >;
   details: (Omit<
     PurchaseDetail,
     | "clientRowId"

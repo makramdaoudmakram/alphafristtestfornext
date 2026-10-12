@@ -30,6 +30,23 @@ export const purchaseHeaderSchema = z.object({
   pOtherExpenses: z.coerce.number().min(0).max(100).default(0),
   pthNetBill: z.number(),
   pthNotice: z.string().default(""),
+  /** PurTransH.ShitNo / PurTransH.EmployCode are smallint columns. */
+  shitNo: z
+    .number()
+    .int("Shift No. must be a whole number")
+    .min(0, "Shift No. cannot be negative")
+    .max(32767, "Shift No. is out of range")
+    .nullable()
+    .default(null),
+  employCode: z
+    .number()
+    .int("Employee code must be a whole number")
+    .min(0, "Employee code cannot be negative")
+    .max(32767, "Employee code is out of range")
+    .nullable()
+    .default(null),
+  /** Employee name returned with the document. Display only — never saved. */
+  employName: z.string().default(""),
   movStat: z.number().nullable().default(null),
 });
 

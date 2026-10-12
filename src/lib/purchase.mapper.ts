@@ -64,6 +64,15 @@ function readNullableNumber(
   return null;
 }
 
+/** Stored 0 means "not assigned" on ShitNo / EmployCode — show it as empty in the UI. */
+function readOptionalPositiveNumber(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): number | null {
+  const value = readNullableNumber(obj, ...keys);
+  return value != null && value > 0 ? value : null;
+}
+
 function formatDateInput(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") {
@@ -161,6 +170,9 @@ export function emptyPurchaseHeader(): PurchaseHeader {
     pOtherExpenses: 0,
     pthNetBill: 0,
     pthNotice: "",
+    shitNo: null,
+    employCode: null,
+    employName: "",
     movStat: null,
   };
 }
@@ -261,6 +273,11 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PurchaseHeader {
     pOtherExpenses: readNumber(raw, "pOtherExpenses", "POtherExpenses"),
     pthNetBill: readNumber(raw, "pthNetBill", "PthNetBill"),
     pthNotice: readString(raw, "pthNotice", "PthNotice"),
+    shitNo: readOptionalPositiveNumber(raw, "shitNo", "ShitNo"),
+    employCode: readOptionalPositiveNumber(raw, "employCode", "EmployCode"),
+    // Display name resolved server-side from the stored employee id; empty when the
+    // employee row no longer exists, so the page falls back to the stored id.
+    employName: readString(raw, "employName", "EmployName").trim(),
     movStat: readNullableNumber(raw, "movStat", "MovStat"),
   };
 }
@@ -450,6 +467,10 @@ export function toUpsertPayload(
       totalTax: Number(header.totalTax) || 0,
       totalDesMon: Number(header.purchExtraDisCount) || 0,
       pthNotice: header.pthNotice ?? "",
+      // EmployCode: 0 = "not assigned", which clears it server-side. ShitNo is display only —
+      // the server stores the shift open for the pharmacy, never a client value.
+      shitNo: Number(header.shitNo) || 0,
+      employCode: Number(header.employCode) || 0,
       movStat: header.movStat ?? null,
     },
     details: details.map((detail) => {

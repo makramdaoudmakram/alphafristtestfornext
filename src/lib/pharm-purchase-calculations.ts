@@ -13,25 +13,28 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
-/** Discount amount from Sales Price × Qty × Disc% only. */
+/**
+ * Discount amount on the SALES subtotal: SalesPrice × Qty × Disc% ÷ 100. Clamped into
+ * [0, sales subtotal] so an invalid percentage can neither turn the discount into a mark-up
+ * nor take the line net below zero. Extra discount is never part of the amount — Pharmacy
+ * Purchase forces itmExtraDis to 0, so a line is never discounted twice.
+ */
 export function computePharmPurchaseDiscAmount(row: {
   itmSell?: number | null;
   qnty?: number | null;
   itmDisPer?: number | null;
 }): number {
-  const salesPrice = toNumber(row.itmSell);
-  const qty = toNumber(row.qnty);
+  const gross = Math.max(toNumber(row.itmSell) * toNumber(row.qnty), 0);
   const discPercent = toNumber(row.itmDisPer);
-  return roundMoney(salesPrice * qty * (discPercent / 100));
+  if (discPercent <= 0) return 0;
+  return roundMoney(Math.min((gross * discPercent) / 100, gross));
 }
 
 /** Sales-based line total: (SalesPrice × Qty) − discount. No tax. */
 export function computePharmPurchaseLineTotal(row: PurchaseDetail): number {
-  const salesPrice = toNumber(row.itmSell);
-  const qty = toNumber(row.qnty);
-  const gross = salesPrice * qty;
+  const gross = toNumber(row.itmSell) * toNumber(row.qnty);
   const discount = computePharmPurchaseDiscAmount(row);
-  return roundMoney(gross - discount);
+  return roundMoney(Math.max(gross - discount, 0));
 }
 
 /** Purchase-side cost from purchase price (stock recording only). */
@@ -46,12 +49,12 @@ export function computePharmPurchaseCost(row: PurchaseDetail): number {
   return roundMoney((qty * purchPrice - purchDisc) / divisor);
 }
 
+/**
+ * Line net is the sales-price subtotal after every applicable discount — the same value the
+ * API persists. Purchase price only feeds computePharmPurchaseCost (stock cost recording).
+ */
 export function computePharmPurchaseNet(row: PurchaseDetail): number {
-  const purchPrice = toNumber(row.itmPurPrice);
-  const qty = toNumber(row.qnty);
-  const discPercent = toNumber(row.itmDisPer);
-  const purchDisc = roundMoney(purchPrice * qty * (discPercent / 100));
-  return roundMoney(purchPrice * qty - purchDisc);
+  return computePharmPurchaseLineTotal(row);
 }
 
 export function recalculatePharmPurchaseDetailRow(row: PurchaseDetail): PurchaseDetail {
