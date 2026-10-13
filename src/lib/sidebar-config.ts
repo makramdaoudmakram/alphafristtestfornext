@@ -1,4 +1,5 @@
 import { DIAGNOSTICS_NAV_PERMISSION } from "@/lib/diagnostics/diagnostics-types";
+import { LEGACY_LEDGER_NAV_PERMISSION } from "@/lib/legacy-ledger-api";
 import { PERMISSIONS } from "@/lib/route-permissions";
 
 export type NavLinkItem = {
@@ -287,6 +288,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/ledger",
           },
           {
+            title: "استيراد الأرصدة القديمة",
+            href: "/dashboard/ledger-import",
+            permission: LEGACY_LEDGER_NAV_PERMISSION,
+          },
+          {
             title: "مراكز التكلفه",
             href: "/dashboard/cost-centers",
           },
@@ -302,6 +308,10 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "الموردين",
             href: "/dashboard/vendors",
+          },
+           {
+            title: "import leadger",
+            href: "/dashboard/ledger-import",
           },
             {
         title: "تعديل الفواتير المحفوظه",
@@ -400,6 +410,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/manual-journal": "Manual Journal",
   "/dashboard/journal": "Journal",
   "/dashboard/ledger": "Ledger",
+  "/dashboard/ledger-import": "Legacy Ledger Import",
   "/dashboard/cost-centers": "Cost Centers",
   "/dashboard/employ-info": "Employee Info",
   "/dashboard/stores": "Stores",

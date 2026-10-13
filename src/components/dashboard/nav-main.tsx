@@ -29,6 +29,10 @@ import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import { isDiagnosticsAdmin } from "@/lib/diagnostics/diagnostics-api";
+import {
+  isLegacyLedgerAdmin,
+  LEGACY_LEDGER_NAV_PERMISSION,
+} from "@/lib/legacy-ledger-api";
 import { DIAGNOSTICS_NAV_PERMISSION } from "@/lib/diagnostics/diagnostics-types";
 import {
   SIDEBAR_NAV,
@@ -410,6 +414,10 @@ export function SidebarNav({
     if (permission === DIAGNOSTICS_NAV_PERMISSION) {
       if (!hydrated || loading) return false;
       return isDiagnosticsAdmin(roles);
+    }
+    if (permission === LEGACY_LEDGER_NAV_PERMISSION) {
+      if (!hydrated || loading) return false;
+      return isLegacyLedgerAdmin(roles);
     }
     if (!permission) return true;
     if (!hydrated || loading) return true;
