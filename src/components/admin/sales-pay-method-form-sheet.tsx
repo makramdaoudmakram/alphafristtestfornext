@@ -22,6 +22,7 @@ export type SalesPayMethodFormValues = {
   salesKindId: string;
   accountCode: string;
   active: boolean;
+  deleveryRequair: boolean;
 };
 
 const emptyValues: SalesPayMethodFormValues = {
@@ -30,6 +31,7 @@ const emptyValues: SalesPayMethodFormValues = {
   salesKindId: "",
   accountCode: "",
   active: true,
+  deleveryRequair: false,
 };
 
 function toFormValues(item: SalesPayMethodItem): SalesPayMethodFormValues {
@@ -39,6 +41,7 @@ function toFormValues(item: SalesPayMethodItem): SalesPayMethodFormValues {
     salesKindId: item.salesKindId > 0 ? String(item.salesKindId) : "",
     accountCode: item.accountCode ?? "",
     active: item.active,
+    deleveryRequair: item.deleveryRequair,
   };
 }
 
@@ -181,6 +184,22 @@ export function SalesPayMethodFormSheet({
                 }
               />
               <Label htmlFor="sheet-affectsCash">Affects cash</Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="sheet-deleveryRequair"
+                type="checkbox"
+                className="size-4"
+                checked={values.deleveryRequair}
+                onChange={(e) =>
+                  setValues((current) => ({
+                    ...current,
+                    deleveryRequair: e.target.checked,
+                  }))
+                }
+              />
+              <Label htmlFor="sheet-deleveryRequair">Delivery Required</Label>
             </div>
 
             <div className="flex items-center gap-2">

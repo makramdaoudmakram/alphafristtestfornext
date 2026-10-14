@@ -96,6 +96,7 @@ export function SalesPayMethodPageContent() {
   const [salesKindId, setSalesKindId] = useState("");
   const [accountCode, setAccountCode] = useState("");
   const [active, setActive] = useState(true);
+  const [deleveryRequair, setDeleveryRequair] = useState(false);
 
   const salesKindOptions = useMemo(
     () => toSalesKindOptions(salesKinds),
@@ -202,6 +203,7 @@ export function SalesPayMethodPageContent() {
           salesKindId: parsedSalesKindId,
           accountCode: accountCode.trim(),
           active,
+          deleveryRequair,
         },
         token
       );
@@ -211,6 +213,7 @@ export function SalesPayMethodPageContent() {
       setSalesKindId("");
       setAccountCode("");
       setActive(true);
+      setDeleveryRequair(false);
       await loadItems();
     } catch (error) {
       toast.error(
@@ -268,6 +271,7 @@ export function SalesPayMethodPageContent() {
           salesKindId: parsedSalesKindId,
           accountCode: values.accountCode.trim(),
           active: values.active,
+          deleveryRequair: values.deleveryRequair,
         },
         token
       );
@@ -388,6 +392,16 @@ export function SalesPayMethodPageContent() {
                     onChange={(e) => setAffectsCash(e.target.checked)}
                   />
                   <Label htmlFor="affectsCash">Affects cash</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="deleveryRequair"
+                    type="checkbox"
+                    className="size-4"
+                    checked={deleveryRequair}
+                    onChange={(e) => setDeleveryRequair(e.target.checked)}
+                  />
+                  <Label htmlFor="deleveryRequair">Delivery Required</Label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

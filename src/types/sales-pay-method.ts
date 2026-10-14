@@ -5,6 +5,7 @@ export interface SalesPayMethodItem {
   salesKindId: number;
   accountCode: string;
   active: boolean;
+  deleveryRequair: boolean;
 }
 
 export interface CreateSalesPayMethodRequest {
@@ -13,6 +14,7 @@ export interface CreateSalesPayMethodRequest {
   salesKindId: number;
   accountCode: string;
   active: boolean;
+  deleveryRequair: boolean;
 }
 
 export type UpdateSalesPayMethodRequest = CreateSalesPayMethodRequest;

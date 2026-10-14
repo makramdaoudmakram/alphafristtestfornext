@@ -45,6 +45,12 @@ export function useSalesPayMethodColumns(
       },
       {
         enableSorting: true,
+        accessorKey: "deleveryRequair",
+        header: "Delivery Required",
+        cell: ({ row }) => (row.original.deleveryRequair ? "Yes" : "No"),
+      },
+      {
+        enableSorting: true,
         accessorKey: "accountCode",
         header: "Account code",
         cell: ({ row }) => {

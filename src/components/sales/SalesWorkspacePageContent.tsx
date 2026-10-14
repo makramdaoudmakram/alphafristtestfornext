@@ -39,9 +39,14 @@ import {
   getShiftMovements,
   lookupSalesManByPassword,
   openShift,
+  upsertSaleDelivery,
 } from "@/lib/api-client";
 import {
   createEmptyTab,
+  areDeliveryRequirementsMet,
+  deliveryItemTotal,
+  deliveryTierCost,
+  DELIVERY_TIER_FREE_BOUNDARY,
   hasAnyRowDiscount,
   hasGlobalDiscount,
   hasValidSalesServiceSelection,
@@ -49,6 +54,7 @@ import {
   isSellableSalesLine,
   money,
   payableAmount,
+  pickDeliveryService,
   sumLinesNet,
   validateSalesQuantities,
 } from "@/lib/sales-workspace-calc";
@@ -132,16 +138,51 @@ export function SalesWorkspacePageContent() {
     active?.salesKindId != null &&
       salesKinds.find((k) => k.salesKindId === active.salesKindId)?.deleveryMandatory
   );
-  const showDeliveryFields = Boolean(active?.deliveryEnabled || deliveryMandatory);
-  const deliveryMandatoryRequirementsMet =
-    !deliveryMandatory ||
-    (active != null &&
-      active.customerId != null &&
-      active.customerId > 0 &&
-      active.deliveryEmployeeId != null &&
-      active.deliveryEmployeeId > 0 &&
-      hasValidSalesServiceSelection(active.salesServiceId) &&
-      services.some((s) => s.salesServiceId === active.salesServiceId));
+  const paymentMethodRequiresDelivery = Boolean(
+    active &&
+      methods.some(
+        (m) => m.deleveryRequair && Number(active.payments[m.paymentMethodId] ?? 0) > 0
+      )
+  );
+  // DeliveryRequired = Delivery button OR SalesKind deleveryMandatory OR payment method deleveryRequair.
+  const deliveryRequired = Boolean(
+    active && (active.deliveryEnabled || deliveryMandatory || paymentMethodRequiresDelivery)
+  );
+  const showDeliveryFields = deliveryRequired;
+  const tierItemTotal = active ? deliveryItemTotal(active) : 0;
+  const tierServiceCost = deliveryTierCost(tierItemTotal);
+  const autoDeliveryService = pickDeliveryService(services, tierItemTotal);
+  // Totals above 300 must keep the zero-cost service — the menu is locked.
+  const deliveryServiceLocked = deliveryRequired && tierServiceCost === 0;
+  const deliveryEditableLocked = Boolean(
+    active?.saved && (active.billTyp ?? 0) === 1
+  );
+  const deliveryRequirementsMet = areDeliveryRequirementsMet({
+    deliveryRequired,
+    deliveryMandatory,
+    customerId: active?.customerId ?? null,
+    deliveryEmployeeId: active?.deliveryEmployeeId ?? null,
+    selectedSalesServiceId: active?.salesServiceId ?? null,
+    autoDeliveryService,
+  });
+  const deliveryMandatoryRequirementsMet = deliveryRequirementsMet;
+  const deliveryMissingReasons: string[] = [];
+  if (active && !active.saved && !deliveryRequirementsMet) {
+    if (deliveryMandatory && (active.customerId == null || active.customerId <= 0))
+      deliveryMissingReasons.push(
+        "Select a customer — required for delivery with this Sales Kind."
+      );
+    if (active.deliveryEmployeeId == null || active.deliveryEmployeeId <= 0)
+      deliveryMissingReasons.push("Select the delivery employee (code lookup).");
+    if (!autoDeliveryService)
+      deliveryMissingReasons.push(
+        `No delivery service costing ${tierServiceCost.toFixed(2)} is assigned to the current pharmacy.`
+      );
+    else if (active.salesServiceId !== autoDeliveryService.salesServiceId)
+      deliveryMissingReasons.push(
+        `Delivery service must be “${autoDeliveryService.serviceName}” for this invoice total.`
+      );
+  }
 
   /** Update one tab by id — never depends on which tab is currently active. */
   const updateTab = useCallback(
@@ -183,6 +224,45 @@ export function SalesWorkspacePageContent() {
     },
     [activeId, updateTab]
   );
+
+  // Delivery normalization: the tier service follows the discounted goods total immediately,
+  // and stale delivery-only values are cleared when delivery is no longer required.
+  useEffect(() => {
+    if (!active || active.deliveryPersisted || deliveryEditableLocked) return;
+    if (!deliveryRequired) {
+      if (
+        active.salesServiceId != null ||
+        active.serviceCost !== 0 ||
+        active.requiresDeliveryEmployee
+      ) {
+        updateActive({
+          salesServiceId: null,
+          serviceCost: 0,
+          requiresDeliveryEmployee: false,
+        });
+      }
+      return;
+    }
+    if (!autoDeliveryService) return;
+    if (
+      active.salesServiceId !== autoDeliveryService.salesServiceId ||
+      active.serviceCost !== autoDeliveryService.cost
+    ) {
+      const expected = autoDeliveryService;
+      updateActive((tab) => ({
+        ...tab,
+        salesServiceId: expected.salesServiceId,
+        serviceCost: expected.cost,
+        requiresDeliveryEmployee: expected.requiresDeliveryEmployee,
+      }));
+    }
+  }, [
+    active,
+    deliveryRequired,
+    deliveryEditableLocked,
+    autoDeliveryService,
+    updateActive,
+  ]);
 
   const ensureShift = useCallback(async () => {
     if (!token) return;
@@ -387,6 +467,10 @@ export function SalesWorkspacePageContent() {
         toast.message("Delivery is required for the selected Sales Kind.");
         return;
       }
+      if (paymentMethodRequiresDelivery) {
+        toast.message("Delivery is required by the selected payment method.");
+        return;
+      }
       updateActive({
         deliveryEnabled: false,
         deliverySearch: "",
@@ -527,24 +611,39 @@ export function SalesWorkspacePageContent() {
     void loadMethodsForSalesKind(kindId);
   };
 
-  const assertDeliveryMandatoryForSave = (): boolean => {
-    if (!active || !deliveryMandatory) return true;
+  const assertDeliveryForSave = (): boolean => {
+    if (!active || !deliveryRequired) return true;
 
-    if (active.customerId == null || active.customerId <= 0) {
+    if (deliveryMandatory && (active.customerId == null || active.customerId <= 0)) {
       toast.error("Customer is required when DeliveryMandatory is enabled.");
       return false;
     }
     if (active.deliveryEmployeeId == null || active.deliveryEmployeeId <= 0) {
-      toast.error("Delivery employee is required when DeliveryMandatory is enabled.");
+      toast.error(
+        deliveryMandatory
+          ? "Delivery employee is required when DeliveryMandatory is enabled."
+          : "Delivery employee code is required when delivery is selected or the payment method requires delivery."
+      );
       return false;
     }
-    if (!hasValidSalesServiceSelection(active.salesServiceId)) {
-      toast.error("Sales Service is required when DeliveryMandatory is enabled.");
+    if (!autoDeliveryService) {
+      toast.error(
+        `No delivery service costing ${tierServiceCost.toFixed(2)} is assigned to the current pharmacy.`
+      );
       return false;
     }
-    if (!services.some((s) => s.salesServiceId === active.salesServiceId)) {
-      toast.error("Selected Sales Service is not available for the current pharmacy.");
-      return false;
+    if (
+      !hasValidSalesServiceSelection(active.salesServiceId) ||
+      active.salesServiceId !== autoDeliveryService.salesServiceId
+    ) {
+      updateActive({
+        salesServiceId: autoDeliveryService.salesServiceId,
+        serviceCost: autoDeliveryService.cost,
+        requiresDeliveryEmployee: autoDeliveryService.requiresDeliveryEmployee,
+      });
+      toast.message(
+        `Delivery service set to “${autoDeliveryService.serviceName}” for this invoice total.`
+      );
     }
     return true;
   };
@@ -582,7 +681,7 @@ export function SalesWorkspacePageContent() {
       toast.error("Cannot use global and row discounts together.");
       return;
     }
-    if (!assertDeliveryMandatoryForSave()) return;
+    if (!assertDeliveryForSave()) return;
 
     setSaving(true);
     try {
@@ -597,12 +696,12 @@ export function SalesWorkspacePageContent() {
         globalDiscountPercent: active.globalDiscountPercent,
         globalDiscountValue: active.globalDiscountValue,
         salesKindId: active.salesKindId,
-        salesServiceId:
-          active.deliveryEnabled || deliveryMandatory ? active.salesServiceId : null,
+        salesServiceId: deliveryRequired ? active.salesServiceId : null,
         deliveryCodeOrPassword:
-          (active.deliveryEnabled || deliveryMandatory) && active.deliveryEmployeeId
+          deliveryRequired && active.deliveryEmployeeId
             ? active.deliveryCode || null
             : null,
+        deliveryRequested: deliveryRequired,
         lines: sellableLines.map((l) => ({
           itemCatalogId: l.itemCatalogId,
           stockId: l.stockId,
@@ -623,6 +722,7 @@ export function SalesWorkspacePageContent() {
         label: `Sale ${result.sthId}`,
         egyptTimeDisplay: result.egyptLocalDisplay || active.egyptTimeDisplay,
         payments: {},
+        deliveryPersisted: deliveryRequired,
       });
       setPaymentPayable(money(result.payable));
       toast.success(`Sale ${result.sthId} saved. Enter payment amounts below.`);
@@ -641,7 +741,33 @@ export function SalesWorkspacePageContent() {
       toast.error("This sale cannot be paid.");
       return;
     }
-    if (!assertDeliveryMandatoryForSave()) return;
+    if (!assertDeliveryForSave()) return;
+
+    // Delivery became required after save (payment method flag): persist it first,
+    // then the refreshed payable (now including the tier service cost) applies.
+    if (deliveryRequired && !active.deliveryPersisted) {
+      try {
+        await upsertSaleDelivery(token, {
+          sthId: active.sthId,
+          custId: active.customerId,
+          customerName: active.customerName || null,
+          tel: active.customerTel || null,
+          address: active.customerAddress || null,
+          salesServiceId: active.salesServiceId ?? 0,
+          deliveryCodeOrPassword: active.deliveryCode || null,
+        });
+        updateTab(active.clientId, { deliveryPersisted: true });
+        await refreshPaymentContext(active.sthId, active.clientId, active.salesKindId);
+        toast.message(
+          "Delivery service applied; payable updated. Confirm payment amounts and finalize again."
+        );
+      } catch (err) {
+        toast.error(
+          err instanceof ApiError ? err.message : "Failed to save delivery details."
+        );
+      }
+      return;
+    }
 
     if (active.salesKindId == null || active.salesKindId <= 0) {
       toast.error("Select a sales kind.");
@@ -843,7 +969,7 @@ export function SalesWorkspacePageContent() {
                     <div className="flex justify-between gap-4">
                       <span>Service</span>
                       <span>
-                        {active.deliveryEnabled
+                        {deliveryRequired
                           ? active.serviceCost.toFixed(2)
                           : "0.00"}
                       </span>
@@ -1037,7 +1163,7 @@ export function SalesWorkspacePageContent() {
                       <div className="flex items-center justify-between gap-2">
                         <Label htmlFor="delivery-employee-lookup">
                           Delivery Employee
-                          {deliveryMandatory ? (
+                          {deliveryRequired ? (
                             <span className="text-destructive"> *</span>
                           ) : null}
                         </Label>
@@ -1046,7 +1172,7 @@ export function SalesWorkspacePageContent() {
                             type="button"
                             size="sm"
                             variant="ghost"
-                            disabled={active.saved}
+                            disabled={deliveryEditableLocked}
                             onClick={clearDeliveryEmployeeSelection}
                           >
                             Clear
@@ -1056,7 +1182,7 @@ export function SalesWorkspacePageContent() {
                       <SalesDeliveryEmployeeAutocomplete
                         value={active.deliverySearch}
                         token={token}
-                        disabled={active.saved}
+                        disabled={deliveryEditableLocked}
                         onQueryChange={(text) =>
                           updateActive({
                             deliverySearch: text,
@@ -1073,14 +1199,14 @@ export function SalesWorkspacePageContent() {
                     <div className="space-y-2">
                       <Label htmlFor="payment-sales-service">
                         Sales Service
-                        {deliveryMandatory ? (
+                        {deliveryRequired ? (
                           <span className="text-destructive"> *</span>
                         ) : null}
                       </Label>
                       <select
                         id="payment-sales-service"
                         className="border-input bg-background h-9 w-full rounded-md border px-2"
-                        disabled={active.saved}
+                        disabled={deliveryEditableLocked || deliveryServiceLocked}
                         value={active.salesServiceId ?? ""}
                         onChange={(e) =>
                           onServiceChange(e.target.value ? Number(e.target.value) : null)
@@ -1093,6 +1219,18 @@ export function SalesWorkspacePageContent() {
                           </option>
                         ))}
                       </select>
+                      {deliveryServiceLocked ? (
+                        <p className="text-xs text-muted-foreground">
+                          Invoice total is above {DELIVERY_TIER_FREE_BOUNDARY} — the zero-cost
+                          delivery service is applied automatically.
+                        </p>
+                      ) : null}
+                      {deliveryRequired && !autoDeliveryService ? (
+                        <div className="text-destructive mt-1 text-xs">
+                          No delivery service costing {tierServiceCost.toFixed(2)} is assigned
+                          to the current pharmacy for this invoice total.
+                        </div>
+                      ) : null}
                       <div className="text-sm">
                         Service value: {active.serviceCost.toFixed(2)}
                       </div>
@@ -1169,6 +1307,21 @@ export function SalesWorkspacePageContent() {
                     {(paymentPayable ?? payable).toFixed(2)}
                   </div>
                 </div>
+
+                {!active.saved && !canSave &&
+                (deliveryMissingReasons.length > 0 || !active.salesManId) ? (
+                  <div className="text-destructive text-xs" role="alert">
+                    <p>Save is disabled until these are resolved:</p>
+                    <ul className="list-disc ps-4">
+                      {!active.salesManId ? (
+                        <li>Resolve Sales Man first.</li>
+                      ) : null}
+                      {deliveryMissingReasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
                 <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
                     <Button

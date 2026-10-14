@@ -66,6 +66,10 @@ export function salesItemSecondaryLabel(
     return `Code: ${code} · Catalog · Price: ${formatMoney(salesCatalogDisplayPrice(hit))}`;
   }
 
+  if (hit.itmSrvc) {
+    return `Code: ${code} · Service · Price: ${formatMoney(salesCatalogDisplayPrice(hit))}`;
+  }
+
   if (hit.stocks.length === 0) {
     return `Code: ${code} · No stock · Price: ${formatMoney(salesCatalogDisplayPrice(hit))}`;
   }

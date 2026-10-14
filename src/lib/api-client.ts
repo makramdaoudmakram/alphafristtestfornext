@@ -1554,6 +1554,7 @@ function normalizeSalesPayMethodItem(
     salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
     accountCode: readString(item, "accountCode", "AccountCode"),
     active: readBoolean(item, "active", "Active"),
+    deleveryRequair: readBoolean(item, "deleveryRequair", "DeleveryRequair"),
   };
 }
 
@@ -1596,6 +1597,7 @@ export function createSalesPayMethod(
         SalesKindId: data.salesKindId,
         AccountCode: data.accountCode || null,
         Active: data.active,
+        DeleveryRequair: data.deleveryRequair,
       }),
     },
     token
@@ -1617,6 +1619,7 @@ export function updateSalesPayMethod(
         SalesKindId: data.salesKindId,
         AccountCode: data.accountCode || null,
         Active: data.active,
+        DeleveryRequair: data.deleveryRequair,
       }),
     },
     token
@@ -4671,7 +4674,13 @@ function normalizeItemCatalogLookupItem(
     itmHasExpire: null,
     itmActive: true,
     itmStopSell: false,
-    itmSrvc: false,
+    itmSrvc: readBoolean(
+      item,
+      "itmSrvc",
+      "ItmSrvc",
+      "itm_Srvc",
+      "Itm_Srvc"
+    ),
     itmStopPur: false,
     itmPrintBarcode: false,
     itmAllowDiscount: false,
@@ -5239,6 +5248,7 @@ function mapSalesPaymentMethodOption(
     affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
     active: readBoolean(item, "active", "Active"),
     salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
+    deleveryRequair: readBoolean(item, "deleveryRequair", "DeleveryRequair"),
   };
 }
 
@@ -5403,6 +5413,7 @@ export async function searchSalesItems(
         itmMaxDiscPer: readNullableNumber(r, "itmMaxDiscPer", "ItmMaxDiscPer"),
         groupNameEn: readString(r, "groupNameEn", "GroupNameEn"),
         groupNameAr: readString(r, "groupNameAr", "GroupNameAr"),
+        itmSrvc: readBoolean(r, "itmSrvc", "ItmSrvc", "itm_Srvc", "Itm_Srvc"),
         stocks: stocks.map((s) => {
           const st = s as Record<string, unknown>;
           return {
@@ -5488,6 +5499,7 @@ export async function createSale(
         SalesKindId: request.salesKindId,
         SalesServiceId: request.salesServiceId,
         DeliveryCodeOrPassword: request.deliveryCodeOrPassword,
+        DeliveryRequested: request.deliveryRequested,
         Lines: request.lines.map((l) => ({
           ItemCatalogId: l.itemCatalogId,
           StockId: l.stockId,

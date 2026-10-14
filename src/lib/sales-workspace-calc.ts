@@ -24,7 +24,9 @@ export function lineNet(line: SalesWorkspaceLine): number {
 }
 
 export function isSellableSalesLine(line: SalesWorkspaceLine): boolean {
-  return line.itemCatalogId > 0 && line.stockId > 0;
+  if (line.itemCatalogId <= 0) return false;
+  // Service items have no Stock row; their catalog flag is the authority.
+  return line.isService === true || line.stockId > 0;
 }
 
 export function hasAnyRowDiscount(lines: SalesWorkspaceLine[]): boolean {
@@ -66,6 +68,66 @@ export function payableAmount(tab: SalesWorkspaceTab): number {
   const service =
     tab.deliveryEnabled && Number.isFinite(tab.serviceCost) ? tab.serviceCost || 0 : 0;
   return money(sumLinesNet(tab.lines) - headerDiscountAmount(tab) + service);
+}
+
+/**
+ * Delivery tier boundaries on the discounted goods total (service cost excluded):
+ * <= 200 → service costing 30; 200.01–300 → service costing 15; > 300 → service costing 0.
+ */
+export const DELIVERY_TIER_HIGH_BOUNDARY = 200;
+export const DELIVERY_TIER_FREE_BOUNDARY = 300;
+
+export function deliveryItemTotal(tab: SalesWorkspaceTab): number {
+  return money(sumLinesNet(tab.lines) - headerDiscountAmount(tab));
+}
+
+export function deliveryTierCost(itemTotal: number): number {
+  const total = money(itemTotal);
+  if (total <= DELIVERY_TIER_HIGH_BOUNDARY) return 30;
+  if (total <= DELIVERY_TIER_FREE_BOUNDARY) return 15;
+  return 0;
+}
+
+/** Mirrors backend RequiresDeliveryEmployee: trimmed, case-insensitive. */
+export function isDeliveryServiceType(serviceType: string): boolean {
+  return serviceType.trim().toLowerCase() === "delivery";
+}
+
+/** Tier-authoritative: the service is identified by its cost, never by an assumed id. */
+export function pickDeliveryService<T extends { salesServiceId: number; serviceType: string; cost: number }>(
+  services: readonly T[],
+  itemTotal: number
+): T | null {
+  const required = deliveryTierCost(itemTotal);
+  const matches = services.filter(
+    (s) => isDeliveryServiceType(s.serviceType) && money(s.cost) === required
+  );
+  return matches.length > 0 ? matches[0] : null;
+}
+
+/** Delivery save gate: employee code + the tier service for the current invoice total. */
+export function areDeliveryRequirementsMet(args: {
+  deliveryRequired: boolean;
+  deliveryMandatory: boolean;
+  customerId: number | null;
+  deliveryEmployeeId: number | null;
+  selectedSalesServiceId: number | null;
+  autoDeliveryService: { salesServiceId: number } | null;
+}): boolean {
+  if (!args.deliveryRequired) return true;
+  if (
+    args.deliveryMandatory &&
+    (args.customerId == null || args.customerId <= 0)
+  ) {
+    return false;
+  }
+  if (args.deliveryEmployeeId == null || args.deliveryEmployeeId <= 0) {
+    return false;
+  }
+  return (
+    args.autoDeliveryService != null &&
+    args.selectedSalesServiceId === args.autoDeliveryService.salesServiceId
+  );
 }
 
 /** True when Sales Service Id is a positive selection (not null/0/empty). */
@@ -266,12 +328,15 @@ export function checkInvoiceStockAllocation(
   lines: SalesWorkspaceLine[],
   candidate: Pick<
     SalesWorkspaceLine,
-    "key" | "stockId" | "availableQty" | "quantity" | "batchNo" | "itemName" | "itemCode"
+    "key" | "stockId" | "availableQty" | "quantity" | "batchNo" | "itemName" | "itemCode" | "isService"
   > &
     SalesUnitConversionFields,
   unitName: string,
   excludeLineKey?: string
 ): { ok: true } | { ok: false; message: string; remainingBase: number } {
+  // Service lines reserve nothing, so batch/availability rules never apply to them.
+  if (candidate.isService === true) return { ok: true };
+
   if (candidate.stockId <= 0) {
     return { ok: false, message: "Select a stock batch first.", remainingBase: 0 };
   }
@@ -501,6 +566,7 @@ export function createEmptyTab(seq: number, egyptTimeDisplay: string): SalesWork
     salesServiceId: null,
     serviceCost: 0,
     requiresDeliveryEmployee: false,
+    deliveryPersisted: false,
     deliverySearch: "",
     deliveryEmployeeId: null,
     deliveryCode: "",

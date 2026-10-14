@@ -10,6 +10,8 @@ export type SalesPaymentMethodOption = {
   affectsCash: boolean;
   active: boolean;
   salesKindId: number;
+  /** SalesPayMethod.DeleveryRequair — payment method requires delivery on the invoice. */
+  deleveryRequair: boolean;
 };
 
 export type SalesPaymentLine = {

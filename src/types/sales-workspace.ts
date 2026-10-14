@@ -31,6 +31,8 @@ export type SalesItemSearchHit = {
   itmMaxDiscPer: number | null;
   groupNameEn: string;
   groupNameAr: string;
+  /** Persisted ItemCatalog.Itm_Srvc. Service lines never need a stock batch. */
+  itmSrvc: boolean;
   stocks: SalesItemSearchStock[];
 };
 
@@ -85,6 +87,8 @@ export type SalesWorkspaceLine = {
   discountMode: DiscountMode;
   discountPercent: number;
   discountValue: number;
+  /** True from persisted ItemCatalog.Itm_Srvc: no batch/stock, never returnable. */
+  isService?: boolean;
   /** When multiple batches match, user must pick one StockId. */
   pendingStocks?: SalesItemSearchStock[];
   /** Batch net qty in Unit 1 at selection time (Sales Return display hint). */
@@ -120,6 +124,8 @@ export type SalesWorkspaceTab = {
   salesServiceId: number | null;
   serviceCost: number;
   requiresDeliveryEmployee: boolean;
+  /** True once delivery (service + employee) was persisted server-side (create or PUT SalesDelivery). */
+  deliveryPersisted: boolean;
   /** Working text in the Delivery lookup (may be code, name, or "code - name"). */
   deliverySearch: string;
   /** Valid selected Delivery employee (EmployInfo.Id). Null = not selected. */
@@ -166,6 +172,8 @@ export type CreateSaleRequest = {
   salesKindId: number | null;
   salesServiceId: number | null;
   deliveryCodeOrPassword: string | null;
+  /** Delivery button / payment-method flag — server auto-selects the tier service. */
+  deliveryRequested: boolean;
   lines: Array<{
     itemCatalogId: number;
     stockId: number;

@@ -132,7 +132,50 @@ function applyStockToLine(
     unitSellPrice: base,
     priceQtyNet: 1,
     qtyError: null,
+    isService: false,
     pendingStocks: undefined,
+  };
+}
+
+function applyServiceToLine(
+  line: SalesWorkspaceLine,
+  hit: SalesItemSearchHit,
+  language: SalesSearchLanguage
+): SalesWorkspaceLine {
+  const unitId = hit.unit1 || hit.unit2 || hit.unit3 || 0;
+  const base = money(hit.defPharmPrice || hit.defSellPrice || 0);
+  const name = salesItemPrimaryLabel(hit, language);
+  return {
+    ...line,
+    itemCatalogId: hit.itemCatalogId,
+    itemCode: hit.itmCode,
+    itmNameAr: hit.itmNameAr,
+    itmNameEn: hit.itmNameEn,
+    itemName: name,
+    searchText: name,
+    isService: true,
+    // Drop every batch/stock trace of a previously selected physical item.
+    stockId: 0,
+    batchNo: "",
+    expDate: null,
+    storId: 0,
+    availableQty: 0,
+    unit1: hit.unit1,
+    unit2: hit.unit2,
+    unit3: hit.unit3,
+    unit1Unit2: hit.unit1Unit2,
+    unit1Unit3: hit.unit1Unit3,
+    itmMaxDiscPer: hit.itmMaxDiscPer,
+    groupNameEn: hit.groupNameEn,
+    groupNameAr: hit.groupNameAr,
+    unitId,
+    quantity: line.quantity > 0 ? line.quantity : 1,
+    baseUnitSellPrice: base,
+    unitSellPrice: base,
+    priceQtyNet: 1,
+    qtyError: null,
+    pendingStocks: undefined,
+    batchDisplayAvailableQty: undefined,
   };
 }
 
@@ -418,6 +461,7 @@ export function SalesDetailsGrid({
       unitSellPrice: catalogBase,
       priceQtyNet: 1,
       qtyError: null,
+      isService: false,
       pendingStocks: stocks,
     };
     const next = lines.map((l, i) => (i === rowIndex ? pending : l));
@@ -429,6 +473,19 @@ export function SalesDetailsGrid({
     if (!line || disabled) return;
     if (!canAddItems) {
       onToast?.("error", "Resolve Sales Man before adding items.");
+      return;
+    }
+
+    // Service items are sold without any stock lookup, in every stock scope.
+    if (hit.itmSrvc) {
+      if (!(hit.unit1 || hit.unit2 || hit.unit3)) {
+        onToast?.("error", "Item has no units configured.");
+        return;
+      }
+      const next = lines.map((l, i) =>
+        i === rowIndex ? applyServiceToLine(line, hit, language) : l
+      );
+      replaceLines(ensureTrailingDraft(next));
       return;
     }
 
@@ -465,6 +522,7 @@ export function SalesDetailsGrid({
         itemCode: hit.itmCode,
         itemCatalogId: 0,
         stockId: 0,
+        isService: false,
         pendingStocks: undefined,
         qtyError: null,
       });
@@ -487,6 +545,7 @@ export function SalesDetailsGrid({
       availableQty: stock.availableQty,
       baseUnitSellPrice: base,
       unitSellPrice: money(base * (line.priceQtyNet || 1)),
+      isService: false,
       pendingStocks: undefined,
       qtyError: null,
     };
@@ -522,6 +581,7 @@ export function SalesDetailsGrid({
       availableQty: withStock.availableQty,
       baseUnitSellPrice: withStock.baseUnitSellPrice,
       unitSellPrice: withStock.unitSellPrice,
+      isService: false,
       pendingStocks: undefined,
       qtyError: null,
       discountPercent,
@@ -559,7 +619,9 @@ export function SalesDetailsGrid({
           <tbody>
             {lines.map((line, rowIndex) => {
               const resolved = line.itemCatalogId > 0;
-              const sellable = line.stockId > 0;
+              const isService = line.isService === true;
+              const sellable = isService || line.stockId > 0;
+              const stockCheck = sellable && !isService && !skipStockAvailabilityCheck;
               const unitOptions = buildRowUnitComboboxOptions(
                 units,
                 itemUnitFields(line),
@@ -649,6 +711,8 @@ export function SalesDetailsGrid({
                           );
                         })}
                       </select>
+                    ) : isService ? (
+                      <span className="text-muted-foreground">Service</span>
                     ) : (
                       <span>{line.batchNo || "—"}</span>
                     )}
@@ -694,7 +758,7 @@ export function SalesDetailsGrid({
                       type="number"
                       min={1}
                       max={
-                        sellable && !skipStockAvailabilityCheck
+                        stockCheck
                           ? (invoiceRemainingInSelectedUnit(
                               lines,
                               line,
@@ -732,7 +796,7 @@ export function SalesDetailsGrid({
                         });
                       }}
                     />
-                    {sellable && !skipStockAvailabilityCheck ? (
+                    {stockCheck ? (
                       <div className="text-muted-foreground text-xs">
                         {(() => {
                           const remaining = invoiceRemainingInSelectedUnit(
@@ -861,7 +925,7 @@ export function SalesDetailsGrid({
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       ) : null}
-                      {resolved && line.itemCatalogId > 0 ? (
+                      {resolved && line.itemCatalogId > 0 && !isService ? (
                         <Button
                           type="button"
                           size="icon"
