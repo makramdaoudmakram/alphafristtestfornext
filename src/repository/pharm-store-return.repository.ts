@@ -203,6 +203,15 @@ export function acceptPharmStoreReturn(token: string, headerId: number) {
   );
 }
 
+export function cancelPharmStoreReturn(token: string, headerId: number) {
+  return request(
+    token,
+    `PharmStoreReturn/${headerId}/cancel`,
+    { method: "POST" },
+    mapAcceptResult
+  );
+}
+
 export function sendPharmStoreReturn(token: string, payload: PharmStoreReturnSendPayload) {
   return request(
     token,

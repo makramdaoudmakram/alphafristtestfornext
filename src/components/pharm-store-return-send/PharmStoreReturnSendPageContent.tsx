@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { Loader2, Plus, Save, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getMovmentById, getStors } from "@/lib/api-client";
+import { getActivePharmacy } from "@/lib/pharmacy-scope-api";
+import { collectOutgoingPendingForStorage } from "@/lib/pharm-store-return-pending";
+import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { createUnitService } from "@/services/unit.service";
 import { buildRowUnitComboboxOptions } from "@/lib/item-unit-options";
 import { toMovmentLookupItem } from "@/lib/pharm-recive-movement";
@@ -37,7 +40,21 @@ import {
   FormFieldInlineWrap,
   formControlFocusClass,
 } from "@/components/ui/form-field-inline";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -53,6 +70,7 @@ import type { ReturnItemStockSearchItem } from "@/types/stock";
 import type { StorItem } from "@/types/stor";
 import type { UnitItem } from "@/types/unit";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
+import type { PharmStoreReturnPendingHeader } from "@/types/pharm-store-return";
 import type {
   PharmStoreReturnSendDetail,
   PharmStoreReturnSendResult,
@@ -73,11 +91,24 @@ function storeLabel(stores: StorItem[], storeId: string | null | undefined): str
   return store ? formatStorDisplayName(store) || id : id;
 }
 
+function formatPendingDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function displaySerial(header: PharmStoreReturnPendingHeader): string {
+  if (header.serialNo != null && header.serialNo > 0) return String(header.serialNo);
+  return "—";
+}
+
 export function PharmStoreReturnSendPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
   const sessionAuthenticated = status === "authenticated" && !!token;
+  const { activePharmacy, ready: scopeReady } = usePharmacyScope();
 
   const [movement, setMovement] = useState<MovmentLookupItem | null>(null);
   const [details, setDetails] = useState<PharmStoreReturnSendDetail[]>([
@@ -89,12 +120,59 @@ export function PharmStoreReturnSendPageContent() {
   const [stores, setStores] = useState<StorItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [sent, setSent] = useState<PharmStoreReturnSendResult | null>(null);
+  const [outgoingPending, setOutgoingPending] = useState<PharmStoreReturnPendingHeader[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingLoadError, setPendingLoadError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [confirmCancelHeader, setConfirmCancelHeader] =
+    useState<PharmStoreReturnPendingHeader | null>(null);
   const movementReqRef = useRef(0);
 
   const service = useMemo(
     () => (token ? new PharmStoreReturnService(token) : null),
     [token]
   );
+
+  const loadPending = useCallback(async () => {
+    if (!service || !token) {
+      setOutgoingPending([]);
+      setPendingLoading(false);
+      return;
+    }
+
+    setPendingLoading(true);
+    setPendingLoadError(null);
+    try {
+      const [page, activeScope] = await Promise.all([
+        service.getPending(),
+        getActivePharmacy(token),
+      ]);
+      const storageId =
+        activeScope.storageId != null && activeScope.storageId.trim() !== ""
+          ? Number(activeScope.storageId)
+          : null;
+      const resolvedStorageId =
+        storageId != null && Number.isFinite(storageId) ? storageId : null;
+      setOutgoingPending(collectOutgoingPendingForStorage(page, resolvedStorageId));
+    } catch (error) {
+      setOutgoingPending([]);
+      const message =
+        error instanceof PharmStoreReturnRepositoryError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Could not load pending returns.";
+      setPendingLoadError(message);
+      toast.error(message);
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [service, token]);
+
+  useEffect(() => {
+    if (!sessionReady || !scopeReady) return;
+    void loadPending();
+  }, [sessionReady, scopeReady, activePharmacy?.parmId, loadPending]);
 
   useEffect(() => {
     if (!sessionAuthenticated || !token) {
@@ -214,6 +292,7 @@ export function PharmStoreReturnSendPageContent() {
       setNote("");
       const label = result.serialNo != null ? `#${result.serialNo}` : `ID ${result.id}`;
       toast.success(`Pharmacy return sent ${label} — awaiting store acceptance.`);
+      await loadPending();
     } catch (error) {
       toast.error(
         error instanceof PharmStoreReturnRepositoryError
@@ -225,7 +304,29 @@ export function PharmStoreReturnSendPageContent() {
     } finally {
       setSaving(false);
     }
-  }, [details, movement, note, service]);
+  }, [details, loadPending, movement, note, service]);
+
+  async function handleCancelConfirmed() {
+    if (!service || !confirmCancelHeader) return;
+
+    setCancellingId(confirmCancelHeader.id);
+    try {
+      const result = await service.cancel(confirmCancelHeader.id);
+      toast.success(result.message || "Return cancelled. Reserved stock was released.");
+      setConfirmCancelHeader(null);
+      await loadPending();
+    } catch (error) {
+      toast.error(
+        error instanceof PharmStoreReturnRepositoryError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Cancel failed."
+      );
+    } finally {
+      setCancellingId(null);
+    }
+  }
 
   const editableLines = details.filter((row) => row.itmId.trim()).length;
   const canSave = !!service && !!movement && editableLines > 0 && !saving;
@@ -238,7 +339,7 @@ export function PharmStoreReturnSendPageContent() {
     setSent(null);
   }, []);
 
-  if (!sessionReady) {
+  if (!sessionReady || !scopeReady) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-full max-w-3xl" />
@@ -260,6 +361,75 @@ export function PharmStoreReturnSendPageContent() {
             outgoing quantity; the store accepts it from the Pharm-to-Store page.
           </p>
         </div>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Pending returns awaiting store acceptance</CardTitle>
+            <CardDescription>
+              Returns sent from{" "}
+              <span className="font-medium text-foreground">
+                {activePharmacy?.name ?? "the current pharmacy"}
+              </span>
+              . Cancel before the store accepts to release reserved stock.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {pendingLoading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : pendingLoadError ? (
+              <p className="text-destructive text-sm">{pendingLoadError}</p>
+            ) : outgoingPending.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No pending outgoing returns.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Serial</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Destination</TableHead>
+                      <TableHead className="text-end">Qty</TableHead>
+                      <TableHead className="w-28" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {outgoingPending.map((header) => (
+                      <TableRow key={header.id}>
+                        <TableCell className="tabular-nums">{displaySerial(header)}</TableCell>
+                        <TableCell>{formatPendingDate(header.returnDate)}</TableCell>
+                        <TableCell>
+                          {header.destinationStoreName ??
+                            storeLabel(stores, String(header.destinationStoreId ?? ""))}
+                        </TableCell>
+                        <TableCell className="text-end tabular-nums">
+                          {header.totalQuantity?.toLocaleString(undefined, {
+                            maximumFractionDigits: 4,
+                          }) ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={cancellingId !== null || saving}
+                            onClick={() => setConfirmCancelHeader(header)}
+                          >
+                            {cancellingId === header.id ? (
+                              <Loader2 className="mr-1 size-4 animate-spin" />
+                            ) : (
+                              <XCircle className="mr-1 size-4" />
+                            )}
+                            Cancel
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="bg-card flex flex-wrap items-center gap-1 rounded-lg border p-2">
           <Button type="button" size="icon" variant="outline" disabled={saving} onClick={handleNew} aria-label="New" title="New">
@@ -460,6 +630,45 @@ export function PharmStoreReturnSendPageContent() {
           Return date: {machineTodayInput()} · Stock is reserved on send and moved to the store on
           acceptance (pharmacy OUT / store IN), atomically on the server.
         </p>
+
+        <Dialog
+          open={confirmCancelHeader != null}
+          onOpenChange={(open) => {
+            if (!open && cancellingId === null) setConfirmCancelHeader(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cancel pharmacy return?</DialogTitle>
+              <DialogDescription>
+                {confirmCancelHeader
+                  ? `This cancels return #${displaySerial(confirmCancelHeader)} (document ID ${confirmCancelHeader.id}) and releases reserved stock at the pharmacy. The store will no longer be able to accept it.`
+                  : null}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={cancellingId !== null}
+                onClick={() => setConfirmCancelHeader(null)}
+              >
+                Keep pending
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={cancellingId !== null}
+                onClick={() => void handleCancelConfirmed()}
+              >
+                {cancellingId !== null ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : null}
+                Cancel return
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </PageGuard>
   );

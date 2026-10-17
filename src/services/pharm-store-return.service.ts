@@ -1,5 +1,6 @@
 import {
   acceptPharmStoreReturn,
+  cancelPharmStoreReturn,
   getPendingPharmStoreReturn,
   sendPharmStoreReturn,
   PharmStoreReturnRepositoryError,
@@ -26,6 +27,10 @@ export class PharmStoreReturnService {
 
   accept(headerId: number): Promise<PharmStoreReturnAcceptResult> {
     return acceptPharmStoreReturn(this.token, headerId);
+  }
+
+  cancel(headerId: number): Promise<PharmStoreReturnAcceptResult> {
+    return cancelPharmStoreReturn(this.token, headerId);
   }
 }
 
