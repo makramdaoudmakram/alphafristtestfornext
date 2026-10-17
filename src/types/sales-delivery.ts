@@ -37,6 +37,22 @@ export type SalesDeliveryContext = {
   availableServices: SalesServiceOption[];
 };
 
+/** One pending delivery order (SalesDelivInfo with DelivStat "P"); id is the accept target key. */
+export type PendingDeliveryOrder = {
+  id: number;
+  sthId: number;
+  deliveryName: string | null;
+  totalInvoice: number | null;
+  paymentType: string | null;
+  billTyp: number;
+};
+
+export type AcceptDeliveryOrderResult = {
+  id: number;
+  sthId: number;
+  delivStat: string;
+};
+
 export type UpsertSalesDeliveryRequest = {
   sthId: number;
   custId: number | null;

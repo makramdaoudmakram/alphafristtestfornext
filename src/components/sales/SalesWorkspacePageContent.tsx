@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Bike, Check } from "lucide-react";
@@ -15,6 +15,7 @@ import {
   SalesDeliveryEmployeeAutocomplete,
 } from "@/components/sales/SalesDeliveryEmployeeAutocomplete";
 import { SalesDetailsGrid } from "@/components/sales/SalesDetailsGrid";
+import { SalesThermalReceipt } from "@/components/sales/SalesThermalReceipt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,7 @@ import {
   getSalePaymentContext,
   getSalePaymentKinds,
   getSalePaymentMethods,
+  getSalesReceipt,
   finalizeSalePayment,
   getSalesServerTime,
   getShiftMovements,
@@ -41,9 +43,15 @@ import {
   openShift,
   upsertSaleDelivery,
 } from "@/lib/api-client";
+import { getCustomerById } from "@/lib/customer-api";
+import {
+  applyNewSalesInvoiceDefaults,
+  DEFAULT_CASH_CUSTOMER_ID,
+} from "@/lib/sales-workspace-defaults";
 import {
   createEmptyTab,
   areDeliveryRequirementsMet,
+  canFinalizeSale,
   deliveryItemTotal,
   deliveryTierCost,
   DELIVERY_TIER_FREE_BOUNDARY,
@@ -51,6 +59,7 @@ import {
   hasGlobalDiscount,
   hasValidSalesServiceSelection,
   headerDiscountAmount,
+  isSaleFinalized,
   isSellableSalesLine,
   money,
   payableAmount,
@@ -59,6 +68,10 @@ import {
   validateSalesQuantities,
 } from "@/lib/sales-workspace-calc";
 import { formatUnitOptionLabel } from "@/lib/item-unit-options";
+import {
+  finalizeWithPrintIfNeeded,
+  loadReceiptForPrint,
+} from "@/lib/sales-receipt-print";
 import { createUnitService } from "@/services/unit.service";
 import type {
   SalesStockScope,
@@ -68,10 +81,15 @@ import type {
 } from "@/types/sales-workspace";
 import type { SalesDeliveryEmployee } from "@/types/sales-delivery";
 import type {
+  ReceiptPaperWidth,
+  SalesReceipt,
+} from "@/types/sales-receipt";
+import type {
   SalesPaymentKindOption,
   SalesPaymentMethodOption,
 } from "@/types/sales-payment";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
+import type { CustomerItem } from "@/types/customer";
 import type { UnitItem } from "@/types/unit";
 import { cn } from "@/lib/utils";
 
@@ -125,9 +143,15 @@ export function SalesWorkspacePageContent() {
   >([]);
   const [methods, setMethods] = useState<SalesPaymentMethodOption[]>([]);
   const [salesKinds, setSalesKinds] = useState<SalesPaymentKindOption[]>([]);
+  const cashCustomerRef = useRef<CustomerItem | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentPayable, setPaymentPayable] = useState<number | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [paperWidth, setPaperWidth] = useState<ReceiptPaperWidth>(80);
+  const [receiptToPrint, setReceiptToPrint] = useState<{
+    receipt: SalesReceipt;
+    width: ReceiptPaperWidth;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
@@ -223,6 +247,64 @@ export function SalesWorkspacePageContent() {
       updateTab(activeId, patch);
     },
     [activeId, updateTab]
+  );
+
+  const ensureCashCustomer = useCallback(async (): Promise<CustomerItem | null> => {
+    if (!token) return null;
+    if (cashCustomerRef.current) return cashCustomerRef.current;
+    try {
+      const customer = await getCustomerById(DEFAULT_CASH_CUSTOMER_ID, token);
+      if (customer.custCode === DEFAULT_CASH_CUSTOMER_ID) {
+        cashCustomerRef.current = customer;
+        return customer;
+      }
+    } catch {
+      // Cash customer missing — leave unset.
+    }
+    return null;
+  }, [token]);
+
+  const loadMethodsForSalesKind = useCallback(
+    async (salesKindId: number | null) => {
+      if (!token) {
+        setMethods([]);
+        return;
+      }
+      if (salesKindId == null || salesKindId <= 0) {
+        setMethods([]);
+        return;
+      }
+
+      setPaymentLoading(true);
+      try {
+        setMethods(await getSalePaymentMethods(token, salesKindId));
+      } catch (err) {
+        setMethods([]);
+        toast.error(
+          err instanceof ApiError
+            ? err.message
+            : "Failed to load payment methods."
+        );
+      } finally {
+        setPaymentLoading(false);
+      }
+    },
+    [token]
+  );
+
+  const stampNewInvoiceDefaults = useCallback(
+    (tab: SalesWorkspaceTab, cash: CustomerItem | null) => {
+      const next = applyNewSalesInvoiceDefaults(tab, salesKinds, cash);
+      if (
+        next.salesKindId != null &&
+        next.salesKindId > 0 &&
+        next.salesKindId !== tab.salesKindId
+      ) {
+        void loadMethodsForSalesKind(next.salesKindId);
+      }
+      return next;
+    },
+    [salesKinds, loadMethodsForSalesKind]
   );
 
   // Delivery normalization: the tier service follows the discounted goods total immediately,
@@ -361,21 +443,45 @@ export function SalesWorkspacePageContent() {
     };
   }, [token, ensureShift]);
 
+  useEffect(() => {
+    if (!token || salesKinds.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const cash = await ensureCashCustomer();
+      if (cancelled) return;
+      setTabs((prev) =>
+        prev.map((tab) => stampNewInvoiceDefaults(tab, cash))
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, salesKinds, ensureCashCustomer, stampNewInvoiceDefaults]);
+
   const handleNewTab = () => {
-    const tab = createEmptyTab(seq, egyptTime);
-    setSeq((n) => n + 1);
-    setTabs((prev) => [...prev, tab]);
-    setActiveId(tab.clientId);
+    void (async () => {
+      const cash = await ensureCashCustomer();
+      const tab = stampNewInvoiceDefaults(createEmptyTab(seq, egyptTime), cash);
+      setSeq((n) => n + 1);
+      setTabs((prev) => [...prev, tab]);
+      setActiveId(tab.clientId);
+    })();
   };
 
   const handleCloseTab = (clientId: string) => {
     const remaining = tabs.filter((t) => t.clientId !== clientId);
     if (remaining.length === 0) {
       // Last tab closed → normal empty/new workspace (no DB change).
-      const fresh = createEmptyTab(seq, egyptTime);
-      setSeq((n) => n + 1);
-      setTabs([fresh]);
-      setActiveId(fresh.clientId);
+      void (async () => {
+        const cash = await ensureCashCustomer();
+        const fresh = stampNewInvoiceDefaults(
+          createEmptyTab(seq, egyptTime),
+          cash
+        );
+        setSeq((n) => n + 1);
+        setTabs([fresh]);
+        setActiveId(fresh.clientId);
+      })();
       return;
     }
 
@@ -538,12 +644,7 @@ export function SalesWorkspacePageContent() {
     return true;
   }, [active, resolveUnitName]);
 
-  const canPay = Boolean(
-    active?.saved &&
-      active.sthId != null &&
-      active.sthId > 0 &&
-      (active.billTyp ?? 0) === 0
-  );
+  const canPay = canFinalizeSale(active, isFinalizing);
 
   const refreshPaymentContext = useCallback(
     async (sthId: number, tabId: string, salesKindId?: number | null) => {
@@ -565,34 +666,6 @@ export function SalesWorkspacePageContent() {
       }
     },
     [token, updateTab]
-  );
-
-  const loadMethodsForSalesKind = useCallback(
-    async (salesKindId: number | null) => {
-      if (!token) {
-        setMethods([]);
-        return;
-      }
-      if (salesKindId == null || salesKindId <= 0) {
-        setMethods([]);
-        return;
-      }
-
-      setPaymentLoading(true);
-      try {
-        setMethods(await getSalePaymentMethods(token, salesKindId));
-      } catch (err) {
-        setMethods([]);
-        toast.error(
-          err instanceof ApiError
-            ? err.message
-            : "Failed to load payment methods."
-        );
-      } finally {
-        setPaymentLoading(false);
-      }
-    },
-    [token]
   );
 
   const onSalesKindChange = (raw: string) => {
@@ -734,11 +807,12 @@ export function SalesWorkspacePageContent() {
     }
   };
 
-  const handleFinalizePayment = async () => {
+  const handleFinalizePayment = async (printAfter = false) => {
     if (!token || !active || active.sthId == null) return;
     if (isFinalizing) return;
     if (!canPay) {
-      toast.error("This sale cannot be paid.");
+      // Already finalized: the click does nothing. Printing it is the reprint report's job.
+      if (!isSaleFinalized(active)) toast.error("This sale cannot be paid.");
       return;
     }
     if (!assertDeliveryForSave()) return;
@@ -811,22 +885,79 @@ export function SalesWorkspacePageContent() {
 
     setIsFinalizing(true);
     try {
-      const result = await finalizeSalePayment(token, {
-        sthId: active.sthId,
-        salesKindId: active.salesKindId,
-        payments: entries,
+      const sthId = active.sthId;
+      const salesKindId = active.salesKindId;
+      const clientId = active.clientId;
+      const outcome = await finalizeWithPrintIfNeeded({
+        inFlight: false,
+        printAfter,
+        finalize: () =>
+          finalizeSalePayment(token, {
+            sthId,
+            salesKindId,
+            payments: entries,
+          }),
+        // Read-only GET of the persisted invoice; never finalizes or pays again.
+        fetchReceipt: (id) => getSalesReceipt(token, id),
+        onFinalized: (result) => {
+          updateTab(clientId, {
+            billTyp: result.billTyp ?? 1,
+            payments: {},
+          });
+          setPaymentPayable(null);
+          // A replay means the sale was already finalized (an earlier response was lost): the
+          // returned payments are the persisted ones and no new payment or stock movement happened.
+          if (result.replay) {
+            toast.message(
+              `Sale ${result.sthId} was already finalized. No new payment was recorded.`
+            );
+          } else {
+            toast.success(
+              `Sale ${result.sthId} paid. ${result.paymentStatus || "Payment finalized"}.`
+            );
+          }
+        },
       });
 
-      updateTab(active.clientId, {
-        billTyp: result.billTyp ?? 1,
-        payments: {},
+      if (outcome.kind === "finalize-failed") {
+        const err = outcome.error;
+        toast.error(
+          err instanceof ApiError ? err.message : "Payment finalization failed."
+        );
+      } else if (outcome.kind === "printed") {
+        setReceiptToPrint({ receipt: outcome.receipt, width: paperWidth });
+      } else if (outcome.kind === "print-blocked") {
+        toast.error(
+          outcome.reason === "not-finalized"
+            ? "The server reports this invoice is not finalized. Printing skipped."
+            : "Payment finalized, but the receipt data could not be loaded. Printing skipped."
+        );
+      }
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  /** Reprint of an already finalized invoice: read-only GET only — never finalizes or pays. */
+  const handlePrintReceipt = async () => {
+    if (!token || !active || active.sthId == null) return;
+    if (isFinalizing || !isSaleFinalized(active)) return;
+    const sthId = active.sthId;
+    setIsFinalizing(true);
+    try {
+      const loaded = await loadReceiptForPrint({
+        sthId,
+        fetchReceipt: (id) => getSalesReceipt(token, id),
       });
-      setPaymentPayable(null);
-      toast.success(
-        `Sale ${result.sthId} paid. ${result.paymentStatus || "Payment finalized"}.`
-      );
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Payment finalization failed.");
+      if (loaded.ok) {
+        setReceiptToPrint({ receipt: loaded.receipt, width: paperWidth });
+      } else {
+        toast.error(
+          loaded.reason === "not-finalized"
+            ? "The server reports this invoice is not finalized. Printing skipped."
+            : "Receipt data could not be loaded from the server. Printing skipped."
+        );
+      }
     } finally {
       setIsFinalizing(false);
     }
@@ -998,7 +1129,7 @@ export function SalesWorkspacePageContent() {
                     [
                       ["CurrentPharmacy", "Current Pharmacy — Available Qty"],
                       ["Catalog", "Item Catalog"],
-                      ["AllPharmacies", "All Pharmacies — Available Qty ≥ 0"],
+                      
                     ] as const
                   ).map(([value, label]) => (
                     <label
@@ -1323,7 +1454,28 @@ export function SalesWorkspacePageContent() {
                   </div>
                 ) : null}
 
-                <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+                    <div className="mr-auto flex items-center gap-1">
+                      <span className="text-muted-foreground text-xs">Receipt</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={paperWidth === 80 ? "default" : "outline"}
+                        aria-pressed={paperWidth === 80}
+                        onClick={() => setPaperWidth(80)}
+                      >
+                        80 mm
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={paperWidth === 58 ? "default" : "outline"}
+                        aria-pressed={paperWidth === 58}
+                        onClick={() => setPaperWidth(58)}
+                      >
+                        58 mm
+                      </Button>
+                    </div>
                     <Button
                       type="button"
                       disabled={!canSave}
@@ -1344,8 +1496,33 @@ export function SalesWorkspacePageContent() {
                       }
                       onClick={() => void handleFinalizePayment()}
                     >
-                      {isFinalizing ? "Finalizing…" : "Finalize Payment"}
+                      {isFinalizing ? "Finalizing…" : "Finalize"}
                     </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        !canPay ||
+                        isFinalizing ||
+                        !active.salesKindId ||
+                        methods.length === 0 ||
+                        paymentTotal <= 0 ||
+                        paymentTotal !== money(paymentPayable ?? payable)
+                      }
+                      onClick={() => void handleFinalizePayment(true)}
+                    >
+                      {isFinalizing ? "Finalizing…" : "Finalize & Print"}
+                    </Button>
+                    {isSaleFinalized(active) && active.sthId != null ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isFinalizing}
+                        onClick={() => void handlePrintReceipt()}
+                      >
+                        {isFinalizing ? "Preparing…" : "Print receipt"}
+                      </Button>
+                    ) : null}
                 </div>
               </CardContent>
             </Card>
@@ -1380,6 +1557,13 @@ export function SalesWorkspacePageContent() {
         language={language}
         custId={active?.customerId ?? null}
       />
+      {receiptToPrint ? (
+        <SalesThermalReceipt
+          receipt={receiptToPrint.receipt}
+          width={receiptToPrint.width}
+          onClose={() => setReceiptToPrint(null)}
+        />
+      ) : null}
     </PageGuard>
   );
 }

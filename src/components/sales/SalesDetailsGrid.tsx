@@ -28,6 +28,7 @@ import {
   maxDiscountValue,
   resolveSalesDiscountLimit,
 } from "@/lib/sales-discount-limit";
+import { formatSalesBatchOptionLabel } from "@/lib/sales-batch-option-label";
 import { salesItemPrimaryLabel } from "@/lib/sales-item-search-ux";
 import { cn } from "@/lib/utils";
 import type {
@@ -679,42 +680,46 @@ export function SalesDetailsGrid({
                         }
                       >
                         <option value="">Select batch…</option>
-                        {line.pendingStocks.map((s) => {
-                          let remLabel = "";
-                          if (!skipStockAvailabilityCheck) {
-                            const probe = {
-                              ...line,
-                              stockId: s.stockId,
-                              batchNo: s.batchNo,
-                              availableQty: s.availableQty,
-                            };
-                            const rem = invoiceRemainingInSelectedUnit(
-                              lines,
-                              probe,
-                              line.key
-                            );
-                            const unitLabel = unitShortName(line.unitId, units);
-                            remLabel =
-                              rem != null
-                                ? ` · left ${rem} ${unitLabel}`
-                                : ` · Avail ${s.availableQty}`;
-                          }
-                          return (
-                            <option key={s.stockId} value={s.stockId}>
-                              {s.batchNo || "—"}
-                              {remLabel}
-                              {!skipStockAvailabilityCheck &&
-                              (s.pharmacyName || s.storName)
-                                ? ` · ${s.pharmacyName || s.storName}`
-                                : ""}
-                            </option>
-                          );
-                        })}
+                        {line.pendingStocks.map((s) => (
+                          <option key={s.stockId} value={s.stockId}>
+                            {formatSalesBatchOptionLabel(
+                              {
+                                batchNo: s.batchNo,
+                                availableQty: s.availableQty,
+                                expDate: s.expDate,
+                                unitId: line.unitId,
+                                unit1: line.unit1,
+                                unit2: line.unit2,
+                                unit3: line.unit3,
+                                unit1Unit2: line.unit1Unit2,
+                                unit1Unit3: line.unit1Unit3,
+                              },
+                              units
+                            )}
+                          </option>
+                        ))}
                       </select>
                     ) : isService ? (
                       <span className="text-muted-foreground">Service</span>
+                    ) : sellable ? (
+                      <span className="tabular-nums">
+                        {formatSalesBatchOptionLabel(
+                          {
+                            batchNo: line.batchNo,
+                            availableQty: line.availableQty,
+                            expDate: line.expDate,
+                            unitId: line.unitId,
+                            unit1: line.unit1,
+                            unit2: line.unit2,
+                            unit3: line.unit3,
+                            unit1Unit2: line.unit1Unit2,
+                            unit1Unit3: line.unit1Unit3,
+                          },
+                          units
+                        )}
+                      </span>
                     ) : (
-                      <span>{line.batchNo || "—"}</span>
+                      <span>—</span>
                     )}
                   </td>
                   <td className="p-2">{line.expDate || "—"}</td>

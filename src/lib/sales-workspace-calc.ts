@@ -70,6 +70,42 @@ export function payableAmount(tab: SalesWorkspaceTab): number {
   return money(sumLinesNet(tab.lines) - headerDiscountAmount(tab) + service);
 }
 
+/** SalesTransH.BillTyp is a payment status flag only: 0 pending, 1 finalized. */
+export const BILL_TYP_PENDING = 0;
+export const BILL_TYP_FINALIZED = 1;
+
+type FinalizationGate = Pick<SalesWorkspaceTab, "saved" | "sthId" | "billTyp">;
+
+/**
+ * Finalize gate: a saved, still-pending invoice with no request already in flight.
+ * Folding `isFinalizing` in here keeps a double click from reaching the API.
+ */
+export function canFinalizeSale(
+  tab: FinalizationGate | null,
+  isFinalizing = false
+): boolean {
+  if (isFinalizing) return false;
+  return Boolean(
+    tab?.saved &&
+      tab.sthId != null &&
+      tab.sthId > 0 &&
+      (tab.billTyp ?? BILL_TYP_PENDING) === BILL_TYP_PENDING
+  );
+}
+
+/**
+ * A finalized invoice stays inert: no second finalization, no automatic print.
+ * Printing it later is the Sales Invoice Reprint report's job.
+ */
+export function isSaleFinalized(tab: FinalizationGate | null): boolean {
+  return Boolean(
+    tab?.saved &&
+      tab.sthId != null &&
+      tab.sthId > 0 &&
+      tab.billTyp === BILL_TYP_FINALIZED
+  );
+}
+
 /**
  * Delivery tier boundaries on the discounted goods total (service cost excluded):
  * <= 200 → service costing 30; 200.01–300 → service costing 15; > 300 → service costing 0.

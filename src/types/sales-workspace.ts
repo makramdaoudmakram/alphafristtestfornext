@@ -36,6 +36,19 @@ export type SalesItemSearchHit = {
   stocks: SalesItemSearchStock[];
 };
 
+export type SalesItemStockReportStoreKind = "Pharmacy" | "Central";
+
+export type SalesItemStockReportRow = {
+  storeKind: SalesItemStockReportStoreKind;
+  storId: number;
+  parmId: number | null;
+  displayName: string;
+  /** Pharmacy rows only — total available in Unit1. */
+  availableQtyUnit1: number | null;
+  unit1: number | null;
+  earliestExpDate: string | null;
+};
+
 export type SalesItemPharmacyStockResponse = {
   itemCatalogId: number;
   itmCode: string;
@@ -47,6 +60,7 @@ export type SalesItemPharmacyStockResponse = {
   currentStorId: number;
   currentParmId: number;
   currentPharmacyName: string;
+  reportRows: SalesItemStockReportRow[];
   stocks: SalesItemSearchStock[];
 };
 

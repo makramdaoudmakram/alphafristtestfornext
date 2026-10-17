@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { registerWithAlfaApi } from "@/lib/api-client";
+import { createUserAsAdmin, registerWithAlfaApi } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -51,8 +51,15 @@ function InlineField({
   );
 }
 
-export function RegisterForm() {
+type RegisterFormProps = {
+  /** Admin Users page — uses authenticated POST /api/Users, not public register. */
+  adminCreate?: boolean;
+};
+
+export function RegisterForm({ adminCreate = false }: RegisterFormProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const token = session?.accessToken ?? null;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,6 +70,26 @@ export function RegisterForm() {
     setIsLoading(true);
 
     try {
+      if (adminCreate) {
+        if (!token) {
+          toast.error("Sign in is required to create users.");
+          return;
+        }
+        const result = await createUserAsAdmin(token, {
+          email: email.trim(),
+          password,
+          userName: name.trim() || undefined,
+        });
+        if (!result.isSuccess || !result.userId) {
+          toast.error(result.message || "User creation failed");
+          return;
+        }
+        toast.success("User created.");
+        router.push("/dashboard/admin/users");
+        router.refresh();
+        return;
+      }
+
       const result = await registerWithAlfaApi({
         email: email.trim(),
         password,
@@ -103,7 +130,9 @@ export function RegisterForm() {
   return (
     <Card className="w-[80%] max-w-5xl">
       <CardHeader className="pb-3">
-        <CardTitle className="text-xl">Create account</CardTitle>
+        <CardTitle className="text-xl">
+          {adminCreate ? "Create user" : "Create account"}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <form
@@ -135,7 +164,7 @@ export function RegisterForm() {
             minLength={8}
           />
           <Button type="submit" className="h-9 shrink-0" disabled={isLoading}>
-            {isLoading ? "Creating..." : "Register"}
+            {isLoading ? "Creating..." : adminCreate ? "Create user" : "Register"}
           </Button>
         </form>
       </CardContent>

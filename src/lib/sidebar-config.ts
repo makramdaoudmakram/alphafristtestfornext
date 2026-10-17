@@ -46,6 +46,16 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.sales.view,
       },
       {
+        title: "المبيعات المعلقة",
+        href: "/dashboard/sales/pending",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
+        title: "طلبات التوصيل المعلقة",
+        href: "/dashboard/sales/delivery",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
         title: "مرتجع المبيعات",
         href: "/dashboard/sales-return",
         permission: PERMISSIONS.sales.view,
@@ -385,6 +395,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/permissions": "Role Permissions",
   "/dashboard/shift": "Shift Management",
   "/dashboard/sales": "Sales",
+  "/dashboard/sales/pending": "Pending Sales",
+  "/dashboard/sales/delivery": "Pending Delivery Orders",
   "/dashboard/sales/pharm-expenses": "Pharm Expenses",
   "/dashboard/sales/item-card": "Item Card",
   "/dashboard/sales/customers": "Customers",

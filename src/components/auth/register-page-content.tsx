@@ -12,7 +12,7 @@ export function RegisterPageContent() {
   return (
     <main className="flex h-dvh min-h-screen flex-col bg-muted/30">
       <section className="flex h-[30dvh] min-h-[16rem] shrink-0 items-start justify-start overflow-y-auto pt-[5vh] pl-[20vw] pr-4 sm:pr-6">
-        <RegisterForm />
+        <RegisterForm adminCreate={fromUsers} />
       </section>
 
       {fromUsers ? (

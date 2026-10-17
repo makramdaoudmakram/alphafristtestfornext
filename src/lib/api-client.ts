@@ -1064,6 +1064,37 @@ export async function loginWithAlfaApi(
   }
 }
 
+/** Authenticated admin user creation (Users.Create). Not public registration. */
+export async function createUserAsAdmin(
+  token: string,
+  input: {
+    email: string;
+    password: string;
+    userName?: string;
+  }
+): Promise<AuthResponse> {
+  try {
+    const data = await apiFetch<Record<string, unknown>>(
+      "Users",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          email: input.email,
+          password: input.password,
+          userName: input.userName ?? null,
+        }),
+      },
+      token
+    );
+    return normalizeAuthResponse(data);
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return { isSuccess: false, message: error.message };
+    }
+    throw error;
+  }
+}
+
 export async function registerWithAlfaApi(input: {
   email: string;
   password: string;
@@ -5341,6 +5372,113 @@ export async function getSalePaymentContext(
   return mapSalesPaymentContext(data);
 }
 
+function mapSalesReceiptLine(
+  item: Record<string, unknown>
+): import("@/types/sales-receipt").SalesReceiptLine {
+  return {
+    lineNo: readNumber(item, "lineNo", "LineNo"),
+    itemName: readNullableString(item, "itemName", "ItemName"),
+    itemCode: readNullableString(item, "itemCode", "ItemCode"),
+    quantity: readNumber(item, "quantity", "Quantity"),
+    unitName: readNullableString(item, "unitName", "UnitName"),
+    unitPrice: readNumber(item, "unitPrice", "UnitPrice"),
+    lineDiscount: readNumber(item, "lineDiscount", "LineDiscount"),
+    lineNet: readNumber(item, "lineNet", "LineNet"),
+  };
+}
+
+function mapSalesReceipt(
+  data: Record<string, unknown>
+): import("@/types/sales-receipt").SalesReceipt {
+  const paymentsRaw = data.payments ?? data.Payments;
+  const linesRaw = data.lines ?? data.Lines;
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    paymentStatus: readString(data, "paymentStatus", "PaymentStatus"),
+    invoiceDate: readNullableString(data, "invoiceDate", "InvoiceDate"),
+    pharmacyName: readNullableString(data, "pharmacyName", "PharmacyName"),
+    pharmacyTel: readNullableString(data, "pharmacyTel", "PharmacyTel"),
+    pharmacyAddress: readNullableString(data, "pharmacyAddress", "PharmacyAddress"),
+    customerName: readNullableString(data, "customerName", "CustomerName"),
+    customerTel: readNullableString(data, "customerTel", "CustomerTel"),
+    totalBill: readNullableNumber(data, "totalBill", "TotalBill"),
+    totalDiscount: readNullableNumber(data, "totalDiscount", "TotalDiscount"),
+    serviceCost: readNullableNumber(data, "serviceCost", "ServiceCost"),
+    finalPayableAmount: readNumber(data, "finalPayableAmount", "FinalPayableAmount"),
+    paidAmount: readNumber(data, "paidAmount", "PaidAmount"),
+    remainingAmount: readNumber(data, "remainingAmount", "RemainingAmount"),
+    changeAmount: readNumber(data, "changeAmount", "ChangeAmount"),
+    payments: Array.isArray(paymentsRaw)
+      ? paymentsRaw.map((row) => mapSalesPaymentLine(row as Record<string, unknown>))
+      : [],
+    lines: Array.isArray(linesRaw)
+      ? linesRaw.map((row) => mapSalesReceiptLine(row as Record<string, unknown>))
+      : [],
+  };
+}
+
+/** Read-only authoritative receipt for a finalized sale; used for thermal printing. */
+export async function getSalesReceipt(
+  token: string,
+  sthId: number
+): Promise<import("@/types/sales-receipt").SalesReceipt> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesPayment/${sthId}/receipt`,
+    {},
+    token
+  );
+  return mapSalesReceipt(data);
+}
+
+function mapPendingSale(
+  item: Record<string, unknown>
+): import("@/types/sales-payment").PendingSaleListItem {
+  return {
+    sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    totalBill: readNullableNumber(item, "totalBill", "TotalBill"),
+    salesmanName: readNullableString(item, "salesmanName", "SalesmanName"),
+  };
+}
+
+/** Pending (BillTyp 0/null) invoices of the active pharmacy, newest first. Server-scoped. */
+export async function getPendingSales(
+  token: string
+): Promise<import("@/types/sales-payment").PendingSaleListItem[]> {
+  const data = await apiFetch<unknown>("SalesPayment/pending", {}, token);
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) => mapPendingSale(row as Record<string, unknown>));
+}
+
+function mapSalesSaleDetails(
+  data: Record<string, unknown>
+): import("@/types/sales-payment").SalesSaleDetails {
+  const linesRaw = data.lines ?? data.Lines;
+  return {
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    billTyp: readNumber(data, "billTyp", "BillTyp"),
+    custId: readNullableNumber(data, "custId", "CustId", "cust_Id", "Cust_Id"),
+    customerName: readNullableString(data, "customerName", "CustomerName"),
+    customerTel: readNullableString(data, "customerTel", "CustomerTel"),
+    lines: Array.isArray(linesRaw)
+      ? linesRaw.map((row) => mapSalesReceiptLine(row as Record<string, unknown>))
+      : [],
+  };
+}
+
+/** Read-only item lines + header customer for an invoice (pending or finalized). */
+export async function getSalesSaleDetails(
+  token: string,
+  sthId: number
+): Promise<import("@/types/sales-payment").SalesSaleDetails> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesPayment/${sthId}/details`,
+    {},
+    token
+  );
+  return mapSalesSaleDetails(data);
+}
+
 export async function getSalesServerTime(token: string): Promise<{
   utcNow: string;
   egyptLocalDisplay: string;
@@ -5433,6 +5571,36 @@ export async function searchSalesItems(
   };
 }
 
+function mapSalesItemStockReportRows(
+  data: Record<string, unknown>
+): import("@/types/sales-workspace").SalesItemStockReportRow[] {
+  const raw = data.reportRows ?? data.ReportRows;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row) => {
+    const r = row as Record<string, unknown>;
+    const kindRaw = readString(r, "storeKind", "StoreKind");
+    const storeKind =
+      kindRaw === "Central" || kindRaw === "2" ? "Central" : "Pharmacy";
+    return {
+      storeKind,
+      storId: readNumber(r, "storId", "StorId"),
+      parmId: readNullableNumber(r, "parmId", "ParmId"),
+      displayName: readString(r, "displayName", "DisplayName"),
+      availableQtyUnit1: readNullableNumber(
+        r,
+        "availableQtyUnit1",
+        "AvailableQtyUnit1"
+      ),
+      unit1: readNullableNumber(r, "unit1", "Unit1"),
+      earliestExpDate: readNullableString(
+        r,
+        "earliestExpDate",
+        "EarliestExpDate"
+      ),
+    };
+  });
+}
+
 export async function getSalesItemPharmacyStock(
   token: string,
   itemCatalogId: number
@@ -5462,6 +5630,7 @@ export async function getSalesItemPharmacyStock(
       "currentPharmacyName",
       "CurrentPharmacyName"
     ),
+    reportRows: mapSalesItemStockReportRows(data),
     stocks: stocks.map((s) => {
       const st = s as Record<string, unknown>;
       return {
@@ -5672,6 +5841,12 @@ export async function finalizeSalePayment(
           PaymentMethodId: p.paymentMethodId,
           Amount: p.amount,
         })),
+        // Optional finalize inputs stay absent for legacy callers (Sales page unchanged).
+        ...(request.employeeCode ? { EmployeeCode: request.employeeCode } : {}),
+        ...(request.custId != null && request.custId > 0
+          ? { Cust_Id: request.custId }
+          : {}),
+        ...(request.requireCustomer ? { RequireCustomer: true } : {}),
       }),
     },
     token
@@ -5684,6 +5859,7 @@ export async function finalizeSalePayment(
     paymentStatus: readString(data, "paymentStatus", "PaymentStatus"),
     finalSaleTotal: readNumber(data, "finalSaleTotal", "FinalSaleTotal"),
     paymentTotal: readNumber(data, "paymentTotal", "PaymentTotal"),
+    replay: readBoolean(data, "replay", "Replay"),
     paymentDetails: Array.isArray(detailsRaw)
       ? detailsRaw.map((row) => mapSalesPaymentLine(row as Record<string, unknown>))
       : [],
@@ -5840,6 +6016,45 @@ export async function upsertSaleDelivery(
     token
   );
   return mapSalesDeliveryInfo(data)!;
+}
+
+function mapPendingDeliveryOrder(
+  item: Record<string, unknown>
+): import("@/types/sales-delivery").PendingDeliveryOrder {
+  return {
+    id: readNumber(item, "id", "Id"),
+    sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    deliveryName: readNullableString(item, "deliveryName", "DeliveryName"),
+    totalInvoice: readNullableNumber(item, "totalInvoice", "TotalInvoice"),
+    paymentType: readNullableString(item, "paymentType", "PaymentType"),
+    billTyp: readNumber(item, "billTyp", "BillTyp"),
+  };
+}
+
+/** Pending delivery orders (DelivStat "P") of the active pharmacy, newest first. Server-scoped. */
+export async function getPendingDeliveryOrders(
+  token: string
+): Promise<import("@/types/sales-delivery").PendingDeliveryOrder[]> {
+  const data = await apiFetch<unknown>("SalesDelivery/pending", {}, token);
+  const list = Array.isArray(data) ? data : [];
+  return list.map((row) => mapPendingDeliveryOrder(row as Record<string, unknown>));
+}
+
+/** Accepts one pending delivery order by its SalesDelivInfo id; sets DelivStat to "C" server-side. */
+export async function acceptDeliveryOrder(
+  token: string,
+  id: number
+): Promise<import("@/types/sales-delivery").AcceptDeliveryOrderResult> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesDelivery/${id}/accept`,
+    { method: "POST" },
+    token
+  );
+  return {
+    id: readNumber(data, "id", "Id"),
+    sthId: readNumber(data, "sth_Id", "Sth_Id", "sthId", "SthId"),
+    delivStat: readNullableString(data, "delivStat", "DelivStat") ?? "",
+  };
 }
 
 function mapShiftStatus(data: Record<string, unknown>): import("@/types/shift").ShiftStatus {
