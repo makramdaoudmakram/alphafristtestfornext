@@ -9,6 +9,7 @@ import {
   getStors,
   getUnitConversionInfo,
   searchStockBatchesForInventoryAdjustment,
+  type StockUnitConversionResult,
 } from "@/lib/api-client";
 import { convertBaseStockQtyToUnit } from "@/lib/inventory-adjustment-qty";
 import {
@@ -242,7 +243,8 @@ export function InventoryAdjustmentPageContent() {
     async (
       item: ItemCatalogItem,
       batch: StockBatchItem,
-      storeId: string
+      storeId: string,
+      sharedUnitConversion?: StockUnitConversionResult
     ): Promise<InventoryAdjustmentDetail | null> => {
       if (!token) return null;
 
@@ -253,22 +255,34 @@ export function InventoryAdjustmentPageContent() {
         return null;
       }
 
-      const converted = await convertBaseStockQtyToUnit(
-        token,
-        itemCode,
-        unitId,
-        batch.qty
-      );
-      if (converted.error) {
-        toast.error(converted.error);
-        return null;
-      }
-
-      const currentQty = converted.qty;
-      const priceInfo = await getUnitConversionInfo(token, itemCode, unitId, 1);
+      const priceInfo =
+        sharedUnitConversion ??
+        (await getUnitConversionInfo(token, itemCode, unitId, 1));
       if (priceInfo.errorMessage?.trim()) {
         toast.error(priceInfo.errorMessage.trim());
         return null;
+      }
+
+      const baseQty = batch.qty;
+      let currentQty = 0;
+      if (Number.isFinite(baseQty) && baseQty >= 0) {
+        const convFactor =
+          priceInfo.conversionValue != null &&
+          Number.isFinite(priceInfo.conversionValue) &&
+          priceInfo.conversionValue > 0
+            ? priceInfo.conversionValue
+            : priceInfo.quantityNet != null &&
+                Number.isFinite(priceInfo.quantityNet) &&
+                priceInfo.quantityNet > 0
+              ? priceInfo.quantityNet
+              : 0;
+        if (convFactor <= 0) {
+          toast.error(
+            `Could not resolve unit conversion for item '${itemCode}'.`
+          );
+          return null;
+        }
+        currentQty = baseQty / convFactor;
       }
 
       const factor =
@@ -388,19 +402,43 @@ export function InventoryAdjustmentPageContent() {
           )
         );
 
-        const newRows: InventoryAdjustmentDetail[] = [];
-        for (const batch of batches) {
-          const key = inventoryDetailRowKey(itemCode, storeId, batch.batchNo);
-          if (existingKeys.has(key)) continue;
+        const batchesToAdd = batches.filter(
+          (batch) =>
+            !existingKeys.has(
+              inventoryDetailRowKey(itemCode, storeId, batch.batchNo)
+            )
+        );
 
-          const row = await buildDetailFromBatch(item, batch, storeId);
-          if (row) newRows.push(row);
-        }
-
-        if (newRows.length === 0) {
+        if (batchesToAdd.length === 0) {
           toast.message("All batches for this item are already in the list.");
           return;
         }
+
+        const unitId = getItemDefaultUnitId(item);
+        if (unitId == null || unitId <= 0) {
+          toast.error("Item has no default unit configured.");
+          return;
+        }
+
+        const unitConversionInfo = await getUnitConversionInfo(
+          token,
+          itemCode,
+          unitId,
+          1
+        );
+        if (unitConversionInfo.errorMessage?.trim()) {
+          toast.error(unitConversionInfo.errorMessage.trim());
+          return;
+        }
+
+        const rowResults = await Promise.all(
+          batchesToAdd.map((batch) =>
+            buildDetailFromBatch(item, batch, storeId, unitConversionInfo)
+          )
+        );
+        const newRows = rowResults.filter(
+          (row): row is InventoryAdjustmentDetail => row != null
+        );
 
         prependDetailRows(newRows);
         setSelectedDetailIndex(0);
