@@ -6067,6 +6067,14 @@ function mapShiftStatus(data: Record<string, unknown>): import("@/types/shift").
     parmId: parmRaw == null || parmRaw === "" ? null : Number(parmRaw),
     pharmacyName: readNullableString(data, "pharmacyName", "PharmacyName"),
     hasOpenShift: readBoolean(data, "hasOpenShift", "HasOpenShift"),
+    hasShiftHistory: readBoolean(data, "hasShiftHistory", "HasShiftHistory"),
+    isFirstShiftOpening: readBoolean(
+      data,
+      "isFirstShiftOpening",
+      "IsFirstShiftOpening"
+    ),
+    costCenterCode: readNullableString(data, "costCenterCode", "CostCenterCode"),
+    costCenterName: readNullableString(data, "costCenterName", "CostCenterName"),
     status: readString(data, "status", "Status"),
     scId: scRaw == null || scRaw === "" ? null : Number(scRaw),
     openedAt: readNullableString(data, "openedAt", "OpenedAt"),
@@ -6139,6 +6147,24 @@ export async function getShiftMovements(token: string) {
   });
 }
 
+export async function openFirstShift(
+  token: string,
+  request: import("@/types/shift").OpenFirstShiftRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "Shift/open/first",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        StartingCash: request.startingCash ?? 0,
+        Notes: request.notes,
+      }),
+    },
+    token
+  );
+  return mapShiftStatus(data);
+}
+
 export async function openShift(
   token: string,
   request: import("@/types/shift").OpenShiftRequest
@@ -6156,6 +6182,151 @@ export async function openShift(
     token
   );
   return mapShiftStatus(data);
+}
+
+function mapShiftClosingTotals(
+  data: Record<string, unknown> | null | undefined
+): import("@/types/shift").ShiftClosingTotals {
+  const row = data ?? {};
+  return {
+    salesPostPay: readNumber(row, "salesPostPay", "SalesPostPay"),
+    salesPostPayDiscount: readNumber(
+      row,
+      "salesPostPayDiscount",
+      "SalesPostPayDiscount"
+    ),
+    salesMedicalDiscount: readNumber(
+      row,
+      "salesMedicalDiscount",
+      "SalesMedicalDiscount"
+    ),
+    salesMedicen: readNumber(row, "salesMedicen", "SalesMedicen"),
+    salesAccessories: readNumber(row, "salesAccessories", "SalesAccessories"),
+    salesTax: readNumber(row, "salesTax", "SalesTax"),
+    salesTragurt: readNumber(row, "salesTragurt", "SalesTragurt"),
+    salesCostMedicen: readNumber(row, "salesCostMedicen", "SalesCostMedicen"),
+    salesAccessoricCost: readNumber(
+      row,
+      "salesAccessoricCost",
+      "SalesAccessoricCost"
+    ),
+    salesParmCost: readNumber(row, "salesParmCost", "SalesParmCost"),
+    salesExpensive: readNumber(row, "salesExpensive", "SalesExpensive"),
+    salesPurches: readNumber(row, "salesPurches", "SalesPurches"),
+  };
+}
+
+function mapShiftClosingPreview(
+  data: Record<string, unknown>
+): import("@/types/shift").ShiftClosingPreview {
+  const unresolvedRaw = data.unresolvedSales ?? data.UnresolvedSales;
+  const pendingRaw = data.pendingDeliveries ?? data.PendingDeliveries;
+  const totalsRaw = (data.totals ?? data.Totals) as Record<string, unknown> | undefined;
+
+  const unresolved: import("@/types/shift").ShiftClosingUnresolvedSale[] = Array.isArray(
+    unresolvedRaw
+  )
+    ? unresolvedRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+          totalBillNet: readNullableNumber(
+            item,
+            "totalBillNet",
+            "TotalBillNet"
+          ),
+          createdAt: readNullableString(item, "createdAt", "CreatedAt"),
+        };
+      })
+    : [];
+
+  const pending: import("@/types/shift").ShiftClosingPendingDelivery[] = Array.isArray(
+    pendingRaw
+  )
+    ? pendingRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+          contact: readNullableString(item, "contact", "Contact"),
+          tel: readNullableString(item, "tel", "Tel"),
+          delivStat: readNullableString(item, "delivStat", "DelivStat"),
+        };
+      })
+    : [];
+
+  return {
+    parmId: readNumber(data, "parmId", "ParmId"),
+    pharmKey: readString(data, "pharmKey", "PharmKey"),
+    scId: readNumber(data, "sc_Id", "Sc_Id", "scId", "ScId"),
+    moveId: readNumber(data, "move_Id", "Move_Id", "moveId", "MoveId"),
+    costCenterCode: readNullableString(data, "costCenterCode", "CostCenterCode"),
+    costCenterName: readNullableString(data, "costCenterName", "CostCenterName"),
+    shiftStartedAt: readNullableString(
+      data,
+      "shiftStartedAt",
+      "ShiftStartedAt"
+    ),
+    openingBalance: readNullableNumber(
+      data,
+      "openingBalance",
+      "OpeningBalance"
+    ),
+    canClose: readBoolean(data, "canClose", "CanClose"),
+    blockReason: readNullableString(data, "blockReason", "BlockReason"),
+    unresolvedSales: unresolved,
+    pendingDeliveries: pending,
+    totals: mapShiftClosingTotals(totalsRaw),
+  };
+}
+
+export async function getShiftClosingPreview(
+  token: string,
+  scId?: number | null
+) {
+  const query =
+    scId != null && scId > 0
+      ? `Shift/close/preview?scId=${encodeURIComponent(String(scId))}`
+      : "Shift/close/preview";
+  const data = await apiFetch<Record<string, unknown>>(query, {}, token);
+  return mapShiftClosingPreview(data);
+}
+
+export async function closeShift(
+  token: string,
+  request: import("@/types/shift").ShiftCloseRequest
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "Shift/close",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        Sc_Id: request.scId ?? null,
+        ActualPharmacyCash: request.actualPharmacyCash,
+        HeadOfficeTransferAmount: request.headOfficeTransferAmount,
+        EmployeePassword: request.employeePassword,
+        ClosingNotes: request.closingNotes,
+      }),
+    },
+    token
+  );
+  return {
+    scId: readNumber(data, "sc_Id", "Sc_Id", "scId", "ScId"),
+    closedAt: readNullableString(data, "closedAt", "ClosedAt"),
+    totals: mapShiftClosingTotals(
+      (data.totals ?? data.Totals) as Record<string, unknown> | undefined
+    ),
+    nextScId: readNumber(data, "nextSc_Id", "NextSc_Id", "nextScId", "NextScId"),
+    nextOpeningBalance: readNumber(
+      data,
+      "nextOpeningBalance",
+      "NextOpeningBalance"
+    ),
+    nextShiftStartedAt: readNullableString(
+      data,
+      "nextShiftStartedAt",
+      "NextShiftStartedAt"
+    ),
+  } satisfies import("@/types/shift").ShiftClosedResult;
 }
 
 /** Persist missing sales items (SalesNotExistItem) for the current open shift. */

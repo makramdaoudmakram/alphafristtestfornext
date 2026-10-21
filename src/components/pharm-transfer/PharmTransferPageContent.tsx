@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { getActivePharmacy } from "@/lib/pharmacy-scope-api";
+import { collectOutgoingPendingForStorage } from "@/lib/pharm-transfer-pending";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { PharmTransferDetailsGrid } from "@/components/pharm-transfer/PharmTransferDetailsGrid";
 import { PharmTransferEmployeeTotalsTable } from "@/components/pharm-transfer/PharmTransferEmployeeTotalsTable";
@@ -11,7 +14,13 @@ import { ItemLanguageToggle } from "@/components/pharm-recive/ItemLanguageToggle
 import { PageGuard } from "@/components/permissions/page-guard";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { FormFieldInlineWrap } from "@/components/ui/form-field-inline";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -39,6 +48,8 @@ import {
 import { PERMISSIONS } from "@/lib/route-permissions";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmTransferContext } from "@/types/pharm-transfer";
+import type { PharmTranPendingHeader } from "@/types/pharm-tran";
+import { PharmTransferRepositoryError } from "@/services/pharm-transfer.service";
 import {
   EMPLOY_TYPE_DELIVERY,
 } from "@/types/pharm-transfer";
@@ -61,11 +72,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+function formatPendingDate(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function displayTransferSerial(header: PharmTranPendingHeader): string {
+  if (header.serialNo != null && header.serialNo > 0) return String(header.serialNo);
+  return "—";
+}
+
 export function PharmTransferPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
-  const { activePharmacyId } = usePharmacyScope();
+  const { activePharmacyId, activePharmacy, ready: scopeReady } = usePharmacyScope();
 
   const {
     header,
@@ -77,6 +100,7 @@ export function PharmTransferPageContent() {
     loading,
     saving,
     isEditable,
+    isPending,
     searchOpen,
     setSearchOpen,
     navState,
@@ -109,11 +133,52 @@ export function PharmTransferPageContent() {
   const [searchItemCode, setSearchItemCode] = useState("");
   const [searchStartDate, setSearchStartDate] = useState("");
   const [searchEndDate, setSearchEndDate] = useState("");
+  const [outgoingPending, setOutgoingPending] = useState<PharmTranPendingHeader[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingLoadError, setPendingLoadError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [confirmCancelHeader, setConfirmCancelHeader] =
+    useState<PharmTranPendingHeader | null>(null);
 
   const service = useMemo(
     () => (token ? createPharmTransferService(token) : null),
     [token]
   );
+
+  const loadOutgoingPending = useCallback(async () => {
+    if (!service || !token) {
+      setOutgoingPending([]);
+      setPendingLoading(false);
+      return;
+    }
+
+    setPendingLoading(true);
+    setPendingLoadError(null);
+    try {
+      const [page, activeScope] = await Promise.all([
+        service.getOutgoingPending(),
+        getActivePharmacy(token),
+      ]);
+      const storageId =
+        activeScope.storageId != null && activeScope.storageId.trim() !== ""
+          ? Number(activeScope.storageId)
+          : null;
+      const resolvedStorageId =
+        storageId != null && Number.isFinite(storageId) ? storageId : null;
+      setOutgoingPending(collectOutgoingPendingForStorage(page.items, resolvedStorageId));
+    } catch (error) {
+      setOutgoingPending([]);
+      const message =
+        error instanceof PharmTransferRepositoryError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Could not load pending transfers.";
+      setPendingLoadError(message);
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [service, token]);
 
   const loadContext = useCallback(async () => {
     if (!service) {
@@ -140,6 +205,11 @@ export function PharmTransferPageContent() {
     void loadContext();
     void refreshNavIds();
   }, [loadContext, refreshNavIds, activePharmacyId]);
+
+  useEffect(() => {
+    if (!scopeReady) return;
+    void loadOutgoingPending();
+  }, [scopeReady, activePharmacyId, loadOutgoingPending]);
 
   useEffect(() => {
     if (!token) return;
@@ -477,11 +547,47 @@ export function PharmTransferPageContent() {
   );
 
   const confirmDelete = useCallback(() => {
-    if (!hasRecord) return;
-    if (window.confirm("Delete this pharmacy transfer?")) {
+    if (!hasRecord || !isPending) return;
+    if (
+      window.confirm(
+        "Cancel this pending pharmacy transfer? Reserved stock at the sending pharmacy will be released."
+      )
+    ) {
       void handleDelete();
     }
-  }, [handleDelete, hasRecord]);
+  }, [handleDelete, hasRecord, isPending]);
+
+  const handleCancelConfirmed = useCallback(async () => {
+    if (!service || !confirmCancelHeader) return;
+    setCancellingId(confirmCancelHeader.id);
+    try {
+      const result = await service.cancel(confirmCancelHeader.id);
+      toast.success(result.message || "Transfer cancelled. Reserved stock was released.");
+      setConfirmCancelHeader(null);
+      if (header.id === confirmCancelHeader.id) {
+        handleNew();
+      }
+      await loadOutgoingPending();
+      await refreshNavIds();
+    } catch (error) {
+      toast.error(
+        error instanceof PharmTransferRepositoryError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Cancel failed."
+      );
+    } finally {
+      setCancellingId(null);
+    }
+  }, [
+    confirmCancelHeader,
+    handleNew,
+    header.id,
+    loadOutgoingPending,
+    refreshNavIds,
+    service,
+  ]);
 
   const runDocumentSearch = useCallback(async () => {
     if (searchStartDate && searchEndDate && searchStartDate > searchEndDate) {
@@ -548,6 +654,77 @@ export function PharmTransferPageContent() {
           showExcelActions={false}
 
         />
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Pending transfers awaiting destination acceptance</CardTitle>
+            <CardDescription>
+              Transfers sent from{" "}
+              <span className="font-medium text-foreground">
+                {activePharmacy?.name ?? context?.currentPharmacyName ?? "the current pharmacy"}
+              </span>
+              . Cancel before the destination pharmacy accepts to release reserved stock.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {pendingLoading ? (
+              <Skeleton className="h-20 w-full" />
+            ) : pendingLoadError ? (
+              <p className="text-destructive text-sm">{pendingLoadError}</p>
+            ) : outgoingPending.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No pending outgoing transfers.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Serial</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Destination</TableHead>
+                      <TableHead className="text-end">Qty</TableHead>
+                      <TableHead className="w-28" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {outgoingPending.map((pendingHeader) => (
+                      <TableRow key={pendingHeader.id}>
+                        <TableCell className="tabular-nums">
+                          {displayTransferSerial(pendingHeader)}
+                        </TableCell>
+                        <TableCell>{formatPendingDate(pendingHeader.transferDate)}</TableCell>
+                        <TableCell>
+                          {pendingHeader.receivingPharmacyName ??
+                            String(pendingHeader.receivingPharmacyId)}
+                        </TableCell>
+                        <TableCell className="text-end tabular-nums">
+                          {pendingHeader.totalQuantity?.toLocaleString(undefined, {
+                            maximumFractionDigits: 4,
+                          }) ?? "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={cancellingId !== null || saving}
+                            onClick={() => setConfirmCancelHeader(pendingHeader)}
+                          >
+                            {cancellingId === pendingHeader.id ? (
+                              <Loader2 className="mr-1 size-4 animate-spin" />
+                            ) : (
+                              <XCircle className="mr-1 size-4" />
+                            )}
+                            Cancel
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent className="space-y-4 pt-6">
@@ -788,6 +965,45 @@ export function PharmTransferPageContent() {
               </TableBody>
             </Table>
             <DialogFooter />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={confirmCancelHeader != null}
+          onOpenChange={(open) => {
+            if (!open && cancellingId === null) setConfirmCancelHeader(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cancel pharmacy transfer?</DialogTitle>
+            </DialogHeader>
+            <p className="text-muted-foreground text-sm">
+              {confirmCancelHeader
+                ? `This cancels transfer #${displayTransferSerial(confirmCancelHeader)} (document ID ${confirmCancelHeader.id}) and releases reserved stock at the sending pharmacy. The destination pharmacy will no longer be able to accept it.`
+                : null}
+            </p>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={cancellingId !== null}
+                onClick={() => setConfirmCancelHeader(null)}
+              >
+                Keep transfer
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={cancellingId !== null}
+                onClick={() => void handleCancelConfirmed()}
+              >
+                {cancellingId !== null ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : null}
+                Cancel transfer
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

@@ -298,6 +298,14 @@ export class PharmTransferService {
   remove(id: number) {
     return this.repository.delete(id);
   }
+
+  getOutgoingPending() {
+    return this.repository.getOutgoingPending();
+  }
+
+  cancel(id: number) {
+    return this.repository.cancel(id);
+  }
 }
 
 export function createPharmTransferService(token: string) {

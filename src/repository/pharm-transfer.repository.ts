@@ -7,6 +7,10 @@ import type {
   PharmTransferHeader,
   PharmTransferSearchResult,
 } from "@/types/pharm-transfer";
+import type {
+  PharmTranAcceptResult,
+  PharmTranPendingList,
+} from "@/types/pharm-tran";
 
 export class PharmTransferRepositoryError extends Error {
   status: number;
@@ -162,6 +166,65 @@ function mapSearchResult(raw: unknown): PharmTransferSearchResult {
   };
 }
 
+function mapPendingDetail(raw: unknown) {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: readNullableNumber(obj, "id", "Id") ?? 0,
+    lineNo: readNullableNumber(obj, "lineNo", "LineNo") ?? 0,
+    itemCode: readNullableString(obj, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(obj, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(obj, "itemNameEn", "ItemNameEn"),
+    quantity: readNullableNumber(obj, "quantity", "Quantity"),
+    unitId: readNullableNumber(obj, "unitId", "UnitId"),
+    unitName: readNullableString(obj, "unitName", "UnitName"),
+    batchNo: readNullableString(obj, "batchNo", "BatchNo"),
+    expDate: readNullableString(obj, "expDate", "ExpDate"),
+    purchasePrice: readNullableNumber(obj, "purchasePrice", "PurchasePrice"),
+    salesPrice: readNullableNumber(obj, "salesPrice", "SalesPrice"),
+    costPrice: readNullableNumber(obj, "costPrice", "CostPrice"),
+  };
+}
+
+function mapPendingHeader(raw: unknown) {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const detailsRaw = obj.details ?? obj.Details ?? [];
+  return {
+    id: readNullableNumber(obj, "id", "Id") ?? 0,
+    serialNo: readNullableNumber(obj, "serialNo", "SerialNo"),
+    sendingPharmacyId: readNullableNumber(obj, "sendingPharmacyId", "SendingPharmacyId") ?? 0,
+    sendingPharmacyName: readNullableString(obj, "sendingPharmacyName", "SendingPharmacyName"),
+    receivingPharmacyId:
+      readNullableNumber(obj, "receivingPharmacyId", "ReceivingPharmacyId") ?? 0,
+    receivingPharmacyName: readNullableString(
+      obj,
+      "receivingPharmacyName",
+      "ReceivingPharmacyName"
+    ),
+    totalQuantity: readNullableNumber(obj, "totalQuantity", "TotalQuantity"),
+    transferDate: readNullableString(obj, "transferDate", "TransferDate"),
+    totalSalesPrice: readNullableNumber(obj, "totalSalesPrice", "TotalSalesPrice"),
+    details: Array.isArray(detailsRaw) ? detailsRaw.map(mapPendingDetail) : [],
+  };
+}
+
+function mapOutgoingPendingList(raw: unknown): PharmTranPendingList {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const itemsRaw = obj.items ?? obj.Items ?? [];
+  return {
+    items: Array.isArray(itemsRaw) ? itemsRaw.map(mapPendingHeader) : [],
+  };
+}
+
+function mapCancelResult(raw: unknown): PharmTranAcceptResult {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  return {
+    id: readNullableNumber(obj, "id", "Id") ?? 0,
+    serialNo: readNullableNumber(obj, "serialNo", "SerialNo"),
+    traFlag: readNullableNumber(obj, "traFlag", "TraFlag") ?? 0,
+    message: readString(obj, "message", "Message"),
+  };
+}
+
 function mapEmployLookup(raw: unknown): EmployInfoLookup {
   const obj = (raw ?? {}) as Record<string, unknown>;
   return {
@@ -263,6 +326,24 @@ export function createPharmTransferRepository(token: string) {
 
     delete(id: number): Promise<void> {
       return request(token, `PharmTranH/${id}`, { method: "DELETE" });
+    },
+
+    getOutgoingPending(): Promise<PharmTranPendingList> {
+      return request(
+        token,
+        "PharmTranH/pending/outgoing",
+        { method: "GET" },
+        mapOutgoingPendingList
+      );
+    },
+
+    cancel(id: number): Promise<PharmTranAcceptResult> {
+      return request(
+        token,
+        `PharmTranH/${id}/cancel`,
+        { method: "POST" },
+        mapCancelResult
+      );
     },
 
     lookupEmployee(code: string, employType: number): Promise<EmployInfoLookup | null> {
