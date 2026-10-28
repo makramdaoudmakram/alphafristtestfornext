@@ -48,6 +48,12 @@ export type ShiftClosingPendingDelivery = {
   delivStat: string | null;
 };
 
+export type ShiftClosingPaymentClassification = {
+  salesClassifyId: number;
+  displayName: string;
+  salesInvoiceCount: number;
+};
+
 export type ShiftClosingTotals = {
   salesPostPay: number;
   salesPostPayDiscount: number;
@@ -61,6 +67,15 @@ export type ShiftClosingTotals = {
   salesParmCost: number;
   salesExpensive: number;
   salesPurches: number;
+  salesReturnTotal: number;
+  purchaseReturnTotal: number;
+  deliveryValue: number;
+  deliveryCount: number;
+  totalReturnSales: number;
+  returnCash: number;
+  totalPurchReturn: number;
+  totalSales: number;
+  totalDiscountValue: number;
 };
 
 export type ShiftClosingPreview = {
@@ -76,6 +91,7 @@ export type ShiftClosingPreview = {
   blockReason: string | null;
   unresolvedSales: ShiftClosingUnresolvedSale[];
   pendingDeliveries: ShiftClosingPendingDelivery[];
+  paymentClassifications: ShiftClosingPaymentClassification[];
   totals: ShiftClosingTotals;
 };
 
@@ -88,10 +104,16 @@ export type ShiftClosedResult = {
   nextShiftStartedAt: string | null;
 };
 
+export type ShiftPaymentCollectionCloseEntry = {
+  salesClassifyId: number;
+  actualAmount: number;
+};
+
 export type ShiftCloseRequest = {
   scId: number | null;
   actualPharmacyCash: number;
   headOfficeTransferAmount: number;
   employeePassword: string;
   closingNotes: string | null;
+  paymentCollection?: ShiftPaymentCollectionCloseEntry[];
 };

@@ -32,6 +32,13 @@ export function getItemDefaultUnitId(
   return normalizeUnitId(item?.itmUnit1);
 }
 
+/** Primary Itm_Code, else Itm_Code2 — used for detail itmId and catalog map keys. */
+export function getCanonicalItemCatalogCode(
+  item: Pick<ItemCatalogItem, "itmCode" | "itmCode2"> | null | undefined
+): string {
+  return item?.itmCode?.trim() || item?.itmCode2?.trim() || "";
+}
+
 export function getItemUnitIds(
   item: ItemUnitFields | null | undefined
 ): number[] {
@@ -252,6 +259,31 @@ export function validatePurchaseDetailUnits(
   return null;
 }
 
+export function findUnresolvedCatalogCodesForUnitValidation(
+  details: ReadonlyArray<{ itmId: string; unitId: number | null }>,
+  itemByCode: Map<string, ItemCatalogItem>,
+  catalogItems?: readonly ItemCatalogItem[]
+): { lineIndex: number; code: string }[] {
+  const unresolved: { lineIndex: number; code: string }[] = [];
+
+  for (const [lineIndex, row] of details.entries()) {
+    const code = row.itmId?.trim();
+    if (!code) continue;
+    if (row.unitId == null || row.unitId <= 0) continue;
+    if (findCatalogItemByCode(code, itemByCode, catalogItems)) continue;
+    unresolved.push({ lineIndex, code });
+  }
+
+  return unresolved;
+}
+
+export function formatCatalogResolutionError(
+  lineIndex: number,
+  code: string
+): string {
+  return `Line ${lineIndex + 1}: could not resolve catalog item "${code}" for unit validation. Select the item from search again or verify the item code in the catalog.`;
+}
+
 /** Resolve missing catalog rows before save-time unit validation. */
 export async function ensureCatalogItemsForDetails(
   details: ReadonlyArray<{ itmId: string; unitId: number | null }>,
@@ -319,18 +351,20 @@ export async function ensureCatalogItemsForItmCodes(
         indexCatalogItem(map, item, catalogItems);
       }
     } catch {
-      for (let index = 0; index < missing.length; index += 1) {
-        const code = missing[index];
-        if (!code) continue;
-        const resolved = await resolveCatalogItemByCode(
-          token,
-          code,
-          map,
-          catalogItems
-        );
-        if (resolved) indexCatalogItem(map, resolved, catalogItems);
-        onProgress?.(index + 1, total);
-      }
+      // Fall through to per-code resolve when the batch request fails.
+    }
+
+    for (let index = 0; index < missing.length; index += 1) {
+      const code = missing[index];
+      if (!code || findCatalogItemByCode(code, map, catalogItems)) continue;
+      const resolved = await resolveCatalogItemByCode(
+        token,
+        code,
+        map,
+        catalogItems
+      );
+      if (resolved) indexCatalogItem(map, resolved, catalogItems);
+      onProgress?.(index + 1, total);
     }
   }
 

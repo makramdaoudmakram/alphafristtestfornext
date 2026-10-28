@@ -1,23 +1,27 @@
 import type { ShiftClosingPreview } from "@/types/shift";
 
-export const PENDING_SALES_PATH = "/dashboard/sales/pending";
-export const PENDING_DELIVERY_PATH = "/dashboard/sales/delivery";
+export const SHIFT_CLOSE_PENDING_INVOICES_WARNING =
+  "You have to finish all pending invoices before closing the shift.";
 
-export type ShiftCloseBlockerKind = "pending-sales" | "pending-delivery";
+export const SHIFT_CLOSE_PENDING_DELIVERIES_WARNING =
+  "You have to finish all pending deliveries before closing the shift.";
 
-export type ShiftCloseBlockerCheck =
-  | { ok: true; preview: ShiftClosingPreview }
-  | { ok: false; kind: ShiftCloseBlockerKind };
+export function hasShiftCloseBlockers(preview: ShiftClosingPreview): boolean {
+  return (
+    preview.unresolvedSales.length > 0 || preview.pendingDeliveries.length > 0
+  );
+}
 
-/** Same order as server shift-close validation: sales first, then delivery. */
-export function classifyShiftClosingPreview(
+/** User-facing warnings for the Close Shift form (one per active blocker). */
+export function getShiftCloseWarningMessages(
   preview: ShiftClosingPreview
-): ShiftCloseBlockerCheck {
+): string[] {
+  const messages: string[] = [];
   if (preview.unresolvedSales.length > 0) {
-    return { ok: false, kind: "pending-sales" };
+    messages.push(SHIFT_CLOSE_PENDING_INVOICES_WARNING);
   }
   if (preview.pendingDeliveries.length > 0) {
-    return { ok: false, kind: "pending-delivery" };
+    messages.push(SHIFT_CLOSE_PENDING_DELIVERIES_WARNING);
   }
-  return { ok: true, preview };
+  return messages;
 }

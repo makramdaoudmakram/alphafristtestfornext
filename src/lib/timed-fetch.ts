@@ -1,4 +1,5 @@
-export const API_CLIENT_TIMEOUT_MS = 28_000;
+/** Must exceed Alfa `DocumentRequestLimits.RequestTimeoutSeconds` (30s) plus network latency. */
+export const API_CLIENT_TIMEOUT_MS = 60_000;
 export const REQUEST_ID_HEADER = "X-Request-Id";
 
 export class ApiTimeoutError extends Error {

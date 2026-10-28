@@ -7,11 +7,13 @@ import {
   createSalesPayMethod,
   deactivateSalesPayMethod,
   getSalesKindCompo,
+  getSalesPaymentClassifyCompo,
   getSalesPayMethods,
   updateSalesPayMethod,
 } from "@/lib/api-client";
 import { getChartLeaves } from "@/lib/manual-journal-api";
 import type { SalesKindCompoItem } from "@/types/sales-kind";
+import type { SalesPaymentClassifyCompoItem } from "@/types/sales-payment-classify";
 import type { SalesPayMethodItem } from "@/types/sales-pay-method";
 import type { ComboboxOption } from "@/components/ui/searchable-combobox";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -72,6 +74,25 @@ function parseSalesKindId(raw: string): number | null {
   return id;
 }
 
+function toClassificationOptions(
+  items: SalesPaymentClassifyCompoItem[]
+): ComboboxOption[] {
+  return items
+    .map((item) => ({
+      value: String(item.id),
+      label: item.salesclassifyName?.trim() || `Classification #${item.id}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function parseSalesclasid(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const id = Number(trimmed);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return id;
+}
+
 export function SalesPayMethodPageContent() {
   const { data: session, status } = useSession();
   const { hasPermission } = usePermissions();
@@ -90,10 +111,14 @@ export function SalesPayMethodPageContent() {
   );
   const [accountOptions, setAccountOptions] = useState<ComboboxOption[]>([]);
   const [salesKinds, setSalesKinds] = useState<SalesKindCompoItem[]>([]);
+  const [classifications, setClassifications] = useState<
+    SalesPaymentClassifyCompoItem[]
+  >([]);
 
   const [paymentName, setPaymentName] = useState("");
   const [affectsCash, setAffectsCash] = useState(true);
   const [salesKindId, setSalesKindId] = useState("");
+  const [salesclasid, setSalesclasid] = useState("");
   const [accountCode, setAccountCode] = useState("");
   const [active, setActive] = useState(true);
   const [deleveryRequair, setDeleveryRequair] = useState(false);
@@ -106,7 +131,19 @@ export function SalesPayMethodPageContent() {
     () => toSalesKindOptions(salesKinds.filter((kind) => kind.isActive)),
     [salesKinds]
   );
-  const columns = useSalesPayMethodColumns(accountOptions, salesKindOptions);
+  const classificationOptions = useMemo(
+    () => toClassificationOptions(classifications),
+    [classifications]
+  );
+  const createClassificationOptions = useMemo(
+    () => withClear(classificationOptions),
+    [classificationOptions]
+  );
+  const columns = useSalesPayMethodColumns(
+    accountOptions,
+    salesKindOptions,
+    classificationOptions
+  );
   const canCreate = hasPermission(PERMISSIONS.salesPayMethod.create);
   const canEdit = hasPermission(PERMISSIONS.salesPayMethod.edit);
   const canDelete = hasPermission(PERMISSIONS.salesPayMethod.delete);
@@ -120,20 +157,24 @@ export function SalesPayMethodPageContent() {
     if (!token) {
       setAccountOptions([]);
       setSalesKinds([]);
+      setClassifications([]);
       return;
     }
 
     setLookupsLoading(true);
     try {
-      const [accounts, kinds] = await Promise.all([
+      const [accounts, kinds, classifies] = await Promise.all([
         getChartLeaves(token),
         getSalesKindCompo(token),
+        getSalesPaymentClassifyCompo(token),
       ]);
       setAccountOptions(toAccountOptions(accounts));
       setSalesKinds(kinds);
+      setClassifications(classifies);
     } catch {
       setAccountOptions([]);
       setSalesKinds([]);
+      setClassifications([]);
       toast.error("Failed to load lookup data.");
     } finally {
       setLookupsLoading(false);
@@ -194,6 +235,19 @@ export function SalesPayMethodPageContent() {
       }
     }
 
+    const parsedSalesclasid = parseSalesclasid(salesclasid);
+    if (salesclasid.trim() && parsedSalesclasid == null) {
+      toast.error("Select a valid sales classification.");
+      return;
+    }
+    if (
+      parsedSalesclasid != null &&
+      !classificationOptions.some((option) => option.value === salesclasid)
+    ) {
+      toast.error("Select a valid sales classification.");
+      return;
+    }
+
     setSaving(true);
     try {
       await createSalesPayMethod(
@@ -201,6 +255,7 @@ export function SalesPayMethodPageContent() {
           paymentName: paymentName.trim(),
           affectsCash,
           salesKindId: parsedSalesKindId,
+          salesclasid: parsedSalesclasid,
           accountCode: accountCode.trim(),
           active,
           deleveryRequair,
@@ -211,6 +266,7 @@ export function SalesPayMethodPageContent() {
       setPaymentName("");
       setAffectsCash(true);
       setSalesKindId("");
+      setSalesclasid("");
       setAccountCode("");
       setActive(true);
       setDeleveryRequair(false);
@@ -261,6 +317,27 @@ export function SalesPayMethodPageContent() {
       }
     }
 
+    const parsedSalesclasid = parseSalesclasid(values.salesclasid);
+    if (values.salesclasid.trim() && parsedSalesclasid == null) {
+      toast.error("Select a valid sales classification.");
+      return;
+    }
+    const inClassifyList = classificationOptions.some(
+      (option) => option.value === values.salesclasid
+    );
+    const isCurrentSavedClassify =
+      editingItem.salesclasid != null &&
+      editingItem.salesclasid > 0 &&
+      String(editingItem.salesclasid) === values.salesclasid;
+    if (
+      values.salesclasid.trim() &&
+      !inClassifyList &&
+      !isCurrentSavedClassify
+    ) {
+      toast.error("Select a valid sales classification.");
+      return;
+    }
+
     setSheetSaving(true);
     try {
       await updateSalesPayMethod(
@@ -269,6 +346,7 @@ export function SalesPayMethodPageContent() {
           paymentName: values.paymentName.trim(),
           affectsCash: values.affectsCash,
           salesKindId: parsedSalesKindId,
+          salesclasid: parsedSalesclasid,
           accountCode: values.accountCode.trim(),
           active: values.active,
           deleveryRequair: values.deleveryRequair,
@@ -368,6 +446,22 @@ export function SalesPayMethodPageContent() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Sales Classification</Label>
+                  <SearchableCombobox
+                    value={salesclasid}
+                    onValueChange={setSalesclasid}
+                    options={createClassificationOptions}
+                    placeholder={
+                      lookupsLoading
+                        ? "Loading sales classifications..."
+                        : "Select sales classification"
+                    }
+                    searchPlaceholder="Search sales classification..."
+                    emptyMessage="No sales classifications found."
+                    disabled={lookupsLoading || saving}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Account code (optional)</Label>
                   <SearchableCombobox
                     value={accountCode}
@@ -453,6 +547,7 @@ export function SalesPayMethodPageContent() {
           saving={sheetSaving}
           accountOptions={accountOptions}
           salesKindOptions={salesKindOptions}
+          classificationOptions={classificationOptions}
           lookupsLoading={lookupsLoading}
           onSubmit={handleSheetSubmit}
         />

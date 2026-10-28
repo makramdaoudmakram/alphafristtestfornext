@@ -5,6 +5,7 @@ export const SHIFT_CLOSING_TOTAL_ROWS: {
   key: keyof ShiftClosingTotals;
   labelAr: string;
   labelEn: string;
+  integer?: boolean;
 }[] = [
   { key: "salesPostPay", labelAr: "مبيعات آجل (بعد الدفع)", labelEn: "Post-payment sales" },
   {
@@ -30,4 +31,32 @@ export const SHIFT_CLOSING_TOTAL_ROWS: {
   { key: "salesParmCost", labelAr: "إجمالي تكلفة الأصناف", labelEn: "Total item cost" },
   { key: "salesExpensive", labelAr: "مصروفات الصيدلية", labelEn: "Pharmacy expenses" },
   { key: "salesPurches", labelAr: "مشتريات الوردية", labelEn: "Shift purchases" },
+  { key: "deliveryValue", labelAr: "قيمة التوصيل", labelEn: "Delivery Value" },
+  {
+    key: "deliveryCount",
+    labelAr: "عدد فواتير التوصيل",
+    labelEn: "Delivery Count",
+    integer: true,
+  },
+  {
+    key: "totalReturnSales",
+    labelAr: "إجمالي مرتجع المبيعات",
+    labelEn: "Total Return Sales",
+  },
+  { key: "returnCash", labelAr: "مرتجع نقدي", labelEn: "Return Cash" },
+  {
+    key: "totalPurchReturn",
+    labelAr: "إجمالي مرتجع المشتريات",
+    labelEn: "Total Purchase Return",
+  },
+  {
+    key: "totalSales",
+    labelAr: "إجمالي المبيعات",
+    labelEn: "Total Sales",
+  },
+  {
+    key: "totalDiscountValue",
+    labelAr: "إجمالي قيمة الخصم",
+    labelEn: "Total Discount Value",
+  },
 ];

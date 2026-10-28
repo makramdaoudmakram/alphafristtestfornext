@@ -78,6 +78,9 @@ const ICONS: Record<string, ElementType> = {
   "Role Permissions": ListChecks,
   Diagnostics: Activity,
   "Commit Documents": Activity,
+  Report: Receipt,
+  "Shift Print": Receipt,
+  "تقرير فواتير المبيعات": Receipt,
 };
 
 function NavLeafLink({

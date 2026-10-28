@@ -37,6 +37,10 @@ export type SalesPaymentContext = {
   availablePaymentMethods: SalesPaymentMethodOption[];
 };
 
+/** 1 = sale, 2 = customer sales return (API SalesPaymentDocumentType). */
+export const SALES_PAYMENT_DOCUMENT_SALE = 1;
+export const SALES_PAYMENT_DOCUMENT_SALES_RETURN = 2;
+
 export type FinalizeSalePaymentRequest = {
   sthId: number;
   salesKindId: number;
@@ -44,6 +48,8 @@ export type FinalizeSalePaymentRequest = {
     paymentMethodId: number;
     amount: number;
   }>;
+  /** Defaults to sale (1). Customer returns must send 2. */
+  documentType?: number;
   /** Employee code/password credential; the server resolves and verifies it. */
   employeeCode?: string | null;
   /** Customer.CustCode selected during finalization; validated server-side. */

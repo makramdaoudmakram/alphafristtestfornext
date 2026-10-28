@@ -25,7 +25,7 @@ function formatDisplayNumber(value: number): string {
 }
 
 /** Stock.AvailableQty in base units — same source as Sales stock.availableQty. */
-function resolveReturnSearchBaseAvailableQty(
+export function resolveReturnSearchBaseAvailableQty(
   searchResult: ReturnItemStockSearchItem
 ): number {
   if (

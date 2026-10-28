@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,23 +12,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ShiftClosingThermalReceipt } from "@/components/shift/ShiftClosingThermalReceipt";
 import {
   ApiError,
   closeShift,
   getShiftClosingPreview,
+  getShiftClosingReceipt,
   lookupSalesManByPassword,
 } from "@/lib/api-client";
+import type { ShiftClosingReceiptPrintState } from "@/types/shift-closing-receipt";
+import type { ReceiptPaperWidth } from "@/types/sales-receipt";
 import { SHIFT_CLOSING_TOTAL_ROWS } from "@/lib/shift-closing-labels";
 import {
-  classifyShiftClosingPreview,
-  PENDING_DELIVERY_PATH,
-  PENDING_SALES_PATH,
+  getShiftCloseWarningMessages,
+  hasShiftCloseBlockers,
 } from "@/lib/shift-close-blockers";
-import {
-  formatMoneyDifference,
-  validateShiftCloseForm,
-} from "@/lib/shift-close-validation";
+import { buildShiftClosePaymentCollection } from "@/lib/shift-close-validation";
 import type { ShiftClosingPreview, ShiftStatus } from "@/types/shift";
+
+/** Placeholder until collection amounts drive close; API still requires numeric cash fields. */
+const CLOSE_SHIFT_API_CASH_PLACEHOLDER = 0;
 
 function formatMoney(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
@@ -55,14 +56,18 @@ export function ShiftClosingPanel({
   status,
   onShiftClosed,
 }: ShiftClosingPanelProps) {
-  const router = useRouter();
   const [preview, setPreview] = useState<ShiftClosingPreview | null>(null);
+  const [closingReceipt, setClosingReceipt] = useState<ShiftClosingReceiptPrintState | null>(
+    null
+  );
+  const receiptPaperWidth: ReceiptPaperWidth = 80;
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeFlowOpen, setCloseFlowOpen] = useState(false);
 
-  const [actualCash, setActualCash] = useState("");
-  const [transferAmount, setTransferAmount] = useState("");
+  const [classificationAmounts, setClassificationAmounts] = useState<
+    Record<string, string>
+  >({});
   const [employeePasswordInput, setEmployeePasswordInput] = useState("");
   const [verifiedSalesMan, setVerifiedSalesMan] = useState<{
     name: string;
@@ -74,15 +79,6 @@ export function ShiftClosingPanel({
 
   const scId = status?.scId ?? null;
   const hasOpenShift = Boolean(status?.hasOpenShift && scId != null);
-
-  const clientValidation = useMemo(
-    () =>
-      validateShiftCloseForm({
-        actualCash,
-        transferAmount,
-      }),
-    [actualCash, transferAmount]
-  );
 
   const clearSalesMan = () => {
     setVerifiedSalesMan(null);
@@ -99,21 +95,7 @@ export function ShiftClosingPanel({
     setPreview(null);
     try {
       const data = await getShiftClosingPreview(token, scId);
-      const classified = classifyShiftClosingPreview(data);
-      if (!classified.ok) {
-        if (classified.kind === "pending-sales") {
-          toast.error("Resolve pending sales before closing the shift.");
-          router.push(PENDING_SALES_PATH);
-        } else {
-          toast.error("Resolve pending delivery orders before closing the shift.");
-          router.push(PENDING_DELIVERY_PATH);
-        }
-        setCloseFlowOpen(false);
-        setVerifiedSalesMan(null);
-        setEmployeePasswordInput("");
-        return false;
-      }
-      setPreview(classified.preview);
+      setPreview(data);
       return true;
     } catch (err) {
       setPreview(null);
@@ -124,7 +106,14 @@ export function ShiftClosingPanel({
     } finally {
       setLoadingPreview(false);
     }
-  }, [token, hasOpenShift, scId, router]);
+  }, [token, hasOpenShift, scId]);
+
+  const closeWarnings = useMemo(
+    () => (preview ? getShiftCloseWarningMessages(preview) : []),
+    [preview]
+  );
+
+  const closeBlocked = preview != null && hasShiftCloseBlockers(preview);
 
   const openCloseFlow = () => {
     setCloseFlowOpen(true);
@@ -134,14 +123,27 @@ export function ShiftClosingPanel({
 
   useEffect(() => {
     if (!closeFlowOpen) {
-      setActualCash("");
-      setTransferAmount("");
+      setClassificationAmounts({});
       setEmployeePasswordInput("");
       setVerifiedSalesMan(null);
       setClosingNotes("");
       setFormError(null);
     }
   }, [closeFlowOpen]);
+
+  useEffect(() => {
+    if (!preview?.paymentClassifications) {
+      return;
+    }
+    setClassificationAmounts((previous) => {
+      const next: Record<string, string> = {};
+      for (const row of preview.paymentClassifications) {
+        const key = String(row.salesClassifyId);
+        next[key] = previous[key] ?? "";
+      }
+      return next;
+    });
+  }, [preview]);
 
   const resolveSalesMan = async () => {
     if (!token) return;
@@ -183,14 +185,17 @@ export function ShiftClosingPanel({
   const handleSubmitClose = async () => {
     if (!token || !preview?.canClose || closing) return;
 
-    const validation = validateShiftCloseForm({ actualCash, transferAmount });
-    if (!validation.ok) {
-      setFormError(validation.message);
+    if (!verifiedSalesMan?.submitPassword) {
+      setFormError("Verify Sales Man password before closing.");
       return;
     }
 
-    if (!verifiedSalesMan?.submitPassword) {
-      setFormError("Verify Sales Man password before closing.");
+    const collectionResult = buildShiftClosePaymentCollection(
+      preview.paymentClassifications,
+      classificationAmounts
+    );
+    if (!collectionResult.ok) {
+      setFormError(collectionResult.message);
       return;
     }
 
@@ -200,13 +205,15 @@ export function ShiftClosingPanel({
     try {
       const result = await closeShift(token, {
         scId: preview.scId,
-        actualPharmacyCash: validation.actual,
-        headOfficeTransferAmount: validation.transfer,
+        actualPharmacyCash: CLOSE_SHIFT_API_CASH_PLACEHOLDER,
+        headOfficeTransferAmount: CLOSE_SHIFT_API_CASH_PLACEHOLDER,
         employeePassword: passwordForClose,
         closingNotes: closingNotes.trim() || null,
+        paymentCollection: collectionResult.paymentCollection,
       });
+      const closedScId = result.scId;
       toast.success(
-        `تم إغلاق الوردية ${result.scId}. الوردية الجديدة ${result.nextScId} — رصيد فتح ${formatMoney(
+        `تم إغلاق الوردية ${closedScId}. الوردية الجديدة ${result.nextScId} — رصيد فتح ${formatMoney(
           result.nextOpeningBalance
         )}`
       );
@@ -214,6 +221,12 @@ export function ShiftClosingPanel({
       setCloseFlowOpen(false);
       clearSalesMan();
       await onShiftClosed();
+      try {
+        const receipt = await getShiftClosingReceipt(token, closedScId);
+        setClosingReceipt({ receipt, width: receiptPaperWidth });
+      } catch {
+        toast.error("Could not load the shift closing receipt.");
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);
@@ -237,10 +250,8 @@ export function ShiftClosingPanel({
 
   const displayStartedAt =
     preview?.shiftStartedAt ?? status?.openedAt ?? null;
-  const displayOpening =
-    preview?.openingBalance ?? status?.openingBalance ?? null;
-
   return (
+    <>
     <Card className="border-primary/20">
       <CardHeader>
         <CardTitle>إغلاق الوردية / Close shift</CardTitle>
@@ -348,22 +359,14 @@ export function ShiftClosingPanel({
                       ? "يمكن إغلاق الوردية."
                       : "لا يمكن الإغلاق حتى تُحل العوائق:"}
                   </div>
-                  {preview.blockReason ? (
+                  {preview.blockReason && closeWarnings.length === 0 ? (
                     <p className="mt-1 text-muted-foreground">{preview.blockReason}</p>
                   ) : null}
                 </div>
 
                 {preview.unresolvedSales.length > 0 ? (
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">
-                      فواتير غير مُقفلة —{" "}
-                      <Link
-                        href="/dashboard/sales/pending"
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
-                        المبيعات المعلقة
-                      </Link>
-                    </h3>
+                    <h3 className="text-sm font-semibold">فواتير غير مُقفلة</h3>
                     <ul className="divide-y rounded-md border text-sm">
                       {preview.unresolvedSales.map((row) => (
                         <li
@@ -381,15 +384,7 @@ export function ShiftClosingPanel({
 
                 {preview.pendingDeliveries.length > 0 ? (
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">
-                      توصيل معلق —{" "}
-                      <Link
-                        href="/dashboard/sales/delivery"
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
-                        شاشة التوصيل
-                      </Link>
-                    </h3>
+                    <h3 className="text-sm font-semibold">توصيل معلق</h3>
                     <ul className="divide-y rounded-md border text-sm">
                       {preview.pendingDeliveries.map((row) => (
                         <li
@@ -406,8 +401,7 @@ export function ShiftClosingPanel({
                   </div>
                 ) : null}
 
-                {preview.canClose ? (
-                  <div className="space-y-4 rounded-md border p-4">
+                <div className="space-y-4 rounded-md border p-4">
                     <h3 className="text-sm font-semibold">Closing form</h3>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
@@ -422,56 +416,50 @@ export function ShiftClosingPanel({
                           className="bg-muted"
                         />
                       </div>
-                      <div>
-                        <Label>Opening balance (Sc_StartCash)</Label>
-                        <Input
-                          readOnly
-                          value={formatMoney(displayOpening)}
-                          className="bg-muted"
-                        />
-                      </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <Label htmlFor="shift-actual-cash">Actual pharmacy cash *</Label>
-                        <Input
-                          id="shift-actual-cash"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          autoComplete="off"
-                          disabled={closing}
-                          value={actualCash}
-                          onChange={(e) => setActualCash(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="shift-transfer">Head-office transfer *</Label>
-                        <Input
-                          id="shift-transfer"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          autoComplete="off"
-                          disabled={closing}
-                          value={transferAmount}
-                          onChange={(e) => setTransferAmount(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <Label>Difference (actual − transfer)</Label>
-                      <Input
-                        readOnly
-                        className="bg-muted w-40 font-mono tabular-nums"
-                        value={
-                          clientValidation.ok
-                            ? formatMoneyDifference(clientValidation.difference)
-                            : "—"
-                        }
-                      />
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold">Payment collection</h4>
+                      {loadingPreview ? (
+                        <p className="text-muted-foreground text-sm">
+                          Loading payment classifications…
+                        </p>
+                      ) : preview.paymentClassifications.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          No payment classifications were found for this shift.
+                          Finalized sales with payment details will appear here.
+                        </p>
+                      ) : (
+                        <div className="flex max-w-xs flex-col gap-4">
+                          {preview.paymentClassifications.map((row) => {
+                            const fieldId = `shift-classify-${row.salesClassifyId}`;
+                            const key = String(row.salesClassifyId);
+                            return (
+                              <div key={key} className="space-y-1">
+                                <Label htmlFor={fieldId}>
+                                  {row.displayName} ({row.salesInvoiceCount})
+                                </Label>
+                                <Input
+                                  id={fieldId}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  autoComplete="off"
+                                  disabled={closing}
+                                  placeholder="0.00"
+                                  value={classificationAmounts[key] ?? ""}
+                                  onChange={(e) =>
+                                    setClassificationAmounts((prev) => ({
+                                      ...prev,
+                                      [key]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1">
@@ -483,26 +471,29 @@ export function ShiftClosingPanel({
                         value={closingNotes}
                         onChange={(e) => setClosingNotes(e.target.value)}
                       />
+                      {closeWarnings.length > 0 ? (
+                        <div
+                          className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-100"
+                          role="alert"
+                        >
+                          {closeWarnings.map((message) => (
+                            <p key={message}>{message}</p>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
 
                     {formError ? (
                       <p className="text-sm text-destructive">{formError}</p>
                     ) : null}
-                    {!clientValidation.ok &&
-                    actualCash.trim() &&
-                    transferAmount.trim() ? (
-                      <p className="text-sm text-destructive">
-                        {clientValidation.message}
-                      </p>
-                    ) : null}
-
                     <Button
                       type="button"
                       variant="destructive"
                       disabled={
                         closing ||
                         loadingPreview ||
-                        !clientValidation.ok ||
+                        closeBlocked ||
+                        !preview.canClose ||
                         !verifiedSalesMan?.submitPassword
                       }
                       onClick={() => void handleSubmitClose()}
@@ -510,11 +501,10 @@ export function ShiftClosingPanel({
                       {closing ? "Closing…" : "Submit close"}
                     </Button>
                   </div>
-                ) : null}
 
                 <details className="text-sm">
                   <summary className="cursor-pointer font-medium">
-                    Closing totals preview (12 items)
+                    Closing totals preview ({SHIFT_CLOSING_TOTAL_ROWS.length} items)
                   </summary>
                   <div className="mt-2 overflow-x-auto rounded-md border">
                     <table className="w-full min-w-[320px] text-sm">
@@ -523,7 +513,9 @@ export function ShiftClosingPanel({
                           <tr key={row.key} className="border-t">
                             <td className="px-3 py-2">{row.labelEn}</td>
                             <td className="px-3 py-2 text-end font-mono tabular-nums">
-                              {formatMoney(preview.totals[row.key])}
+                              {row.integer
+                                ? String(preview.totals[row.key])
+                                : formatMoney(preview.totals[row.key])}
                             </td>
                           </tr>
                         ))}
@@ -537,5 +529,13 @@ export function ShiftClosingPanel({
         )}
       </CardContent>
     </Card>
+    {closingReceipt ? (
+      <ShiftClosingThermalReceipt
+        receipt={closingReceipt.receipt}
+        width={closingReceipt.width}
+        onClose={() => setClosingReceipt(null)}
+      />
+    ) : null}
+    </>
   );
 }

@@ -3,6 +3,8 @@ export interface SalesPayMethodItem {
   paymentName: string;
   affectsCash: boolean;
   salesKindId: number;
+  /** SQL tinyint; null when unset. */
+  salesclasid: number | null;
   accountCode: string;
   active: boolean;
   deleveryRequair: boolean;
@@ -12,6 +14,7 @@ export interface CreateSalesPayMethodRequest {
   paymentName: string;
   affectsCash: boolean;
   salesKindId: number;
+  salesclasid: number | null;
   accountCode: string;
   active: boolean;
   deleveryRequair: boolean;

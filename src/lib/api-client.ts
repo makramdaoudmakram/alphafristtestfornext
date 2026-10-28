@@ -1,5 +1,9 @@
 import { API_BASE_URL, getAlfaApiHint } from "./api-config";
-import { ApiTimeoutError, timedFetch } from "./timed-fetch";
+import {
+  API_CLIENT_TIMEOUT_MS,
+  ApiTimeoutError,
+  timedFetch,
+} from "./timed-fetch";
 import type { AuthResponse } from "@/types/auth";
 import type {
   CreatePermissionRequest,
@@ -51,6 +55,12 @@ import type {
   SalesKindItem,
   UpdateSalesKindRequest,
 } from "@/types/sales-kind";
+import type {
+  CreateSalesPaymentClassifyRequest,
+  SalesPaymentClassifyCompoItem,
+  SalesPaymentClassifyItem,
+  UpdateSalesPaymentClassifyRequest,
+} from "@/types/sales-payment-classify";
 import type {
   CreateSalesKindAssignmentRequest,
   SalesKindAssignmentItem,
@@ -975,7 +985,8 @@ function alfaUrl(path: string): string {
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
-  token?: string | null
+  token?: string | null,
+  timeoutMs?: number
 ): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -989,10 +1000,14 @@ export async function apiFetch<T>(
 
   let response: Response;
   try {
-    response = await timedFetch(alfaUrl(path), {
-      ...options,
-      headers,
-    });
+    response = await timedFetch(
+      alfaUrl(path),
+      {
+        ...options,
+        headers,
+      },
+      timeoutMs ?? API_CLIENT_TIMEOUT_MS
+    );
   } catch (error) {
     if (error instanceof ApiTimeoutError) {
       throw new ApiError(408, error.message);
@@ -1583,6 +1598,7 @@ function normalizeSalesPayMethodItem(
     paymentName: readString(item, "paymentName", "PaymentName"),
     affectsCash: readBoolean(item, "affectsCash", "AffectsCash"),
     salesKindId: readNumber(item, "salesKindId", "SalesKindId"),
+    salesclasid: readNullableNumber(item, "salesclasid", "Salesclasid"),
     accountCode: readString(item, "accountCode", "AccountCode"),
     active: readBoolean(item, "active", "Active"),
     deleveryRequair: readBoolean(item, "deleveryRequair", "DeleveryRequair"),
@@ -1626,6 +1642,7 @@ export function createSalesPayMethod(
         PaymentName: data.paymentName,
         AffectsCash: data.affectsCash,
         SalesKindId: data.salesKindId,
+        Salesclasid: data.salesclasid,
         AccountCode: data.accountCode || null,
         Active: data.active,
         DeleveryRequair: data.deleveryRequair,
@@ -1648,6 +1665,7 @@ export function updateSalesPayMethod(
         PaymentName: data.paymentName,
         AffectsCash: data.affectsCash,
         SalesKindId: data.salesKindId,
+        Salesclasid: data.salesclasid,
         AccountCode: data.accountCode || null,
         Active: data.active,
         DeleveryRequair: data.deleveryRequair,
@@ -1659,6 +1677,78 @@ export function updateSalesPayMethod(
 
 export function deactivateSalesPayMethod(id: number, token: string) {
   return apiFetch<void>(`SalesPayMethod/${id}`, { method: "DELETE" }, token);
+}
+
+function normalizeSalesPaymentClassifyItem(
+  item: Record<string, unknown>
+): SalesPaymentClassifyItem {
+  return {
+    id: readNumber(item, "id", "Id", "ID"),
+    salesclassifyName: readString(
+      item,
+      "salesclassifyName",
+      "SalesclassifyName"
+    ),
+  };
+}
+
+function normalizeSalesPaymentClassifyCompoItem(
+  item: Record<string, unknown>
+): SalesPaymentClassifyCompoItem {
+  return normalizeSalesPaymentClassifyItem(item);
+}
+
+export function getSalesPaymentClassifies(token: string) {
+  return fetchAllPaged(
+    "SalesPaymentClassify",
+    token,
+    normalizeSalesPaymentClassifyItem
+  );
+}
+
+export function getSalesPaymentClassifyCompo(token: string) {
+  return fetchAllPaged(
+    "SalesPaymentClassify/for-comp",
+    token,
+    normalizeSalesPaymentClassifyCompoItem
+  );
+}
+
+export function createSalesPaymentClassify(
+  data: CreateSalesPaymentClassifyRequest,
+  token: string
+) {
+  return apiFetch<Record<string, unknown>>(
+    "SalesPaymentClassify",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        SalesclassifyName: data.salesclassifyName,
+      }),
+    },
+    token
+  ).then((item) => normalizeSalesPaymentClassifyItem(item));
+}
+
+export function updateSalesPaymentClassify(
+  id: number,
+  data: UpdateSalesPaymentClassifyRequest,
+  token: string
+) {
+  return apiFetch<void>(
+    `SalesPaymentClassify/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        SalesclassifyName: data.salesclassifyName,
+      }),
+    },
+    token
+  );
+}
+
+export function deleteSalesPaymentClassify(id: number, token: string) {
+  return apiFetch<void>(`SalesPaymentClassify/${id}`, { method: "DELETE" }, token);
 }
 
 function normalizeSalesKindItem(item: Record<string, unknown>): SalesKindItem {
@@ -3198,7 +3288,7 @@ export function getStockBalanceByItem(
 export function searchReturnItemsWithStock(
   token: string,
   search: string,
-  storeId: string,
+  storeId?: string,
   options?: {
     take?: number;
     language?: "en" | "ar";
@@ -3207,11 +3297,53 @@ export function searchReturnItemsWithStock(
     doubleSpaceWildcard?: boolean;
   }
 ) {
-  const params = new URLSearchParams();
   const useWildcard = options?.doubleSpaceWildcard === true;
   const q = useWildcard ? search : search.trim();
+  const trimmedStore = storeId?.trim();
+  const params = new URLSearchParams();
   if (q.trim()) params.set("search", q);
-  params.set("storeId", storeId.trim());
+  if (trimmedStore) params.set("storeId", trimmedStore);
+  if (options?.take != null && options.take > 0) {
+    params.set("take", String(options.take));
+  }
+  if (options?.language === "en" || options?.language === "ar") {
+    params.set("language", options.language);
+  }
+  if (useWildcard) params.set("doubleSpaceWildcard", "true");
+
+  const endpoint = trimmedStore
+    ? "Stock/return-item-search"
+    : "SalesReturn/item-search";
+
+  return apiFetch<unknown>(
+    `${endpoint}?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((item) =>
+        normalizeReturnItemStockSearchItem(item as Record<string, unknown>)
+      );
+    }
+    return parseArrayOrPaged(data, normalizeReturnItemStockSearchItem);
+  });
+}
+
+/** Pharmacy purchase return — store is resolved on the server (no storeId query param). */
+export function searchPharmPurchaseReturnItemsWithStock(
+  token: string,
+  search: string,
+  options?: {
+    take?: number;
+    language?: "en" | "ar";
+    signal?: AbortSignal;
+    doubleSpaceWildcard?: boolean;
+  }
+) {
+  const useWildcard = options?.doubleSpaceWildcard === true;
+  const q = useWildcard ? search : search.trim();
+  const params = new URLSearchParams();
+  if (q.trim()) params.set("search", q);
   if (options?.take != null && options.take > 0) {
     params.set("take", String(options.take));
   }
@@ -3221,7 +3353,7 @@ export function searchReturnItemsWithStock(
   if (useWildcard) params.set("doubleSpaceWildcard", "true");
 
   return apiFetch<unknown>(
-    `Stock/return-item-search?${params.toString()}`,
+    `PharmPurchaseReturnH/item-search?${params.toString()}`,
     { signal: options?.signal },
     token
   ).then((data) => {
@@ -5358,12 +5490,17 @@ export async function getSalePaymentMethods(
 export async function getSalePaymentContext(
   token: string,
   sthId: number,
-  salesKindId?: number | null
+  salesKindId?: number | null,
+  documentType: number = 1
 ) {
-  const query =
-    salesKindId != null && salesKindId > 0
-      ? `?salesKindId=${encodeURIComponent(String(salesKindId))}`
-      : "";
+  const params = new URLSearchParams();
+  if (salesKindId != null && salesKindId > 0) {
+    params.set("salesKindId", String(salesKindId));
+  }
+  if (documentType !== 1) {
+    params.set("documentType", String(documentType));
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
   const data = await apiFetch<Record<string, unknown>>(
     `SalesPayment/${sthId}${query}`,
     {},
@@ -5418,13 +5555,19 @@ function mapSalesReceipt(
   };
 }
 
-/** Read-only authoritative receipt for a finalized sale; used for thermal printing. */
+/** Read-only authoritative receipt for a finalized sale or return; used for thermal printing. */
 export async function getSalesReceipt(
   token: string,
-  sthId: number
+  sthId: number,
+  documentType: number = 1
 ): Promise<import("@/types/sales-receipt").SalesReceipt> {
+  const params = new URLSearchParams();
+  if (documentType !== 1) {
+    params.set("documentType", String(documentType));
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
   const data = await apiFetch<Record<string, unknown>>(
-    `SalesPayment/${sthId}/receipt`,
+    `SalesPayment/${sthId}/receipt${query}`,
     {},
     token
   );
@@ -5703,6 +5846,18 @@ export async function createSale(
   } satisfies import("@/types/sales-workspace").CreateSaleResponse;
 }
 
+export async function getSalesReturnStoreContext(token: string) {
+  const data = await apiFetch<Record<string, unknown>>(
+    "SalesReturn/store-context",
+    {},
+    token
+  );
+  return {
+    storeId: readNullableString(data, "storeId", "StoreId"),
+    movId: readNullableNumber(data, "movId", "MovId"),
+  };
+}
+
 export async function createSalesReturn(
   token: string,
   request: import("@/types/sales-workspace").CreateSalesReturnRequest
@@ -5729,6 +5884,8 @@ export async function createSalesReturn(
           DiscountMode: l.discountMode,
           DiscountPercent: l.discountPercent,
           DiscountValue: l.discountValue,
+          ReturnBatchExpDate: l.returnBatchExpDate || null,
+          ReturnBatchNo: l.returnBatchNo || null,
         })),
         Payments: null,
       }),
@@ -5847,6 +6004,7 @@ export async function finalizeSalePayment(
           ? { Cust_Id: request.custId }
           : {}),
         ...(request.requireCustomer ? { RequireCustomer: true } : {}),
+        DocumentType: request.documentType ?? 1,
       }),
     },
     token
@@ -6213,6 +6371,31 @@ function mapShiftClosingTotals(
     salesParmCost: readNumber(row, "salesParmCost", "SalesParmCost"),
     salesExpensive: readNumber(row, "salesExpensive", "SalesExpensive"),
     salesPurches: readNumber(row, "salesPurches", "SalesPurches"),
+    salesReturnTotal: readNumber(row, "salesReturnTotal", "SalesReturnTotal"),
+    purchaseReturnTotal: readNumber(
+      row,
+      "purchaseReturnTotal",
+      "PurchaseReturnTotal"
+    ),
+    deliveryValue: readNumber(row, "deliveryValue", "DeliveryValue"),
+    deliveryCount: readNumber(row, "deliveryCount", "DeliveryCount"),
+    totalReturnSales: readNumber(
+      row,
+      "totalReturnSales",
+      "TotalReturnSales"
+    ),
+    returnCash: readNumber(row, "returnCash", "ReturnCash"),
+    totalPurchReturn: readNumber(
+      row,
+      "totalPurchReturn",
+      "TotalPurchReturn"
+    ),
+    totalSales: readNumber(row, "totalSales", "TotalSales"),
+    totalDiscountValue: readNumber(
+      row,
+      "totalDiscountValue",
+      "TotalDiscountValue"
+    ),
   };
 }
 
@@ -6254,6 +6437,32 @@ function mapShiftClosingPreview(
       })
     : [];
 
+  const classificationsRaw =
+    data.paymentClassifications ?? data.PaymentClassifications;
+  const paymentClassifications: import("@/types/shift").ShiftClosingPaymentClassification[] =
+    Array.isArray(classificationsRaw)
+      ? classificationsRaw.map((row) => {
+          const item = row as Record<string, unknown>;
+          return {
+            salesClassifyId: readNumber(
+              item,
+              "salesClassifyId",
+              "SalesClassifyId"
+            ),
+            displayName: readString(
+              item,
+              "displayName",
+              "DisplayName"
+            ),
+            salesInvoiceCount: readNumber(
+              item,
+              "salesInvoiceCount",
+              "SalesInvoiceCount"
+            ),
+          };
+        })
+      : [];
+
   return {
     parmId: readNumber(data, "parmId", "ParmId"),
     pharmKey: readString(data, "pharmKey", "PharmKey"),
@@ -6275,6 +6484,7 @@ function mapShiftClosingPreview(
     blockReason: readNullableString(data, "blockReason", "BlockReason"),
     unresolvedSales: unresolved,
     pendingDeliveries: pending,
+    paymentClassifications,
     totals: mapShiftClosingTotals(totalsRaw),
   };
 }
@@ -6305,6 +6515,10 @@ export async function closeShift(
         HeadOfficeTransferAmount: request.headOfficeTransferAmount,
         EmployeePassword: request.employeePassword,
         ClosingNotes: request.closingNotes,
+        paymentCollection: (request.paymentCollection ?? []).map((entry) => ({
+          salesClassifyId: entry.salesClassifyId,
+          actualAmount: entry.actualAmount,
+        })),
       }),
     },
     token
@@ -6327,6 +6541,172 @@ export async function closeShift(
       "NextShiftStartedAt"
     ),
   } satisfies import("@/types/shift").ShiftClosedResult;
+}
+
+function mapShiftClosingReceipt(
+  data: Record<string, unknown>
+): import("@/types/shift-closing-receipt").ShiftClosingReceipt {
+  const summaryRow = ((data.summary ?? data.Summary) ?? {}) as Record<string, unknown>;
+  const classRaw = data.classifications ?? data.Classifications;
+  const rows = Array.isArray(classRaw) ? classRaw : [];
+
+  return {
+    summary: {
+      pharmacyName: readNullableString(summaryRow, "pharmacyName", "PharmacyName"),
+      scId: readNumber(summaryRow, "sc_Id", "Sc_Id", "scId", "ScId"),
+      startTime: readNullableString(summaryRow, "sc_StartTime", "Sc_StartTime", "startTime", "StartTime"),
+      totalSales: readNullableString(summaryRow, "totalSales", "TotalSales"),
+      totalReturn: readNullableNumber(summaryRow, "totalReturn", "TotalReturn"),
+      totalExpen: readNullableNumber(summaryRow, "totalExpen", "TotalExpen"),
+      totalPurch: readNullableNumber(summaryRow, "totalPurch", "TotalPurch"),
+      totalPurchRet: readNullableNumber(summaryRow, "totalPurchRet", "TotalPurchRet"),
+      totalDiscount: readNumber(summaryRow, "totalDiscount", "TotalDiscount"),
+      totalTransfer: readNullableNumber(summaryRow, "totalTransfer", "TotalTransfer"),
+      deliveryValue: readNullableNumber(summaryRow, "deliveryValue", "DeliveryValue"),
+      deliveryCount: readNullableNumber(summaryRow, "deliveryCount", "DeliveryCount"),
+    },
+    classifications: rows.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        classificationName: readString(item, "classificationName", "ClassificationName") ?? "",
+        value: readNullableNumber(item, "value", "Value"),
+        expected: readNullableNumber(item, "expected", "Expected"),
+        difference: readNullableNumber(item, "difference", "Difference"),
+      };
+    }),
+  };
+}
+
+export async function getShiftClosingReceipt(token: string, scId: number) {
+  const data = await apiFetch<Record<string, unknown>>(
+    `Shift/close/receipt?scId=${encodeURIComponent(String(scId))}`,
+    {},
+    token
+  );
+  return mapShiftClosingReceipt(data);
+}
+
+function normalizeClosedShiftListPage(
+  data: unknown
+): import("@/types/shift-print").ClosedShiftListPage {
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+
+  return {
+    items: items.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        scId: readNumber(item, "sc_Id", "Sc_Id", "scId", "ScId"),
+        startTime: readNullableString(
+          item,
+          "sc_StartTime",
+          "Sc_StartTime",
+          "startTime",
+          "StartTime"
+        ),
+        totalSales: readNullableString(item, "sc_Temp2", "Sc_Temp2", "totalSales", "TotalSales"),
+        sendMoney: readNullableNumber(
+          item,
+          "sc_TransformValue",
+          "Sc_TransformValue",
+          "sendMoney",
+          "SendMoney"
+        ),
+      };
+    }),
+    pageNumber:
+      readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || 20,
+    totalCount: readNumber(raw, "totalCount", "TotalCount"),
+    totalPages: readNumber(raw, "totalPages", "TotalPages"),
+    hasPreviousPage: Boolean(raw.hasPreviousPage ?? raw.HasPreviousPage),
+    hasNextPage: Boolean(raw.hasNextPage ?? raw.HasNextPage),
+  };
+}
+
+function normalizeFinalizedSaleListPage(
+  data: unknown
+): import("@/types/sales-invoice-report").FinalizedSaleListPage {
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+
+  return {
+    items: items.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        scId: readNullableNumber(item, "sc_Id", "Sc_Id", "scId", "ScId"),
+        sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId", "SthId"),
+        invoiceDate: readNullableString(
+          item,
+          "secInsertDate",
+          "SecInsertDate",
+          "invoiceDate",
+          "InvoiceDate"
+        ),
+        classifyName: readNullableString(
+          item,
+          "classifyName",
+          "ClassifyName"
+        ),
+        totalValue: readNullableNumber(item, "totalValue", "TotalValue"),
+      };
+    }),
+    pageNumber:
+      readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || 20,
+    totalCount: readNumber(raw, "totalCount", "TotalCount"),
+    totalPages: readNumber(raw, "totalPages", "TotalPages"),
+    hasPreviousPage: Boolean(raw.hasPreviousPage ?? raw.HasPreviousPage),
+    hasNextPage: Boolean(raw.hasNextPage ?? raw.HasNextPage),
+  };
+}
+
+export async function getFinalizedSalesInvoices(
+  token: string,
+  query: {
+    pageNumber: number;
+    pageSize: number;
+    search?: string;
+    signal?: AbortSignal;
+  }
+) {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(query.pageNumber));
+  params.set("pageSize", String(query.pageSize));
+  const search = query.search?.trim();
+  if (search) params.set("search", search);
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesPayment/finalized-invoices?${params.toString()}`,
+    { signal: query.signal },
+    token
+  );
+  return normalizeFinalizedSaleListPage(data);
+}
+
+export async function getClosedShifts(
+  token: string,
+  query: {
+    pageNumber: number;
+    pageSize: number;
+    search?: string;
+    signal?: AbortSignal;
+  }
+) {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(query.pageNumber));
+  params.set("pageSize", String(query.pageSize));
+  const search = query.search?.trim();
+  if (search) params.set("search", search);
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `Shift/closed-shifts?${params.toString()}`,
+    { signal: query.signal },
+    token
+  );
+  return normalizeClosedShiftListPage(data);
 }
 
 /** Persist missing sales items (SalesNotExistItem) for the current open shift. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { PageGuard } from "@/components/permissions/page-guard";
@@ -20,11 +20,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import {
   ApiError,
   createSalesReturn,
   finalizeSalePayment,
+  getSalesReceipt,
   getCurrentOpenShift,
   getItemCatalog,
   getUnitConversionInfo,
@@ -33,8 +35,8 @@ import {
   getSalePaymentMethods,
   getSalesServerTime,
   getShiftMovements,
+  getSalesReturnStoreContext,
   lookupSalesManByPassword,
-  openShift,
 } from "@/lib/api-client";
 import {
   createEmptyReturnTab,
@@ -48,7 +50,6 @@ import {
   validateReturnQuantities,
 } from "@/lib/sales-workspace-calc";
 import { formatUnitOptionLabel } from "@/lib/item-unit-options";
-import { getActivePharmacy } from "@/lib/pharmacy-scope-api";
 import {
   findEmptySalesReturnLineIndex,
   patchSalesReturnLineFromStockSearch,
@@ -65,6 +66,13 @@ import type {
   SalesPaymentKindOption,
   SalesPaymentMethodOption,
 } from "@/types/sales-payment";
+import { SALES_PAYMENT_DOCUMENT_SALES_RETURN } from "@/types/sales-payment";
+import {
+  finalizeWithPrintIfNeeded,
+  loadReceiptForPrint,
+} from "@/lib/sales-receipt-print";
+import { SalesThermalReceipt } from "@/components/sales/SalesThermalReceipt";
+import type { SalesReceipt } from "@/types/sales-receipt";
 import type { PharmReciveItemLanguage } from "@/types/pharm-recive";
 import type { UnitItem } from "@/types/unit";
 import { cn } from "@/lib/utils";
@@ -96,6 +104,7 @@ function returnPayable(tab: SalesWorkspaceTab): number {
 export function SalesReturnWorkspacePageContent() {
   const { data: session } = useSession();
   const token = session?.accessToken ?? null;
+  const { activePharmacyId, ready: pharmacyScopeReady } = usePharmacyScope();
 
   const [tabs, setTabs] = useState<SalesWorkspaceTab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -116,14 +125,21 @@ export function SalesReturnWorkspacePageContent() {
 
   const [methods, setMethods] = useState<SalesPaymentMethodOption[]>([]);
   const [salesKinds, setSalesKinds] = useState<SalesPaymentKindOption[]>([]);
+  const [paymentKindsReady, setPaymentKindsReady] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const methodsLoadSeqRef = useRef(0);
   const [paymentPayable, setPaymentPayable] = useState<number | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [receiptToPrint, setReceiptToPrint] = useState<SalesReceipt | null>(null);
   const [saving, setSaving] = useState(false);
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
 
   const active = tabs.find((t) => t.clientId === activeId) ?? null;
+  const activeSalesKindId =
+    active?.salesKindId != null && active.salesKindId > 0
+      ? active.salesKindId
+      : null;
 
   useEffect(() => {
     setSalesManPasswordDraft("");
@@ -185,35 +201,37 @@ export function SalesReturnWorkspacePageContent() {
         return;
       }
 
-      let status = await getCurrentOpenShift(token);
+      const status = await getCurrentOpenShift(token);
       if (!status.hasOpenShift) {
-        status = await openShift(token, {
-          openingBalance: 0,
-          notes: null,
-          movId: returnMov.movId,
-        });
-        toast.success(`Return shift opened (Sc_Id ${status.scId}).`);
-        setReturnShiftReady(true);
+        setReturnShiftReady(false);
+        toast.message(
+          "No open shift for the current pharmacy. Open a shift in Shift Management first."
+        );
       } else {
-        const isReturnShift =
-          status.moveId != null &&
-          returnMovements.some((m) => m.movId === status.moveId);
-        setReturnShiftReady(isReturnShift);
-        if (!isReturnShift) {
-          toast.message(
-            "Current open shift is not a Return Sales shift. Close it in Shift Management and open one with Return Sales."
-          );
-        }
+        setReturnShiftReady(true);
       }
 
       setPharmacyName(status.pharmacyName?.trim() || "—");
-      setCurrentParmId(
-        status.parmId != null && status.parmId > 0 ? String(status.parmId) : null
-      );
+      const shiftParmId =
+        status.parmId != null && status.parmId > 0 ? String(status.parmId) : null;
+      const scopeParmId = activePharmacyId?.trim() || null;
+      setCurrentParmId(scopeParmId ?? shiftParmId);
+      if (
+        pharmacyScopeReady &&
+        scopeParmId &&
+        shiftParmId &&
+        scopeParmId !== shiftParmId
+      ) {
+        setReturnShiftReady(false);
+        toast.error(
+          "Open shift belongs to a different pharmacy than your current selection. Switch pharmacy or open a shift for the selected pharmacy."
+        );
+        return;
+      }
 
       try {
-        const pharmacy = await getActivePharmacy(token);
-        setCurrentStoreId(pharmacy.storageId?.trim() || null);
+        const returnStore = await getSalesReturnStoreContext(token);
+        setCurrentStoreId(returnStore.storeId?.trim() || null);
       } catch {
         setCurrentStoreId(null);
       }
@@ -231,10 +249,13 @@ export function SalesReturnWorkspacePageContent() {
       setSessionStatus("Unavailable");
       setShiftNumber("—");
     }
-  }, [token]);
+  }, [token, activePharmacyId, pharmacyScopeReady]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setPaymentKindsReady(false);
+      return;
+    }
 
     setTabs((prev) => {
       if (prev.length > 0) return prev;
@@ -257,7 +278,7 @@ export function SalesReturnWorkspacePageContent() {
       if (cancelled) return;
 
       setSalesKinds(kinds);
-      setMethods([]);
+      setPaymentKindsReady(true);
       setUnits(unitResult.units);
       setUnitsLoading(false);
 
@@ -387,7 +408,7 @@ export function SalesReturnWorkspacePageContent() {
   const assertActiveQuantitiesValid = useCallback((): boolean => {
     if (!active) return false;
     const result = validateReturnQuantities(active.lines, resolveUnitName, {
-      enforceBatchStock: true,
+      enforceBatchStock: false,
     });
     if (!result.ok) {
       toast.error(result.message);
@@ -403,11 +424,13 @@ export function SalesReturnWorkspacePageContent() {
         toast.error("Resolve Sales Man before adding items.");
         return;
       }
-      if (!currentStoreId?.trim()) {
-        toast.error("Current pharmacy store is not configured.");
+      const storeId = currentStoreId?.trim();
+      if (!storeId) {
+        toast.error(
+          "Return stock store is not available. Check Sales Movement Setting and pharmacy scope, then refresh."
+        );
         return;
       }
-
       let catalogItem;
       try {
         catalogItem = await getItemCatalog(searchResult.itemCatalogId, token);
@@ -428,7 +451,7 @@ export function SalesReturnWorkspacePageContent() {
         catalogItem,
         searchResult,
         language,
-        currentStoreId
+        storeId
       );
       if ("error" in patchOrError) {
         toast.error(patchOrError.error);
@@ -496,9 +519,15 @@ export function SalesReturnWorkspacePageContent() {
       if (!token) return;
       setPaymentLoading(true);
       try {
-        const ctx = await getSalePaymentContext(token, sthId, salesKindId);
+        const ctx = await getSalePaymentContext(
+          token,
+          sthId,
+          salesKindId,
+          SALES_PAYMENT_DOCUMENT_SALES_RETURN
+        );
         updateTab(tabId, { billTyp: ctx.billTyp });
         if (salesKindId != null && salesKindId > 0) {
+          methodsLoadSeqRef.current += 1;
           setMethods(ctx.availablePaymentMethods);
         }
         setPaymentPayable(money(ctx.finalPayableAmount));
@@ -515,35 +544,44 @@ export function SalesReturnWorkspacePageContent() {
 
   const loadMethodsForSalesKind = useCallback(
     async (salesKindId: number | null) => {
+      const seq = ++methodsLoadSeqRef.current;
+
       if (!token) {
-        setMethods([]);
+        if (seq === methodsLoadSeqRef.current) setMethods([]);
         return;
       }
       if (salesKindId == null || salesKindId <= 0) {
-        setMethods([]);
+        if (seq === methodsLoadSeqRef.current) setMethods([]);
         return;
       }
       setPaymentLoading(true);
       try {
-        setMethods(await getSalePaymentMethods(token, salesKindId));
+        const rows = await getSalePaymentMethods(token, salesKindId);
+        if (seq !== methodsLoadSeqRef.current) return;
+        setMethods(rows);
       } catch (err) {
+        if (seq !== methodsLoadSeqRef.current) return;
         setMethods([]);
         toast.error(
           err instanceof ApiError ? err.message : "Failed to load payment methods."
         );
       } finally {
-        setPaymentLoading(false);
+        if (seq === methodsLoadSeqRef.current) setPaymentLoading(false);
       }
     },
     [token]
   );
+
+  useEffect(() => {
+    if (!paymentKindsReady) return;
+    void loadMethodsForSalesKind(activeSalesKindId);
+  }, [paymentKindsReady, activeId, activeSalesKindId, loadMethodsForSalesKind]);
 
   const onSalesKindChange = (raw: string) => {
     if (!active) return;
     const nextId = raw ? Number(raw) : null;
     const kindId = nextId != null && nextId > 0 ? nextId : null;
     updateActive({ salesKindId: kindId, payments: {} });
-    void loadMethodsForSalesKind(kindId);
   };
 
   const canSave = Boolean(
@@ -564,7 +602,7 @@ export function SalesReturnWorkspacePageContent() {
       return;
     }
     if (!returnShiftReady) {
-      toast.error("Open a Return Sales shift before saving.");
+      toast.error("Open a shift before saving the return.");
       return;
     }
     if (!active.salesManId) {
@@ -578,14 +616,6 @@ export function SalesReturnWorkspacePageContent() {
     const sellableLines = active.lines.filter(isSellableSalesLine);
     if (sellableLines.length === 0) {
       toast.error("Add at least one line.");
-      return;
-    }
-    if (
-      sellableLines.some(
-        (l) => !l.batchNo?.trim() || l.stockId <= 0
-      )
-    ) {
-      toast.error("Every line must have a selected batch/stock.");
       return;
     }
     if (!assertActiveQuantitiesValid()) return;
@@ -607,13 +637,15 @@ export function SalesReturnWorkspacePageContent() {
         globalDiscountValue: active.globalDiscountValue,
         lines: sellableLines.map((l) => ({
           itemCatalogId: l.itemCatalogId,
-          stockId: l.stockId,
+          stockId: l.stockId > 0 ? l.stockId : 0,
           quantity: l.quantity,
           unitId: l.unitId,
           unitSellPrice: l.unitSellPrice,
           discountMode: l.discountMode || null,
           discountPercent: l.discountPercent,
           discountValue: l.discountValue,
+          returnBatchExpDate: l.expDate?.trim() || null,
+          returnBatchNo: l.batchNo?.trim() || null,
         })),
         payments: null,
       });
@@ -636,7 +668,7 @@ export function SalesReturnWorkspacePageContent() {
     }
   };
 
-  const handleFinalizePayment = async () => {
+  const handleFinalizePayment = async (printAfter = false) => {
     if (!token || !active || active.sthId == null) return;
     if (isFinalizing) return;
     if (!canPay) {
@@ -683,22 +715,77 @@ export function SalesReturnWorkspacePageContent() {
 
     setIsFinalizing(true);
     try {
-      const result = await finalizeSalePayment(token, {
-        sthId: active.sthId,
-        salesKindId: active.salesKindId,
-        payments: entries,
+      const sthId = active.sthId;
+      const salesKindId = active.salesKindId;
+      const clientId = active.clientId;
+      const outcome = await finalizeWithPrintIfNeeded({
+        inFlight: false,
+        printAfter,
+        finalize: () =>
+          finalizeSalePayment(token, {
+            sthId,
+            salesKindId,
+            payments: entries,
+            documentType: SALES_PAYMENT_DOCUMENT_SALES_RETURN,
+          }),
+        fetchReceipt: (id) =>
+          getSalesReceipt(token, id, SALES_PAYMENT_DOCUMENT_SALES_RETURN),
+        onFinalized: (result) => {
+          updateTab(clientId, {
+            billTyp: result.billTyp ?? 1,
+            payments: {},
+          });
+          setPaymentPayable(null);
+          if (result.replay) {
+            toast.message(
+              `Return ${result.sthId} was already finalized. No new payment was recorded.`
+            );
+          } else {
+            toast.success(
+              `Return ${result.sthId} finalized. ${result.paymentStatus || "Payment finalized"}.`
+            );
+          }
+        },
       });
 
-      updateTab(active.clientId, {
-        billTyp: result.billTyp ?? 1,
-        payments: {},
+      if (outcome.kind === "finalize-failed") {
+        const err = outcome.error;
+        toast.error(
+          err instanceof ApiError ? err.message : "Payment finalization failed."
+        );
+      } else if (outcome.kind === "printed") {
+        setReceiptToPrint(outcome.receipt);
+      } else if (outcome.kind === "print-blocked") {
+        toast.error(
+          outcome.reason === "not-finalized"
+            ? "The server reports this return is not finalized. Printing skipped."
+            : "Refund finalized, but the receipt could not be loaded. Printing skipped."
+        );
+      }
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!token || !active || active.sthId == null) return;
+    if (isFinalizing || (active.billTyp ?? 0) !== 1) return;
+    setIsFinalizing(true);
+    try {
+      const loaded = await loadReceiptForPrint({
+        sthId: active.sthId,
+        fetchReceipt: (id) =>
+          getSalesReceipt(token, id, SALES_PAYMENT_DOCUMENT_SALES_RETURN),
       });
-      setPaymentPayable(null);
-      toast.success(
-        `Return ${result.sthId} finalized. ${result.paymentStatus || "Payment finalized"}.`
-      );
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Payment finalization failed.");
+      if (loaded.ok) {
+        setReceiptToPrint(loaded.receipt);
+      } else {
+        toast.error(
+          loaded.reason === "not-finalized"
+            ? "The server reports this return is not finalized. Printing skipped."
+            : "Receipt data could not be loaded. Printing skipped."
+        );
+      }
     } finally {
       setIsFinalizing(false);
     }
@@ -740,8 +827,9 @@ export function SalesReturnWorkspacePageContent() {
             {!returnShiftReady ? (
               <Card>
                 <CardContent className="py-4 text-sm text-muted-foreground">
-                  A Return Sales shift is required. Use Shift Management to open a shift with
-                  movement MovParint = 2 (Return Sales).
+                  An open shift is required. Open the pharmacy shift in Shift Management (the same
+                  shift used for sales). Return movement (MovParint = 2) must be configured in
+                  Sales Movement Setting.
                 </CardContent>
               </Card>
             ) : null}
@@ -861,9 +949,9 @@ export function SalesReturnWorkspacePageContent() {
                   <CardHeader>
                     <CardTitle>Return details</CardTitle>
                     <CardDescription>
-                      Search by code, barcode, or name to pick a specific batch.
-                      Each result shows BatchNo, expiry, and net available quantity
-                      for the current pharmacy store.
+                      Search the item catalog by code, barcode, or name. Pick an
+                      existing batch or an item with no stock to receive into a new
+                      batch at the current pharmacy.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -878,12 +966,6 @@ export function SalesReturnWorkspacePageContent() {
                         void handleBatchStockSelected(item);
                       }}
                     />
-                    {!currentStoreId ? (
-                      <p className="text-muted-foreground text-xs">
-                        Current pharmacy store is not configured. Batch search is
-                        unavailable.
-                      </p>
-                    ) : null}
                     <SalesDetailsGrid
                       key={active.clientId}
                       tabId={active.clientId}
@@ -1078,10 +1160,35 @@ export function SalesReturnWorkspacePageContent() {
                           paymentTotal <= 0 ||
                           paymentTotal !== money(paymentPayable ?? payable)
                         }
-                        onClick={() => void handleFinalizePayment()}
+                        onClick={() => void handleFinalizePayment(false)}
                       >
                         {isFinalizing ? "Finalizing…" : "Finalize Refund"}
                       </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={
+                          !canPay ||
+                          isFinalizing ||
+                          !active.salesKindId ||
+                          methods.length === 0 ||
+                          paymentTotal <= 0 ||
+                          paymentTotal !== money(paymentPayable ?? payable)
+                        }
+                        onClick={() => void handleFinalizePayment(true)}
+                      >
+                        {isFinalizing ? "Finalizing…" : "Finalize Refund & Print"}
+                      </Button>
+                      {(active.billTyp ?? 0) === 1 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isFinalizing}
+                          onClick={() => void handlePrintReceipt()}
+                        >
+                          Reprint Receipt
+                        </Button>
+                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
@@ -1099,6 +1206,14 @@ export function SalesReturnWorkspacePageContent() {
           />
         </div>
       </div>
+
+      {receiptToPrint ? (
+        <SalesThermalReceipt
+          receipt={receiptToPrint}
+          width={80}
+          onClose={() => setReceiptToPrint(null)}
+        />
+      ) : null}
 
       <SalesAddCustomerSheet
         open={addCustomerOpen}

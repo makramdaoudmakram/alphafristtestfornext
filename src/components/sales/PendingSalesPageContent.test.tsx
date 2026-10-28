@@ -284,7 +284,9 @@ async function fillMatchingPayment() {
     target: { value: "1" },
   });
   await waitFor(() => expect(getSalePaymentMethods).toHaveBeenCalledWith("token-1", 1));
-  const input = await screen.findByDisplayValue("0");
+  const cashCheckbox = await screen.findByRole("checkbox", { name: /Cash/i });
+  fireEvent.click(cashCheckbox);
+  const input = await screen.findByLabelText(/Cash amount/i);
   fireEvent.change(input, { target: { value: "150" } });
 }
 
@@ -398,8 +400,10 @@ describe("PendingSalesPageContent", () => {
 
     fireEvent.change(screen.getByLabelText("Sales Kind"), { target: { value: "1" } });
     await waitFor(() => expect(getSalePaymentMethods).toHaveBeenCalled());
-    const amount = await screen.findByDisplayValue("0");
-    fireEvent.change(amount, { target: { value: "150" } });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Cash/i }));
+    fireEvent.change(await screen.findByLabelText(/Cash amount/i), {
+      target: { value: "150" },
+    });
 
     await waitFor(() =>
       expect(getSaleDeliveryContext).toHaveBeenCalledWith("token-1", 601)
@@ -410,7 +414,7 @@ describe("PendingSalesPageContent", () => {
     render(<PendingSalesPageContent />);
     await completeFinalizableState();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Sale" }));
 
     await waitFor(() =>
       expect(finalizeSalePayment).toHaveBeenCalledWith("token-1", {
@@ -437,7 +441,7 @@ describe("PendingSalesPageContent", () => {
     render(<PendingSalesPageContent />);
     await completeFinalizableState();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalize & Print" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize with Print" }));
 
     await waitFor(() => expect(finalizeSalePayment).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(getSalesReceipt).toHaveBeenCalledWith("token-1", 601));
@@ -452,16 +456,14 @@ describe("PendingSalesPageContent", () => {
     await verifyFinalizingEmployee();
     vi.mocked(toast.success).mockClear(); // ignore the employee-verification toast
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Sale" }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("shift closed")
     );
     expect(toast.success).not.toHaveBeenCalled();
     expect(screen.getByText("601")).toBeInTheDocument();
-    expect(
-      ((await screen.findByDisplayValue("150")) as HTMLInputElement).value
-    ).toBe("150");
+    expect((await screen.findByLabelText(/Cash amount/i)).value).toBe("150");
     // No list refresh happens on failure: the row stays authoritative.
     expect(getPendingSales).toHaveBeenCalledTimes(1);
   });
@@ -474,7 +476,7 @@ describe("PendingSalesPageContent", () => {
     render(<PendingSalesPageContent />);
     await completeFinalizableState();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Sale" }));
 
     await waitFor(() =>
       expect(toast.message).toHaveBeenCalledWith(
@@ -511,14 +513,16 @@ describe("PendingSalesPageContent", () => {
 
     fireEvent.change(screen.getByLabelText("Sales Kind"), { target: { value: "2" } });
     await waitFor(() => expect(getSalePaymentMethods).toHaveBeenCalled());
-    const amount = await screen.findByDisplayValue("0");
-    fireEvent.change(amount, { target: { value: "150" } });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Cash/i }));
+    fireEvent.change(await screen.findByLabelText(/Cash amount/i), {
+      target: { value: "150" },
+    });
 
     expect(
       await screen.findByText(/Save the delivery service for this invoice/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Finalize & Print" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize Sale" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize with Print" })).toBeDisabled();
     expect(finalizeSalePayment).not.toHaveBeenCalled();
   });
 
@@ -534,17 +538,17 @@ describe("PendingSalesPageContent", () => {
     await verifyFinalizingEmployee();
 
     expect(screen.getByText("Customer is required before finalization.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Finalize & Print" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize Sale" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize with Print" })).toBeDisabled();
 
     // Picking a customer unlocks both buttons and its code rides on the finalize call.
     fireEvent.click(screen.getByRole("button", { name: "Pick customer 42" }));
     await waitFor(() =>
       expect(screen.getByText("42 — عميل")).toBeInTheDocument()
     );
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Finalize Sale" })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Sale" }));
     await waitFor(() =>
       expect(finalizeSalePayment).toHaveBeenCalledWith(
         "token-1",
@@ -559,8 +563,8 @@ describe("PendingSalesPageContent", () => {
     await fillMatchingPayment();
 
     expect(screen.getByText(/Verify the finalizing employee code/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Finalize & Print" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize Sale" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize with Print" })).toBeDisabled();
     expect(finalizeSalePayment).not.toHaveBeenCalled();
   });
 
@@ -577,7 +581,7 @@ describe("PendingSalesPageContent", () => {
     await verifyFinalizingEmployee("e5f6");
 
     expect(toast.error).toHaveBeenCalledWith("Sales Man not found");
-    expect(screen.getByRole("button", { name: "Finalize" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finalize Sale" })).toBeDisabled();
   });
 
   it("changing the selection loads the newly selected invoice only", async () => {
@@ -665,7 +669,8 @@ describe("PendingSalesPageContent", () => {
     expect(screen.getByText("Amount already paid: 0.00")).toBeInTheDocument();
     expect(screen.getByText("Remaining balance: 180.00")).toBeInTheDocument();
 
-    const amount = (await screen.findByDisplayValue("0")) as HTMLInputElement;
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Cash/i }));
+    const amount = await screen.findByLabelText(/Cash amount/i);
     fireEvent.change(amount, { target: { value: "80" } });
     await waitFor(() =>
       expect(screen.getByText("Payment entered: 80.00")).toBeInTheDocument()
@@ -685,7 +690,7 @@ describe("PendingSalesPageContent", () => {
     // Both buttons validate against that same total: one payment line, no double delivery charge.
     fireEvent.change(amount, { target: { value: "190" } });
     await verifyFinalizingEmployee();
-    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize Sale" }));
     await waitFor(() =>
       expect(finalizeSalePayment).toHaveBeenCalledWith(
         "token-1",
@@ -706,8 +711,10 @@ describe("PendingSalesPageContent", () => {
 
     fireEvent.change(screen.getByLabelText("Sales Kind"), { target: { value: "1" } });
     await waitFor(() => expect(getSalePaymentMethods).toHaveBeenCalled());
-    const amount = await screen.findByDisplayValue("0");
-    fireEvent.change(amount, { target: { value: "150" } });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Cash/i }));
+    fireEvent.change(await screen.findByLabelText(/Cash amount/i), {
+      target: { value: "150" },
+    });
 
     await waitFor(() =>
       expect(getSaleDeliveryContext).toHaveBeenCalledWith("token-1", 601)

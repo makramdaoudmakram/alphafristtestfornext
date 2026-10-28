@@ -81,6 +81,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.sales.view,
       },
       {
+        title: "مرتجع مشتريات الفرع",
+        href: "/dashboard/pharm/transactions/pharmacy-purchase-return",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
         title: "التحويلات من الصيدليات",
         href: "/dashboard/pharm/transactions/pharmacy-acceptance",
         permission: PERMISSIONS.sales.view,
@@ -100,6 +105,24 @@ export const SIDEBAR_NAV: NavItem[] = [
         title: "مرتجع الصيدلية للمخزن الرئيسي",
         href: "/dashboard/pharm/transactions/pharm-to-store-send",
         permission: PERMISSIONS.sales.view,
+      },
+    ],
+    groups: [
+      {
+        title: "Report",
+        permission: PERMISSIONS.sales.view,
+        items: [
+          {
+            title: "Shift Print",
+            href: "/dashboard/pharm/shift-print",
+            permission: PERMISSIONS.sales.view,
+          },
+          {
+            title: "تقرير فواتير المبيعات",
+            href: "/dashboard/pharm/sales-invoice-report",
+            permission: PERMISSIONS.sales.view,
+          },
+        ],
       },
     ],
   },
@@ -226,6 +249,10 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/sales-kind",
           },
           {
+            title: "تصنيف طرق الدفع",
+            href: "/dashboard/sales-payment-classify",
+          },
+          {
             title: "تخصيص نوع البيع",
             href: "/dashboard/sales-kind-assignment",
             permission: PERMISSIONS.salesKindAssignment.view,
@@ -319,11 +346,7 @@ export const SIDEBAR_NAV: NavItem[] = [
             title: "الموردين",
             href: "/dashboard/vendors",
           },
-           {
-            title: "import leadger",
-            href: "/dashboard/ledger-import",
-          },
-            {
+          {
         title: "تعديل الفواتير المحفوظه",
         href: "/dashboard/transactions/purchase/reversal",
         permission: null,
@@ -410,11 +433,14 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/companies": "Company",
   "/dashboard/pharm": "Pharm",
   "/dashboard/pharm/transactions/pharmacy-purchase": "Pharmacy Purchase",
+  "/dashboard/pharm/transactions/pharmacy-purchase-return": "Pharmacy Purchase Return",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Pharmacy Acceptance",
   "/dashboard/pharm/transactions/stor-to-pharm": "Store-to-Pharm",
   "/dashboard/pharm/transactions/pharm-to-store": "Pharm-to-Store",
   "/dashboard/pharm/transactions/pharm-to-store-send": "Pharmacy → Main Store Return",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",
+  "/dashboard/pharm/shift-print": "Shift Print",
+  "/dashboard/pharm/sales-invoice-report": "Sales Invoice Report",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",
   "/dashboard/payment-voucher": "Payment Voucher",
@@ -449,6 +475,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales-movement-setting": "Sales Movement",
   "/dashboard/settings/sales-push-list": "SalesPushList",
   "/dashboard/sales-kind": "Sales Kind",
+  "/dashboard/sales-payment-classify": "Sales Payment Classification",
   "/dashboard/sales-kind-assignment": "Sales Kind Assignment",
   "/dashboard/sales-pay-method": "Sales Payment Method",
   "/dashboard/sales-payment-assiment": "Sales Payment Assignment",

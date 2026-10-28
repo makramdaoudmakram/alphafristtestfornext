@@ -169,6 +169,8 @@ export type CreateSalesReturnRequest = {
     discountMode: string | null;
     discountPercent: number;
     discountValue: number;
+    returnBatchExpDate?: string | null;
+    returnBatchNo?: string | null;
   }>;
   payments: null;
 };

@@ -40,20 +40,16 @@ export function patchSalesReturnLineFromStockSearch(
   language: SalesSearchLanguage,
   storeId: string
 ): SalesWorkspaceLine | { error: string } {
-  if (!searchResult.stockId || searchResult.stockId <= 0) {
-    return {
-      error: `No stock record for item "${searchResult.itemCode}" batch "${searchResult.batchNo?.trim() || "—"}".`,
-    };
-  }
+  const hasExistingBatch =
+    Boolean(searchResult.stockId && searchResult.stockId > 0) &&
+    Boolean(searchResult.batchNo?.trim());
 
-  if (!searchResult.batchNo?.trim()) {
-    return {
-      error: `Item "${searchResult.itemCode}" has no batch on the selected stock record.`,
-    };
-  }
-
-  const displayAvailable = resolveSalesReturnDisplayAvailableQty(searchResult);
-  const baseAvailable = resolveSalesReturnBaseAvailableQty(catalogItem, searchResult);
+  const displayAvailable = hasExistingBatch
+    ? resolveSalesReturnDisplayAvailableQty(searchResult)
+    : 0;
+  const baseAvailable = hasExistingBatch
+    ? resolveSalesReturnBaseAvailableQty(catalogItem, searchResult)
+    : 0;
 
   const unitId = getItemDefaultUnitId(catalogItem) ?? 0;
   if (unitId <= 0) {
@@ -68,10 +64,19 @@ export function patchSalesReturnLineFromStockSearch(
     itmNameEn: catalogItem.itmNameEn ?? searchResult.itemNameEn ?? "",
   };
   const name = salesItemPrimaryLabel(hitLabel, language);
+  const catalogSell = catalogItem.itmDefSellPrice;
   const basePrice = money(
-    Number.isFinite(searchResult.salesPrice) ? searchResult.salesPrice : 0
+    catalogSell != null && Number.isFinite(catalogSell) && catalogSell > 0
+      ? catalogSell
+      : Number.isFinite(searchResult.salesPrice)
+        ? searchResult.salesPrice
+        : 0
   );
-  const storId = Number.parseInt(storeId.trim(), 10);
+  const storSource =
+    searchResult.storeId != null && searchResult.storeId > 0
+      ? String(searchResult.storeId)
+      : storeId.trim();
+  const storId = Number.parseInt(storSource, 10);
 
   // Fresh line state — do not spread `line` (avoids stale discount / pending batch fields).
   return {
@@ -84,8 +89,8 @@ export function patchSalesReturnLineFromStockSearch(
     itmNameEn: hitLabel.itmNameEn,
     itemName: name,
     searchText: name,
-    stockId: searchResult.stockId,
-    batchNo: searchResult.batchNo.trim(),
+    stockId: hasExistingBatch ? (searchResult.stockId ?? 0) : 0,
+    batchNo: hasExistingBatch ? searchResult.batchNo.trim() : "",
     expDate: searchResult.expDate?.slice(0, 10) ?? null,
     storId: Number.isFinite(storId) ? storId : 0,
     availableQty: baseAvailable,

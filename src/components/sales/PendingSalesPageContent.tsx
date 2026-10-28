@@ -7,6 +7,7 @@ import { PageGuard } from "@/components/permissions/page-guard";
 import { SalesCustomerAutocomplete } from "@/components/sales/SalesCustomerAutocomplete";
 import { SalesThermalReceipt } from "@/components/sales/SalesThermalReceipt";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -77,6 +78,9 @@ export function PendingSalesPageContent() {
   const [salesKinds, setSalesKinds] = useState<SalesPaymentKindOption[]>([]);
   const [salesKindId, setSalesKindId] = useState<number | null>(null);
   const [methods, setMethods] = useState<SalesPaymentMethodOption[]>([]);
+  const [selectedPaymentMethodIds, setSelectedPaymentMethodIds] = useState<number[]>(
+    []
+  );
   const [amounts, setAmounts] = useState<Record<number, string>>({});
 
   const [loadingSale, setLoadingSale] = useState(false);
@@ -149,6 +153,7 @@ export function PendingSalesPageContent() {
     setSalesKinds([]);
     setSalesKindId(null);
     setMethods([]);
+    setSelectedPaymentMethodIds([]);
     setAmounts({});
     setCustomerName("");
     setTelephone("");
@@ -187,6 +192,7 @@ export function PendingSalesPageContent() {
     setDeliveryContext(null);
     setMethods([]);
     setSalesKindId(null);
+    setSelectedPaymentMethodIds([]);
     setAmounts({});
     setSaleDetails(null);
     setCustomerQuery("");
@@ -277,6 +283,7 @@ export function PendingSalesPageContent() {
       nextId != null && Number.isInteger(nextId) && nextId > 0 ? nextId : null;
     setSalesKindId(kindId);
     setMethods([]);
+    setSelectedPaymentMethodIds([]);
     setAmounts({});
 
     if (!token || !paymentContext || kindId == null) return;
@@ -296,6 +303,23 @@ export function PendingSalesPageContent() {
       );
     } finally {
       setLoadingMethods(false);
+    }
+  };
+
+  const togglePaymentMethod = (methodId: number, checked: boolean) => {
+    if (isFinalizing) return;
+    setSelectedPaymentMethodIds((prev) => {
+      if (checked) {
+        return prev.includes(methodId) ? prev : [...prev, methodId];
+      }
+      return prev.filter((id) => id !== methodId);
+    });
+    if (!checked) {
+      setAmounts((prev) => {
+        const next = { ...prev };
+        delete next[methodId];
+        return next;
+      });
     }
   };
 
@@ -319,6 +343,7 @@ export function PendingSalesPageContent() {
   const paymentRequiresDelivery = methods.some(
     (m) =>
       m.deleveryRequair &&
+      selectedPaymentMethodIds.includes(m.paymentMethodId) &&
       money(Number(amounts[m.paymentMethodId] ?? 0) || 0) > 0
   );
   const deliveryRequired = deliveryMandatory || paymentRequiresDelivery || deliveryWanted;
@@ -375,12 +400,12 @@ export function PendingSalesPageContent() {
   const paymentTotal = useMemo(
     () =>
       money(
-        methods.reduce((sum, m) => {
-          const parsed = Number(amounts[m.paymentMethodId] ?? "");
+        selectedPaymentMethodIds.reduce((sum, methodId) => {
+          const parsed = Number(amounts[methodId] ?? "");
           return sum + (Number.isFinite(parsed) ? parsed : 0);
         }, 0)
       ),
-    [methods, amounts]
+    [selectedPaymentMethodIds, amounts]
   );
   // Paid vs due vs remaining: totals come only from the server context
   // (finalPayableAmount already includes a saved delivery service cost).
@@ -526,15 +551,25 @@ export function PendingSalesPageContent() {
       return;
     }
 
-    const entries = methods
-      .map((m) => ({
-        paymentMethodId: m.paymentMethodId,
-        amount: money(Number(amounts[m.paymentMethodId] ?? 0) || 0),
+    if (selectedPaymentMethodIds.length === 0) {
+      toast.error("Select at least one payment method.");
+      return;
+    }
+
+    const entries = selectedPaymentMethodIds
+      .map((paymentMethodId) => ({
+        paymentMethodId,
+        amount: money(Number(amounts[paymentMethodId] ?? 0) || 0),
       }))
       .filter((p) => p.amount > 0);
 
     if (entries.length === 0) {
-      toast.error("Enter at least one payment amount greater than zero.");
+      toast.error("Enter a payment amount greater than zero for each selected method.");
+      return;
+    }
+
+    if (entries.length !== selectedPaymentMethodIds.length) {
+      toast.error("Every selected payment method needs an amount greater than zero.");
       return;
     }
 
@@ -613,6 +648,7 @@ export function PendingSalesPageContent() {
       salesKindId != null &&
       salesKindId > 0 &&
       methods.length > 0 &&
+      selectedPaymentMethodIds.length > 0 &&
       totalsMatch &&
       blockReasons.length === 0
   );
@@ -791,6 +827,114 @@ export function PendingSalesPageContent() {
                     )}
                   </div>
 
+                  <div className="space-y-2 border-t pt-4">
+                    <p className="text-sm font-medium">Payment</p>
+                    <Label htmlFor="pending-sales-kind">Sales Kind</Label>
+                    <select
+                      id="pending-sales-kind"
+                      className="border-input bg-background h-9 w-full rounded-md border px-2"
+                      disabled={isFinalizing || salesKinds.length === 0}
+                      value={salesKindId ?? ""}
+                      onChange={(e) => void onSalesKindChange(e.target.value)}
+                    >
+                      <option value="">Select Sales Kind</option>
+                      {salesKinds.map((k) => (
+                        <option key={k.salesKindId} value={k.salesKindId}>
+                          {k.salesKindName?.trim() || `Kind #${k.salesKindId}`}
+                        </option>
+                      ))}
+                    </select>
+                    {salesKinds.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        No sales kinds assigned to the current pharmacy.
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-3 border-t pt-4">
+                    <Label>Payment methods</Label>
+                    {!salesKindId ? (
+                      <p className="text-muted-foreground text-sm">
+                        Select a sales kind to load payment methods.
+                      </p>
+                    ) : methods.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        {loadingMethods
+                          ? "Loading payment methods…"
+                          : "No payment methods assigned for this pharmacy and sales kind."}
+                      </p>
+                    ) : (
+                      methods.map((method) => {
+                        const checked = selectedPaymentMethodIds.includes(
+                          method.paymentMethodId
+                        );
+                        const methodLabel =
+                          method.paymentName?.trim() ||
+                          `Method ${method.paymentMethodId}`;
+                        return (
+                          <div
+                            key={method.paymentMethodId}
+                            className="flex flex-col gap-2 rounded-md border p-3"
+                          >
+                            <label className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={checked}
+                                disabled={isFinalizing}
+                                onChange={(event) =>
+                                  togglePaymentMethod(
+                                    method.paymentMethodId,
+                                    event.target.checked
+                                  )
+                                }
+                              />
+                              <span>{methodLabel}</span>
+                            </label>
+                            {checked ? (
+                              <div className="space-y-1 pl-6">
+                                <Label htmlFor={`pending-pay-amt-${method.paymentMethodId}`}>
+                                  {methodLabel} amount
+                                </Label>
+                                <Input
+                                  id={`pending-pay-amt-${method.paymentMethodId}`}
+                                  className="w-40"
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  disabled={isFinalizing}
+                                  value={amounts[method.paymentMethodId] ?? ""}
+                                  onChange={(e) =>
+                                    setAmounts((prev) => ({
+                                      ...prev,
+                                      [method.paymentMethodId]: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })
+                    )}
+                    <div className="grid gap-1 text-sm">
+                      <div>Amount already paid: {paidAmount.toFixed(2)}</div>
+                      <div>Payment entered: {paymentTotal.toFixed(2)}</div>
+                      <div className="font-medium">
+                        {savedDelivery?.serviceCost != null
+                          ? "Total Due (incl. delivery service):"
+                          : "Total Due:"}{" "}
+                        {payable.toFixed(2)}
+                      </div>
+                      <div>Remaining balance: {remainingBalance.toFixed(2)}</div>
+                    </div>
+                    {salesKindId &&
+                    methods.length > 0 &&
+                    selectedPaymentMethodIds.length === 0 ? (
+                      <p className="text-muted-foreground text-sm">
+                        Select a payment method, then enter the amount before finalizing.
+                      </p>
+                    ) : null}
+                  </div>
+
                   <div className="space-y-3 border-t pt-4">
                     <p className="text-sm font-medium">
                       Customer
@@ -964,79 +1108,6 @@ export function PendingSalesPageContent() {
                   </div>
 
                   <div className="space-y-2 border-t pt-4">
-                    <Label htmlFor="pending-sales-kind">Sales Kind</Label>
-                    <select
-                      id="pending-sales-kind"
-                      className="border-input bg-background h-9 w-full rounded-md border px-2"
-                      disabled={isFinalizing || salesKinds.length === 0}
-                      value={salesKindId ?? ""}
-                      onChange={(e) => void onSalesKindChange(e.target.value)}
-                    >
-                      <option value="">Select Sales Kind</option>
-                      {salesKinds.map((k) => (
-                        <option key={k.salesKindId} value={k.salesKindId}>
-                          {k.salesKindName?.trim() || `Kind #${k.salesKindId}`}
-                        </option>
-                      ))}
-                    </select>
-                    {salesKinds.length === 0 ? (
-                      <p className="text-muted-foreground text-sm">
-                        No sales kinds assigned to the current pharmacy.
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-3 border-t pt-4">
-                    {!salesKindId ? (
-                      <p className="text-muted-foreground text-sm">
-                        Select a sales kind to load payment methods.
-                      </p>
-                    ) : methods.length === 0 ? (
-                      <p className="text-muted-foreground text-sm">
-                        {loadingMethods
-                          ? "Loading payment methods…"
-                          : "No payment methods assigned for this pharmacy and sales kind."}
-                      </p>
-                    ) : (
-                      methods.map((m) => (
-                        <div
-                          key={m.paymentMethodId}
-                          className="flex items-center justify-between gap-2"
-                        >
-                          <Label className="min-w-24">
-                            {m.paymentName || m.paymentMethodId}
-                          </Label>
-                          <Input
-                            className="w-32"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            disabled={isFinalizing}
-                            value={amounts[m.paymentMethodId] ?? "0"}
-                            onChange={(e) =>
-                              setAmounts((prev) => ({
-                                ...prev,
-                                [m.paymentMethodId]: e.target.value,
-                              }))
-                            }
-                          />
-                        </div>
-                      ))
-                    )}
-                    <div className="grid gap-1 text-sm">
-                      <div>Amount already paid: {paidAmount.toFixed(2)}</div>
-                      <div>Payment entered: {paymentTotal.toFixed(2)}</div>
-                      <div className="font-medium">
-                        {savedDelivery?.serviceCost != null
-                          ? "Total Due (incl. delivery service):"
-                          : "Total Due:"}{" "}
-                        {payable.toFixed(2)}
-                      </div>
-                      <div>Remaining balance: {remainingBalance.toFixed(2)}</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 border-t pt-4">
                     <Label htmlFor="pending-finalize-emp-code">Finalizing Employee *</Label>
                     <div className="flex flex-wrap gap-2">
                       <Input
@@ -1101,14 +1172,14 @@ export function PendingSalesPageContent() {
                       variant="outline"
                       {...finalizeButtonDisabledProps(false)}
                     >
-                      {isFinalizing ? "Finalizing…" : "Finalize"}
+                      {isFinalizing ? "Finalizing…" : "Finalize Sale"}
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       {...finalizeButtonDisabledProps(true)}
                     >
-                      {isFinalizing ? "Finalizing…" : "Finalize & Print"}
+                      {isFinalizing ? "Finalizing…" : "Finalize with Print"}
                     </Button>
                   </div>
                 </>

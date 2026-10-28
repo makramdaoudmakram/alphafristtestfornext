@@ -1,30 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ShiftClosingPanel } from "@/components/shift/ShiftClosingPanel";
 import {
   ApiError,
   closeShift,
   getShiftClosingPreview,
+  getShiftClosingReceipt,
   lookupSalesManByPassword,
 } from "@/lib/api-client";
-import type { ShiftClosingPreview, ShiftStatus } from "@/types/shift";
-
-const routerPush = vi.fn();
-
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: routerPush }),
-}));
-
-vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-  }: {
-    children: ReactNode;
-    href: string;
-  }) => <a href={href}>{children}</a>,
-}));
+import type {
+  ShiftClosingPreview,
+  ShiftClosingTotals,
+  ShiftStatus,
+} from "@/types/shift";
 
 vi.mock("@/lib/api-client", () => ({
   ApiError: class ApiError extends Error {
@@ -37,6 +25,7 @@ vi.mock("@/lib/api-client", () => ({
     }
   },
   getShiftClosingPreview: vi.fn(),
+  getShiftClosingReceipt: vi.fn(),
   closeShift: vi.fn(),
   lookupSalesManByPassword: vi.fn(),
 }));
@@ -66,7 +55,7 @@ const openStatus: ShiftStatus = {
   movName: "Sales",
 };
 
-const baseTotals = {
+const baseTotals: ShiftClosingTotals = {
   salesPostPay: 10,
   salesPostPayDiscount: 1,
   salesMedicalDiscount: 2,
@@ -79,6 +68,15 @@ const baseTotals = {
   salesParmCost: 48,
   salesExpensive: 3,
   salesPurches: 12,
+  salesReturnTotal: 0,
+  purchaseReturnTotal: 0,
+  deliveryValue: 0,
+  deliveryCount: 0,
+  totalReturnSales: 0,
+  returnCash: 0,
+  totalPurchReturn: 0,
+  totalSales: 0,
+  totalDiscountValue: 0,
 };
 
 function preview(overrides: Partial<ShiftClosingPreview> = {}): ShiftClosingPreview {
@@ -95,6 +93,7 @@ function preview(overrides: Partial<ShiftClosingPreview> = {}): ShiftClosingPrev
     blockReason: null,
     unresolvedSales: [],
     pendingDeliveries: [],
+    paymentClassifications: [],
     totals: baseTotals,
     ...overrides,
   };
@@ -131,14 +130,51 @@ async function verifySalesMan(password = "A1B2") {
 describe("ShiftClosingPanel", () => {
   beforeEach(() => {
     vi.mocked(getShiftClosingPreview).mockReset();
+    vi.mocked(getShiftClosingReceipt).mockResolvedValue({
+      summary: {
+        pharmacyName: "Test Pharm",
+        scId: 3,
+        startTime: null,
+        totalSales: "0",
+        totalReturn: 0,
+        totalExpen: 0,
+        totalPurch: 0,
+        totalPurchRet: 0,
+        deliveryValue: 0,
+        deliveryCount: 0,
+        totalDiscount: 0,
+        totalTransfer: 0,
+      },
+      classifications: [],
+    });
     vi.mocked(closeShift).mockReset();
     vi.mocked(lookupSalesManByPassword).mockReset();
-    routerPush.mockReset();
+    vi.stubGlobal("print", vi.fn());
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("displays Total Sales in closing totals preview", async () => {
+    vi.mocked(getShiftClosingPreview).mockResolvedValue(
+      preview({
+        totals: { ...baseTotals, totalSales: 275 },
+      })
+    );
+    render(
+      <ShiftClosingPanel token="t1" status={openStatus} onShiftClosed={vi.fn()} />
+    );
+    await openCloseForm();
+    await verifySalesMan();
+    fireEvent.click(
+      screen.getByText(/Closing totals preview \(19 items\)/i)
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Total Sales")).toBeInTheDocument()
+    );
+    expect(screen.getByText("275.00")).toBeInTheDocument();
   });
 
   it("loads preview after employee verification", async () => {
@@ -149,14 +185,15 @@ describe("ShiftClosingPanel", () => {
     await openCloseForm();
     await verifySalesMan();
     await waitFor(() => expect(getShiftClosingPreview).toHaveBeenCalledWith("t1", 3));
-    expect(screen.getByDisplayValue("50.00")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Opening balance/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Actual pharmacy cash/i)).not.toBeInTheDocument();
   });
 
-  it("redirects to pending sales when unfinalized sales exist", async () => {
+  it("shows invoice warning under closing notes when unfinalized sales exist", async () => {
     vi.mocked(getShiftClosingPreview).mockResolvedValue(
       preview({
         canClose: false,
-        blockReason: "There are unfinalized sales",
+        blockReason: "You have to finish all pending invoices before closing the shift.",
         unresolvedSales: [{ sthId: 701, totalBillNet: 90, createdAt: null }],
       })
     );
@@ -167,16 +204,20 @@ describe("ShiftClosingPanel", () => {
     await openCloseForm();
     await submitEmployeePassword();
     await waitFor(() =>
-      expect(routerPush).toHaveBeenCalledWith("/dashboard/sales/pending")
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /You have to finish all pending invoices before closing the shift/
+      )
     );
-    expect(screen.queryByLabelText(/Actual pharmacy cash/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit close" })
+    ).toBeDisabled();
   });
 
-  it("redirects to pending delivery when deliveries are open", async () => {
+  it("shows delivery warning under closing notes when deliveries are open", async () => {
     vi.mocked(getShiftClosingPreview).mockResolvedValue(
       preview({
         canClose: false,
-        blockReason: "Pending delivery",
+        blockReason: "You have to finish all pending deliveries before closing the shift.",
         pendingDeliveries: [
           { sthId: 801, contact: "A", tel: "1", delivStat: "P" },
         ],
@@ -189,12 +230,85 @@ describe("ShiftClosingPanel", () => {
     await openCloseForm();
     await submitEmployeePassword();
     await waitFor(() =>
-      expect(routerPush).toHaveBeenCalledWith("/dashboard/sales/delivery")
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /You have to finish all pending deliveries before closing the shift/
+      )
     );
-    expect(screen.queryByLabelText(/Actual pharmacy cash/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit close" })).toBeDisabled();
   });
 
-  it("submits close with cash, transfer, and password", async () => {
+  it("shows both warnings when invoices and deliveries are pending", async () => {
+    vi.mocked(getShiftClosingPreview).mockResolvedValue(
+      preview({
+        canClose: false,
+        unresolvedSales: [{ sthId: 701, totalBillNet: 90, createdAt: null }],
+        pendingDeliveries: [
+          { sthId: 801, contact: "A", tel: "1", delivStat: "P" },
+        ],
+      })
+    );
+
+    render(
+      <ShiftClosingPanel token="t1" status={openStatus} onShiftClosed={vi.fn()} />
+    );
+    await openCloseForm();
+    await submitEmployeePassword();
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(
+      /You have to finish all pending invoices before closing the shift/
+    );
+    expect(alert).toHaveTextContent(
+      /You have to finish all pending deliveries before closing the shift/
+    );
+  });
+
+  it("renders one textbox per distinct payment classification", async () => {
+    vi.mocked(getShiftClosingPreview).mockResolvedValue(
+      preview({
+        paymentClassifications: [
+          { salesClassifyId: 1, displayName: "Cash", salesInvoiceCount: 7 },
+          { salesClassifyId: 2, displayName: "Visa", salesInvoiceCount: 5 },
+          { salesClassifyId: 3, displayName: "InstaPay", salesInvoiceCount: 3 },
+        ],
+      })
+    );
+
+    render(
+      <ShiftClosingPanel token="t1" status={openStatus} onShiftClosed={vi.fn()} />
+    );
+    await openCloseForm();
+    await verifySalesMan();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Cash (7)")).toBeInTheDocument()
+    );
+    expect(screen.getByLabelText("Visa (5)")).toBeInTheDocument();
+    expect(screen.getByLabelText("InstaPay (3)")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Cash (7)"), {
+      target: { value: "100.50" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh preview" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Cash (7)")).toHaveValue(100.5)
+    );
+  });
+
+  it("shows empty message when no classifications exist", async () => {
+    vi.mocked(getShiftClosingPreview).mockResolvedValue(preview());
+    render(
+      <ShiftClosingPanel token="t1" status={openStatus} onShiftClosed={vi.fn()} />
+    );
+    await openCloseForm();
+    await verifySalesMan();
+    await waitFor(() =>
+      expect(
+        screen.getByText(/No payment classifications were found/i)
+      ).toBeInTheDocument()
+    );
+  });
+
+  it("submits close with password using API cash placeholder", async () => {
     vi.mocked(getShiftClosingPreview).mockResolvedValue(preview());
     vi.mocked(closeShift).mockResolvedValue({
       scId: 3,
@@ -211,23 +325,18 @@ describe("ShiftClosingPanel", () => {
     );
     await openCloseForm();
     await verifySalesMan("A1B2");
-    await waitFor(() => screen.getByLabelText(/Actual pharmacy cash/));
-    fireEvent.change(screen.getByLabelText(/Actual pharmacy cash/), {
-      target: { value: "100" },
-    });
-    fireEvent.change(screen.getByLabelText(/Head-office transfer/), {
-      target: { value: "75" },
-    });
+    await waitFor(() => screen.getByRole("button", { name: "Submit close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Submit close" }));
 
     await waitFor(() =>
       expect(closeShift).toHaveBeenCalledWith("t1", {
         scId: 3,
-        actualPharmacyCash: 100,
-        headOfficeTransferAmount: 75,
+        actualPharmacyCash: 0,
+        headOfficeTransferAmount: 0,
         employeePassword: "A1B2",
         closingNotes: null,
+        paymentCollection: [],
       })
     );
     expect(toast.success).toHaveBeenCalled();
@@ -244,13 +353,7 @@ describe("ShiftClosingPanel", () => {
     );
     await openCloseForm();
     await verifySalesMan("x");
-    await waitFor(() => screen.getByLabelText(/Actual pharmacy cash/));
-    fireEvent.change(screen.getByLabelText(/Actual pharmacy cash/), {
-      target: { value: "0" },
-    });
-    fireEvent.change(screen.getByLabelText(/Head-office transfer/), {
-      target: { value: "0" },
-    });
+    await waitFor(() => screen.getByRole("button", { name: "Submit close" }));
     fireEvent.click(screen.getByRole("button", { name: "Submit close" }));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -282,6 +385,54 @@ describe("ShiftClosingPanel", () => {
     expect(screen.getByPlaceholderText("Enter employee password")).toBeInTheDocument();
   });
 
+  it("submits payment collection amounts from Cash and Visa inputs", async () => {
+    vi.mocked(getShiftClosingPreview).mockResolvedValue(
+      preview({
+        paymentClassifications: [
+          { salesClassifyId: 1, displayName: "Cash", salesInvoiceCount: 2 },
+          { salesClassifyId: 2, displayName: "Visa", salesInvoiceCount: 1 },
+        ],
+      })
+    );
+    vi.mocked(closeShift).mockResolvedValue({
+      scId: 3,
+      closedAt: null,
+      totals: baseTotals,
+      nextScId: 4,
+      nextOpeningBalance: 0,
+      nextShiftStartedAt: null,
+    });
+
+    render(
+      <ShiftClosingPanel token="t1" status={openStatus} onShiftClosed={vi.fn()} />
+    );
+    await openCloseForm();
+    await verifySalesMan("A1B2");
+    await waitFor(() => screen.getByLabelText("Cash (2)"));
+
+    fireEvent.change(screen.getByLabelText("Cash (2)"), {
+      target: { value: "2000" },
+    });
+    fireEvent.change(screen.getByLabelText("Visa (1)"), {
+      target: { value: "1500" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Submit close" }));
+
+    await waitFor(() =>
+      expect(closeShift).toHaveBeenCalledWith("t1", {
+        scId: 3,
+        actualPharmacyCash: 0,
+        headOfficeTransferAmount: 0,
+        employeePassword: "A1B2",
+        closingNotes: null,
+        paymentCollection: [
+          { salesClassifyId: 1, actualAmount: 2000 },
+          { salesClassifyId: 2, actualAmount: 1500 },
+        ],
+      })
+    );
+  });
+
   it("submits the latest verified employee after Change", async () => {
     vi.mocked(getShiftClosingPreview).mockResolvedValue(preview());
     vi.mocked(closeShift).mockResolvedValue({
@@ -297,13 +448,6 @@ describe("ShiftClosingPanel", () => {
     );
     await openCloseForm();
     await verifySalesMan("FIRST");
-    await waitFor(() => screen.getByLabelText(/Actual pharmacy cash/));
-    fireEvent.change(screen.getByLabelText(/Actual pharmacy cash/), {
-      target: { value: "50" },
-    });
-    fireEvent.change(screen.getByLabelText(/Head-office transfer/), {
-      target: { value: "10" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "Change" }));
     await waitFor(() =>
       expect(screen.getByPlaceholderText("Enter employee password")).toBeInTheDocument()

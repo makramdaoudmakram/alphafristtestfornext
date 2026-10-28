@@ -26,6 +26,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/stores": null,
   "/dashboard/vendors": null,
   "/dashboard/sales-kind": null,
+  "/dashboard/sales-payment-classify": null,
   "/dashboard/sales-kind-assignment": "SalesKindAssignment.View",
   "/dashboard/sales-pay-method": "SalesPayMethod.View",
   "/dashboard/sales-service": "SalesService.View",
@@ -43,6 +44,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/employ-info": null,
   "/dashboard/transactions/purchase": null,
   "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
+  "/dashboard/pharm/transactions/pharmacy-purchase-return": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
   "/dashboard/pharm/transactions/pharm-to-store": "Sales.View",
@@ -246,6 +248,11 @@ export const NAV_LINKS = [
   {
     href: "/dashboard/sales-kind",
     label: "Sales Kind",
+    permission: null,
+  },
+  {
+    href: "/dashboard/sales-payment-classify",
+    label: "Sales Payment Classification",
     permission: null,
   },
   {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classifyShiftClosingPreview } from "@/lib/shift-close-blockers";
+import {
+  getShiftCloseWarningMessages,
+  hasShiftCloseBlockers,
+  SHIFT_CLOSE_PENDING_DELIVERIES_WARNING,
+  SHIFT_CLOSE_PENDING_INVOICES_WARNING,
+} from "@/lib/shift-close-blockers";
 import type { ShiftClosingPreview } from "@/types/shift";
 
 const baseTotals = {
@@ -15,6 +20,8 @@ const baseTotals = {
   salesParmCost: 0,
   salesExpensive: 0,
   salesPurches: 0,
+  salesReturnTotal: 0,
+  purchaseReturnTotal: 0,
 };
 
 function preview(
@@ -38,32 +45,33 @@ function preview(
   };
 }
 
-describe("classifyShiftClosingPreview", () => {
-  it("flags pending sales before delivery", () => {
-    const result = classifyShiftClosingPreview(
-      preview({
-        unresolvedSales: [{ sthId: 1, totalBillNet: 10, createdAt: null }],
-        pendingDeliveries: [{ sthId: 2, contact: "a", tel: "b", delivStat: "P" }],
-      })
-    );
-    expect(result).toEqual({ ok: false, kind: "pending-sales" });
+describe("shift close blockers", () => {
+  it("reports both warnings when invoices and deliveries are pending", () => {
+    const input = preview({
+      canClose: false,
+      unresolvedSales: [{ sthId: 1, totalBillNet: 10, createdAt: null }],
+      pendingDeliveries: [{ sthId: 2, contact: "a", tel: "b", delivStat: "P" }],
+    });
+    expect(hasShiftCloseBlockers(input)).toBe(true);
+    expect(getShiftCloseWarningMessages(input)).toEqual([
+      SHIFT_CLOSE_PENDING_INVOICES_WARNING,
+      SHIFT_CLOSE_PENDING_DELIVERIES_WARNING,
+    ]);
   });
 
-  it("flags pending delivery when sales are clear", () => {
-    const result = classifyShiftClosingPreview(
-      preview({
-        pendingDeliveries: [{ sthId: 2, contact: "a", tel: "b", delivStat: "P" }],
-      })
-    );
-    expect(result).toEqual({ ok: false, kind: "pending-delivery" });
+  it("reports delivery warning only when sales are clear", () => {
+    const input = preview({
+      pendingDeliveries: [{ sthId: 2, contact: "a", tel: "b", delivStat: "P" }],
+    });
+    expect(hasShiftCloseBlockers(input)).toBe(true);
+    expect(getShiftCloseWarningMessages(input)).toEqual([
+      SHIFT_CLOSE_PENDING_DELIVERIES_WARNING,
+    ]);
   });
 
-  it("allows close when both lists are empty", () => {
+  it("reports no warnings when both lists are empty", () => {
     const input = preview();
-    const result = classifyShiftClosingPreview(input);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.preview).toEqual(input);
-    }
+    expect(hasShiftCloseBlockers(input)).toBe(false);
+    expect(getShiftCloseWarningMessages(input)).toEqual([]);
   });
 });

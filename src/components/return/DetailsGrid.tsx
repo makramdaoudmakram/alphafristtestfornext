@@ -106,6 +106,8 @@ type DetailsGridProps = {
   catalogLoading?: boolean;
   catalogLoaded?: boolean;
   disabled: boolean;
+  /** Pharmacy purchase return: hide tax / extra discount columns in the grid only. */
+  variant?: "default" | "pharm-purchase-return";
   /** Purchase Return: lines must be added via batch stock search, not catalog autocomplete. */
   batchFromSearchRequired?: boolean;
   selectedRowIndex: number;
@@ -128,6 +130,7 @@ export function DetailsGrid({
   catalogLoading = false,
   catalogLoaded = false,
   disabled,
+  variant = "default",
   batchFromSearchRequired = false,
   selectedRowIndex,
   onSelectRow,
@@ -303,7 +306,7 @@ export function DetailsGrid({
       },
     });
 
-    return [
+    const builtColumns: ColumnDef<ReturnDetail>[] = [
       {
         id: "line",
         header: "#",
@@ -631,8 +634,21 @@ export function DetailsGrid({
         ),
       },
     ];
+
+    if (variant === "pharm-purchase-return") {
+      const hidden = new Set([
+        "taxPercent",
+        "itmTaxPrice",
+        "itmTaxTotal",
+        "itmExtraDis",
+      ]);
+      return builtColumns.filter((column) => !hidden.has(String(column.id)));
+    }
+
+    return builtColumns;
   }, [
     disabled,
+    variant,
     batchFromSearchRequired,
     catalogItems,
     itemByCode,
@@ -649,6 +665,19 @@ export function DetailsGrid({
     applyUnitConversionToRow,
   ]);
 
+  const editableColumns = useMemo(() => {
+    if (variant !== "pharm-purchase-return") {
+      return RETURN_DETAIL_EDITABLE_COLUMNS;
+    }
+    const hidden = new Set([
+      "taxPercent",
+      "itmTaxPrice",
+      "itmTaxTotal",
+      "itmExtraDis",
+    ]);
+    return RETURN_DETAIL_EDITABLE_COLUMNS.filter((key) => !hidden.has(key));
+  }, [variant]);
+
   return (
     <MasterDetailGrid
       moduleKey="return"
@@ -658,7 +687,7 @@ export function DetailsGrid({
       columns={columns}
       data={rows}
       getRowId={(row) => row.clientRowId}
-      editableColumns={RETURN_DETAIL_EDITABLE_COLUMNS}
+      editableColumns={editableColumns}
       selectedRowIndex={selectedRowIndex}
       onSelectRow={onSelectRow}
       disabled={disabled}

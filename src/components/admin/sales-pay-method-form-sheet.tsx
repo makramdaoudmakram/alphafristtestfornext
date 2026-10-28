@@ -20,6 +20,7 @@ export type SalesPayMethodFormValues = {
   paymentName: string;
   affectsCash: boolean;
   salesKindId: string;
+  salesclasid: string;
   accountCode: string;
   active: boolean;
   deleveryRequair: boolean;
@@ -29,6 +30,7 @@ const emptyValues: SalesPayMethodFormValues = {
   paymentName: "",
   affectsCash: true,
   salesKindId: "",
+  salesclasid: "",
   accountCode: "",
   active: true,
   deleveryRequair: false,
@@ -39,6 +41,10 @@ function toFormValues(item: SalesPayMethodItem): SalesPayMethodFormValues {
     paymentName: item.paymentName ?? "",
     affectsCash: item.affectsCash,
     salesKindId: item.salesKindId > 0 ? String(item.salesKindId) : "",
+    salesclasid:
+      item.salesclasid != null && item.salesclasid > 0
+        ? String(item.salesclasid)
+        : "",
     accountCode: item.accountCode ?? "",
     active: item.active,
     deleveryRequair: item.deleveryRequair,
@@ -62,6 +68,7 @@ export function SalesPayMethodFormSheet({
   saving,
   accountOptions,
   salesKindOptions,
+  classificationOptions,
   lookupsLoading,
   onSubmit,
 }: {
@@ -71,6 +78,7 @@ export function SalesPayMethodFormSheet({
   saving?: boolean;
   accountOptions: ComboboxOption[];
   salesKindOptions: ComboboxOption[];
+  classificationOptions: ComboboxOption[];
   lookupsLoading?: boolean;
   onSubmit: (values: SalesPayMethodFormValues) => Promise<void>;
 }) {
@@ -95,6 +103,11 @@ export function SalesPayMethodFormSheet({
       { value: trimmed, label: `Sales kind #${trimmed}` },
     ];
   }, [salesKindOptions, values.salesKindId]);
+
+  const sheetClassificationOptions = useMemo(
+    () => withClearAndOrphan(classificationOptions, values.salesclasid),
+    [classificationOptions, values.salesclasid]
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -146,6 +159,28 @@ export function SalesPayMethodFormSheet({
                 }
                 searchPlaceholder="Search sales kind..."
                 emptyMessage="No sales kinds found."
+                disabled={lookupsLoading || saving}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Sales Classification</Label>
+              <SearchableCombobox
+                value={values.salesclasid}
+                onValueChange={(value) =>
+                  setValues((current) => ({
+                    ...current,
+                    salesclasid: value,
+                  }))
+                }
+                options={sheetClassificationOptions}
+                placeholder={
+                  lookupsLoading
+                    ? "Loading sales classifications..."
+                    : "Select sales classification"
+                }
+                searchPlaceholder="Search sales classification..."
+                emptyMessage="No sales classifications found."
                 disabled={lookupsLoading || saving}
               />
             </div>

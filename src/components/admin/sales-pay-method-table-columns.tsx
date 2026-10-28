@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 
 export function useSalesPayMethodColumns(
   accountOptions: ComboboxOption[] = [],
-  salesKindOptions: ComboboxOption[] = []
+  salesKindOptions: ComboboxOption[] = [],
+  classificationOptions: ComboboxOption[] = []
 ): ColumnDef<SalesPayMethodItem>[] {
   return useMemo(
     () => [
@@ -34,6 +35,19 @@ export function useSalesPayMethodColumns(
           const id = row.original.salesKindId;
           if (!id) return "—";
           const match = salesKindOptions.find((option) => option.value === String(id));
+          return match?.label || `#${id}`;
+        },
+      },
+      {
+        enableSorting: true,
+        accessorKey: "salesclasid",
+        header: "Sales Classification",
+        cell: ({ row }) => {
+          const id = row.original.salesclasid;
+          if (id == null || id <= 0) return "—";
+          const match = classificationOptions.find(
+            (option) => option.value === String(id)
+          );
           return match?.label || `#${id}`;
         },
       },
@@ -71,6 +85,6 @@ export function useSalesPayMethodColumns(
         ),
       },
     ],
-    [accountOptions, salesKindOptions]
+    [accountOptions, salesKindOptions, classificationOptions]
   );
 }

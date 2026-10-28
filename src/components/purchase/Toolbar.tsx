@@ -66,6 +66,11 @@ type ToolbarProps = {
   excelImportHref: string;
   /** When false, hides Create template + Import Excel. Default true. */
   showExcelActions?: boolean;
+  /** When false, hides Edit (update) toolbar action. Default true. */
+  showEditButton?: boolean;
+  showDeleteButton?: boolean;
+  showPrintButton?: boolean;
+  showSearchButton?: boolean;
 };
 
 function ToolbarTextButton({
@@ -195,6 +200,10 @@ export function Toolbar({
   excelTemplateLoading,
   excelImportHref,
   showExcelActions = true,
+  showEditButton = true,
+  showDeleteButton = true,
+  showPrintButton = true,
+  showSearchButton = true,
 }: ToolbarProps) {
   const canSave = mode === "new" || mode === "edit";
 
@@ -209,25 +218,31 @@ export function Toolbar({
           disabled={!canSave || saving || isPosted}
           variant="default"
         />
-        <ToolbarButton
-          label="Edit"
-          icon={Pencil}
-          onClick={onEdit}
-          disabled={!hasRecord || mode === "edit" || saving || isPosted}
-        />
-        <ToolbarButton
-          label="Delete"
-          icon={Trash2}
-          onClick={onDelete}
-          disabled={!hasRecord || saving || posting || isPosted}
-          variant="destructive"
-        />
-        <ToolbarButton
-          label="Print Purchase"
-          icon={Printer}
-          onClick={onPrint}
-          disabled={!hasRecord || printing}
-        />
+        {showEditButton ? (
+          <ToolbarButton
+            label="Edit"
+            icon={Pencil}
+            onClick={onEdit}
+            disabled={!hasRecord || mode === "edit" || saving || isPosted}
+          />
+        ) : null}
+        {showDeleteButton ? (
+          <ToolbarButton
+            label="Delete"
+            icon={Trash2}
+            onClick={onDelete}
+            disabled={!hasRecord || saving || posting || isPosted}
+            variant="destructive"
+          />
+        ) : null}
+        {showPrintButton ? (
+          <ToolbarButton
+            label="Print Purchase"
+            icon={Printer}
+            onClick={onPrint}
+            disabled={!hasRecord || printing}
+          />
+        ) : null}
         <ToolbarButton
           label="Refresh"
           icon={RefreshCw}
@@ -264,7 +279,9 @@ export function Toolbar({
 
         <span className="bg-border mx-1 hidden h-6 w-px sm:inline" aria-hidden />
 
-        <ToolbarButton label="Search" icon={Search} onClick={onSearch} />
+        {showSearchButton ? (
+          <ToolbarButton label="Search" icon={Search} onClick={onSearch} />
+        ) : null}
 
         <div className="ml-auto flex items-center gap-1">
           {isTransferButtonVisible ? (

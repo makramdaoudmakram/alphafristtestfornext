@@ -11,7 +11,10 @@ import {
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
-import { searchReturnItemsWithStock } from "@/lib/api-client";
+import {
+  searchPharmPurchaseReturnItemsWithStock,
+  searchReturnItemsWithStock,
+} from "@/lib/api-client";
 import {
   formatReturnItemStockSearchLabel,
   getReturnItemStockSearchDisplayParts,
@@ -35,6 +38,11 @@ type ReturnItemStockSearchBoxProps = {
   preferAvailableQty?: boolean;
   /** Sales Return: show item code + batch columns in the dropdown. */
   showBatchDetails?: boolean;
+  /**
+   * `pharm-purchase-return` uses PharmPurchaseReturnH/item-search (server-resolved store).
+   * Default uses Stock/return-item-search or SalesReturn/item-search.
+   */
+  searchSource?: "default" | "pharm-purchase-return";
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
 };
@@ -54,6 +62,7 @@ export function ReturnItemStockSearchBox({
   itemLanguage,
   preferAvailableQty = false,
   showBatchDetails = false,
+  searchSource = "default",
   onItemSelected,
 }: ReturnItemStockSearchBoxProps) {
   const listId = useId();
@@ -66,7 +75,7 @@ export function ReturnItemStockSearchBox({
   const [results, setResults] = useState<ReturnItemStockSearchItem[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
 
-  const storeReady = Boolean(storeId?.trim());
+  const storeReady = Boolean(token?.trim());
   const inputDisabled = disabled || !storeReady;
 
   const showList =
@@ -92,8 +101,7 @@ export function ReturnItemStockSearchBox({
       !wantList ||
       inputDisabled ||
       !rawQuery.trim() ||
-      !token ||
-      !storeId?.trim()
+      !token
     ) {
       setResults([]);
       setLookupLoading(false);
@@ -104,17 +112,25 @@ export function ReturnItemStockSearchBox({
     const timer = window.setTimeout(async () => {
       setLookupLoading(true);
       try {
-        const rows = await searchReturnItemsWithStock(
-          token,
-          rawQuery,
-          storeId,
-          {
-            take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
-            language: itemLanguage,
-            signal: controller.signal,
-            doubleSpaceWildcard: true,
-          }
-        );
+        const rows =
+          searchSource === "pharm-purchase-return"
+            ? await searchPharmPurchaseReturnItemsWithStock(token, rawQuery, {
+                take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+                language: itemLanguage,
+                signal: controller.signal,
+                doubleSpaceWildcard: true,
+              })
+            : await searchReturnItemsWithStock(
+                token,
+                rawQuery,
+                storeId?.trim() || undefined,
+                {
+                  take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+                  language: itemLanguage,
+                  signal: controller.signal,
+                  doubleSpaceWildcard: true,
+                }
+              );
         if (controller.signal.aborted) return;
         setResults(rows);
       } catch {
@@ -129,7 +145,7 @@ export function ReturnItemStockSearchBox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, token, storeId, wantList, inputDisabled, itemLanguage]);
+  }, [query, token, storeId, wantList, inputDisabled, itemLanguage, searchSource]);
 
   useEffect(() => {
     setHighlight(0);
