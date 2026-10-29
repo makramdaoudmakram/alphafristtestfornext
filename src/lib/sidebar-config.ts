@@ -384,6 +384,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.stock.view,
       },
       {
+        title: "ملخص مخزون المتجر",
+        href: "/dashboard/inventory/store-summary",
+        permission: PERMISSIONS.stock.view,
+      },
+      {
         title: "تعديل الباتشات",
         href: "/dashboard/batch-management",
         permission: PERMISSIONS.stock.view,
@@ -464,6 +469,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/transactions/pharm-recive/import": "Pharmacy Receiving Excel Import",
   "/dashboard/transactions/purchase/import": "Import Purchase Excel",
   "/dashboard/inventory": "Inventory",
+  "/dashboard/inventory/store-summary": "Store stock summary",
   "/dashboard/batch-management": "Batch Management",
   "/dashboard/batch-traceability": "Batch Traceability",
   "/dashboard/stock": "Inventory",

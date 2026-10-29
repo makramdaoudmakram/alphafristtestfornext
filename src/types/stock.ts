@@ -79,6 +79,47 @@ export type StockPagedResult = {
   pageSize: number;
 };
 
+export interface StockStoreItemSummaryRow {
+  itemCatalogId: number;
+  itemCode: string;
+  itemNameAr: string | null;
+  itemNameEn: string | null;
+  storeId: number;
+  totalQty: number;
+  totalTransferQty: number;
+  totalAvailableQty: number;
+  totalIncomingUnacceptedQty: number;
+  itmUnit1Unit3: number | null;
+}
+
+export type StockStoreItemSummaryFilters = {
+  storeId: number;
+  itemCode?: string;
+  itemName?: string;
+  pageNumber?: number;
+  pageSize?: number;
+};
+
+export type StockStoreItemSummaryPagedResult = {
+  items: StockStoreItemSummaryRow[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+};
+
+export interface StockStoreItemPendingMovement {
+  movementKind: string;
+  movementSerial: number | null;
+  quantityBase: number;
+  movementDate: string | null;
+  documentId: number;
+  lineNo: number;
+  destinationName: string | null;
+  /** Inbound at this store (Store Summary incoming column); not outgoing TransferQty. */
+  isIncomingUnaccepted: boolean;
+  sourceName: string | null;
+}
+
 export interface StockBarcodeLabel {
   stockId: number;
   batchNo: string;

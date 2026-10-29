@@ -152,6 +152,10 @@ import type {
   StockBatchItem,
   StockPagedResult,
   StockSearchFilters,
+  StockStoreItemPendingMovement,
+  StockStoreItemSummaryFilters,
+  StockStoreItemSummaryPagedResult,
+  StockStoreItemSummaryRow,
 } from "@/types/stock";
 import type {
   BatchTraceabilityCreatorSource,
@@ -2920,6 +2924,92 @@ export function searchStockBatches(token: string, filters: StockSearchFilters = 
   return apiFetch<unknown>(`Stock${query ? `?${query}` : ""}`, {}, token).then(
     normalizeStockPagedResult
   );
+}
+
+function normalizeStockStoreItemSummaryRow(
+  item: Record<string, unknown>
+): StockStoreItemSummaryRow {
+  return {
+    itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
+    itemCode: readString(item, "itemCode", "ItemCode"),
+    itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
+    itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
+    storeId: readNumber(item, "storeId", "StoreId"),
+    totalQty: readNumber(item, "totalQty", "TotalQty"),
+    totalTransferQty: readNumber(item, "totalTransferQty", "TotalTransferQty"),
+    totalAvailableQty: readNumber(item, "totalAvailableQty", "TotalAvailableQty"),
+    totalIncomingUnacceptedQty: readNumber(
+      item,
+      "totalIncomingUnacceptedQty",
+      "TotalIncomingUnacceptedQty"
+    ),
+    itmUnit1Unit3: readNullableNumber(item, "itmUnit1Unit3", "ItmUnit1Unit3"),
+  };
+}
+
+function normalizeStockStoreItemSummaryPaged(data: unknown): StockStoreItemSummaryPagedResult {
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const items = parseArrayOrPaged(data, normalizeStockStoreItemSummaryRow);
+  return {
+    items,
+    totalCount: readNumber(raw, "totalCount", "TotalCount") || items.length,
+    pageNumber: readNumber(raw, "pageNumber", "PageNumber") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || items.length,
+  };
+}
+
+export function searchStockStoreItemSummary(
+  token: string,
+  filters: StockStoreItemSummaryFilters
+) {
+  const params = new URLSearchParams();
+  params.set("storeId", String(filters.storeId));
+  if (filters.itemCode?.trim()) params.set("itemCode", filters.itemCode.trim());
+  if (filters.itemName?.trim()) params.set("itemName", filters.itemName.trim());
+  params.set("pageNumber", String(filters.pageNumber ?? 1));
+  params.set("pageSize", String(filters.pageSize ?? 20));
+  return apiFetch<unknown>(`Stock/store-item-summary?${params.toString()}`, {}, token).then(
+    normalizeStockStoreItemSummaryPaged
+  );
+}
+
+function normalizeStockStoreItemPendingMovement(
+  item: Record<string, unknown>
+): StockStoreItemPendingMovement {
+  return {
+    movementKind: readString(item, "movementKind", "MovementKind"),
+    movementSerial: readNullableNumber(item, "movementSerial", "MovementSerial"),
+    quantityBase: readNumber(item, "quantityBase", "QuantityBase"),
+    movementDate: readNullableString(item, "movementDate", "MovementDate"),
+    documentId: readNumber(item, "documentId", "DocumentId"),
+    lineNo: readNumber(item, "lineNo", "LineNo"),
+    destinationName: readNullableString(item, "destinationName", "DestinationName"),
+    isIncomingUnaccepted: readBoolean(item, "isIncomingUnaccepted", "IsIncomingUnaccepted"),
+    sourceName: readNullableString(item, "sourceName", "SourceName"),
+  };
+}
+
+export function getStockStoreItemPendingMovements(
+  token: string,
+  storeId: number,
+  itemCatalogId: number
+) {
+  const params = new URLSearchParams({
+    storeId: String(storeId),
+    itemCatalogId: String(itemCatalogId),
+  });
+  return apiFetch<unknown>(
+    `Stock/store-item-pending-movements?${params.toString()}`,
+    {},
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((row) =>
+        normalizeStockStoreItemPendingMovement(row as Record<string, unknown>)
+      );
+    }
+    return [] as StockStoreItemPendingMovement[];
+  });
 }
 
 function normalizeBatchTraceabilityTimelineEntry(

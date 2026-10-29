@@ -34,6 +34,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/sales-payment-assiment": "SalesPaymentAssiment.View",
   "/dashboard/stock": "Stock.View",
   "/dashboard/inventory": "Stock.View",
+  "/dashboard/inventory/store-summary": "Stock.View",
   "/dashboard/batch-management": "Stock.View",
   "/dashboard/batch-traceability": "BatchTraceability.View",
   "/dashboard/transactions/inventory-adjustment": "Stock.View",
