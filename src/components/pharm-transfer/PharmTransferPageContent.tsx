@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getActivePharmacy } from "@/lib/pharmacy-scope-api";
 import { collectOutgoingPendingForStorage } from "@/lib/pharm-transfer-pending";
+import { formatPharmTransferStatusLabel } from "@/lib/pharm-transfer-status";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { PharmTransferDetailsGrid } from "@/components/pharm-transfer/PharmTransferDetailsGrid";
 import { PharmTransferEmployeeTotalsTable } from "@/components/pharm-transfer/PharmTransferEmployeeTotalsTable";
@@ -100,14 +100,12 @@ export function PharmTransferPageContent() {
     loading,
     saving,
     isEditable,
-    isPending,
     searchOpen,
     setSearchOpen,
     navState,
     handleNew,
     handleEdit,
     handleSave,
-    handleDelete,
     handleRefresh,
     navigate,
     loadRecord,
@@ -155,17 +153,16 @@ export function PharmTransferPageContent() {
     setPendingLoading(true);
     setPendingLoadError(null);
     try {
-      const [page, activeScope] = await Promise.all([
+      const [page, nextContext] = await Promise.all([
         service.getOutgoingPending(),
-        getActivePharmacy(token),
+        service.getContext(),
       ]);
-      const storageId =
-        activeScope.storageId != null && activeScope.storageId.trim() !== ""
-          ? Number(activeScope.storageId)
-          : null;
-      const resolvedStorageId =
-        storageId != null && Number.isFinite(storageId) ? storageId : null;
-      setOutgoingPending(collectOutgoingPendingForStorage(page.items, resolvedStorageId));
+      setContext(nextContext);
+      const operationalStoreId =
+        nextContext.currentStoreId > 0 ? nextContext.currentStoreId : null;
+      setOutgoingPending(
+        collectOutgoingPendingForStorage(page.items, operationalStoreId)
+      );
     } catch (error) {
       setOutgoingPending([]);
       const message =
@@ -546,17 +543,6 @@ export function PharmTransferPageContent() {
     ]
   );
 
-  const confirmDelete = useCallback(() => {
-    if (!hasRecord || !isPending) return;
-    if (
-      window.confirm(
-        "Cancel this pending pharmacy transfer? Reserved stock at the sending pharmacy will be released."
-      )
-    ) {
-      void handleDelete();
-    }
-  }, [handleDelete, hasRecord, isPending]);
-
   const handleCancelConfirmed = useCallback(async () => {
     if (!service || !confirmCancelHeader) return;
     setCancellingId(confirmCancelHeader.id);
@@ -565,7 +551,7 @@ export function PharmTransferPageContent() {
       toast.success(result.message || "Transfer cancelled. Reserved stock was released.");
       setConfirmCancelHeader(null);
       if (header.id === confirmCancelHeader.id) {
-        handleNew();
+        await loadRecord(confirmCancelHeader.id);
       }
       await loadOutgoingPending();
       await refreshNavIds();
@@ -582,9 +568,9 @@ export function PharmTransferPageContent() {
     }
   }, [
     confirmCancelHeader,
-    handleNew,
     header.id,
     loadOutgoingPending,
+    loadRecord,
     refreshNavIds,
     service,
   ]);
@@ -638,7 +624,8 @@ export function PharmTransferPageContent() {
           onTransfer={() => undefined}
           onPrintBarcode={() => undefined}
           onEdit={handleEdit}
-          onDelete={confirmDelete}
+          showDeleteButton={false}
+          onDelete={() => undefined}
           onPrint={() => window.print()}
           onRefresh={() => {
             void loadContext();
@@ -951,7 +938,9 @@ export function PharmTransferPageContent() {
                     <TableCell>{row.movId}</TableCell>
                     <TableCell>{row.traDate ?? "—"}</TableCell>
                     <TableCell>{row.destinationPharmacyName ?? row.movDis}</TableCell>
-                    <TableCell>{row.statusText ?? "—"}</TableCell>
+                    <TableCell>
+                      {formatPharmTransferStatusLabel(row.traFlag, row.statusText)}
+                    </TableCell>
                     <TableCell>{row.traTotalq ?? "—"}</TableCell>
                   </TableRow>
                 ))}

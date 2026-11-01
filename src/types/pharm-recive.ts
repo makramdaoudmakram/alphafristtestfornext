@@ -36,6 +36,8 @@ export type PharmReciveHeader = {
   movTotalSalesPrice: number;
   movTotalPurchPrice: number;
   movTotalCostPrice: number;
+  /** Document acceptance status (`PharmReciveTraFlag`); not inventory reservation state. */
+  movFlag: number | null;
 };
 
 export type PharmReciveDocument = {

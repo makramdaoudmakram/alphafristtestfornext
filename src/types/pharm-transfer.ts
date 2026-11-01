@@ -76,7 +76,7 @@ export type PharmTransferSearchResult = {
   traTotalq: number | null;
   /** PharmTranH.TraFlag (spec MovStat / MovFlage). */
   traFlag: number | null;
-  /** Friendly status text from API (1=Not Accept, 2=Accept). */
+  /** Friendly status text from API (1=Not Accept, 2=Accept, 3=Cancelled). */
   statusText: string | null;
 };
 
@@ -94,6 +94,8 @@ export type EmployInfoLookup = {
 };
 
 export const PHARM_TRANSFER_TRA_FLAG_PENDING = 1;
+export const PHARM_TRANSFER_TRA_FLAG_ACCEPTED = 2;
+export const PHARM_TRANSFER_TRA_FLAG_CANCELLED = 3;
 
 export const EMPLOY_TYPE_RECEIVING = 1;
 export const EMPLOY_TYPE_DELIVERY = 2;

@@ -18,9 +18,9 @@ export function Providers({
     <SessionProvider session={session} refetchOnWindowFocus={false}>
       <OfflineProvider autoSync>
         <UnitOfflineBootstrap />
-        <PermissionProvider>
-          <PharmacyScopeProvider>{children}</PharmacyScopeProvider>
-        </PermissionProvider>
+        <PharmacyScopeProvider>
+          <PermissionProvider>{children}</PermissionProvider>
+        </PharmacyScopeProvider>
       </OfflineProvider>
     </SessionProvider>
   );

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { PageGuard } from "@/components/permissions/page-guard";
+import { PageGuard, ActionGuard } from "@/components/permissions/page-guard";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -194,7 +194,7 @@ export function PharmExpensesPageContent() {
   }
 
   return (
-    <PageGuard permission={PERMISSIONS.sales.view}>
+    <PageGuard permission={PERMISSIONS.pharmExpenses.view}>
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Pharm Expenses</h2>
@@ -309,20 +309,22 @@ export function PharmExpensesPageContent() {
             </div>
 
             <div className="flex justify-end">
-              <Button
-                type="button"
-                onClick={() => void handleSaveAll()}
-                disabled={saving || !contextReady}
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save All"
-                )}
-              </Button>
+              <ActionGuard permission={PERMISSIONS.pharmExpenses.create}>
+                <Button
+                  type="button"
+                  onClick={() => void handleSaveAll()}
+                  disabled={saving || !contextReady}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save All"
+                  )}
+                </Button>
+              </ActionGuard>
             </div>
           </CardContent>
         </Card>

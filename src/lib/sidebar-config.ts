@@ -31,11 +31,7 @@ export const SIDEBAR_NAV: NavItem[] = [
     href: "/dashboard",
     permission: null,
   },
-  {
-    title: "Shift Management",
-    href: "/dashboard/shift",
-    permission: PERMISSIONS.sales.view,
-  },
+  
   {
     title: "صيدليات",
     permission: PERMISSIONS.sales.view,
@@ -56,6 +52,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: PERMISSIONS.sales.view,
       },
       {
+    title: "اغلاق الشفت",
+    href: "/dashboard/shift",
+    permission: PERMISSIONS.sales.view,
+  },
+      {
         title: "مرتجع المبيعات",
         href: "/dashboard/sales-return",
         permission: PERMISSIONS.sales.view,
@@ -63,18 +64,14 @@ export const SIDEBAR_NAV: NavItem[] = [
       {
         title: "المصاريف",
         href: "/dashboard/sales/pharm-expenses",
-        permission: PERMISSIONS.sales.view,
+        permission: PERMISSIONS.pharmExpenses.view,
       },
       {
         title: "كارت الصنف",
         href: "/dashboard/sales/item-card",
-        permission: PERMISSIONS.sales.view,
+        permission: PERMISSIONS.itemCard.view,
       },
-      {
-        title: "العملاء",
-        href: "/dashboard/sales/customers",
-        permission: PERMISSIONS.customer.view,
-      },
+   
       {
         title: "مشتريات الفرع",
         href: "/dashboard/pharm/transactions/pharmacy-purchase",
@@ -145,6 +142,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: DIAGNOSTICS_NAV_PERMISSION,
       },
       {
+        title: "SQLite Server Verification",
+        href: "/dashboard/audit/sqlite-verification",
+        permission: DIAGNOSTICS_NAV_PERMISSION,
+      },
+      {
         title: "Batch Traceability",
         href: "/dashboard/batch-traceability",
         permission: PERMISSIONS.batchTraceability.view,
@@ -180,6 +182,11 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Pharmacy Scope",
             href: "/dashboard/admin/pharmacy-scope",
+          },
+          {
+            title: "صلاحيات الصيدليات",
+            href: "/dashboard/admin/pharmacy-authorization",
+            permission: PERMISSIONS.permissions.manage,
           },
           {
             title: "Role Permissions",
@@ -296,6 +303,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/companies",
             permission: PERMISSIONS.company.view,
           },
+             {
+        title: "العملاء",
+        href: "/dashboard/sales/customers",
+        permission: PERMISSIONS.customer.view,
+      },
           {
             title: "شجره الحسابات",
             href: "/dashboard/accounts-chart",
@@ -336,6 +348,7 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "بيانات الموظف",
             href: "/dashboard/employ-info",
+            permission: PERMISSIONS.employInfo.view,
           },
           {
             title: "المخازن",
@@ -430,7 +443,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales/customers": "Customers",
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
+  "/dashboard/admin/pharmacy-authorization": "صلاحيات الصيدليات",
   "/dashboard/diagnostics": "Diagnostics",
+  "/dashboard/audit/sqlite-verification": "SQLite Server Verification",
   "/dashboard/customers": "Customers",
   "/dashboard/item-formats": "Dosage Form",
   "/dashboard/item-origins": "Item Origins",

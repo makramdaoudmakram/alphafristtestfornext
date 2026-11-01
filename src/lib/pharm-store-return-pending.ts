@@ -6,6 +6,9 @@ import type {
 /** Matches backend PharmStoreReturnTraFlag.PendingStoreAcceptance */
 export const PHARM_STORE_RETURN_STATUS_PENDING = 1;
 
+/** Matches backend PharmStoreReturnTraFlag.CancelledBySender */
+export const PHARM_STORE_RETURN_STATUS_CANCELLED = 3;
+
 export function isPharmStoreReturnCancellable(
   header: PharmStoreReturnPendingHeader
 ): boolean {

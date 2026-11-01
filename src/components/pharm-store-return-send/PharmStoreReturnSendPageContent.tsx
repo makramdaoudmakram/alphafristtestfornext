@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { Loader2, Plus, Save, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getMovmentById, getStors } from "@/lib/api-client";
-import { getActivePharmacy } from "@/lib/pharmacy-scope-api";
+import { fetchOperationalPharmacyStoreId } from "@/lib/pharmacy-operational-store";
 import { collectOutgoingPendingForStorage } from "@/lib/pharm-store-return-pending";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { createUnitService } from "@/services/unit.service";
@@ -143,17 +143,13 @@ export function PharmStoreReturnSendPageContent() {
     setPendingLoading(true);
     setPendingLoadError(null);
     try {
-      const [page, activeScope] = await Promise.all([
+      const [page, operationalStoreId] = await Promise.all([
         service.getPending(),
-        getActivePharmacy(token),
+        fetchOperationalPharmacyStoreId(token),
       ]);
-      const storageId =
-        activeScope.storageId != null && activeScope.storageId.trim() !== ""
-          ? Number(activeScope.storageId)
-          : null;
-      const resolvedStorageId =
-        storageId != null && Number.isFinite(storageId) ? storageId : null;
-      setOutgoingPending(collectOutgoingPendingForStorage(page, resolvedStorageId));
+      setOutgoingPending(
+        collectOutgoingPendingForStorage(page, operationalStoreId)
+      );
     } catch (error) {
       setOutgoingPending([]);
       const message =

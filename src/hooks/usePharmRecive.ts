@@ -22,13 +22,16 @@ import {
   PHARM_RECIVE_INITIAL_ROW_ID,
 } from "@/lib/pharm-recive.mapper";
 import { ensureCatalogItemsForDetails, ensureCatalogItemsForItmCodes } from "@/lib/item-unit-options";
+import { validatePharmReciveDetailQuantity } from "@/lib/pharm-recive-item-stock-search";
 import {
   createPharmReciveService,
   PharmReciveRepositoryError,
 } from "@/services/pharm-recive.service";
 import {
-  validatePharmReciveDetailQuantity,
-} from "@/lib/pharm-recive-item-stock-search";
+  canDeletePharmReciveDocument,
+  canEditPharmReciveSavedDocument,
+  isPharmReciveFormEditable,
+} from "@/lib/pharm-recive-document-state";
 import type { PharmReciveDetail, PharmReciveDetailPatch, PharmReciveHeader, PharmReciveSearchFilters } from "@/types/pharm-recive";
 import type { MovmentLookupItem } from "@/types/movment";
 import type { ItemCatalogItem } from "@/types/item-catalog";
@@ -139,7 +142,19 @@ export function usePharmRecive(token: string | undefined) {
     void applyNewDocumentDate();
   }, [applyNewDocumentDate]);
 
-  const isEditable = mode === "new" || mode === "edit";
+  const isEditable = isPharmReciveFormEditable(
+    mode,
+    form.watch("id"),
+    form.watch("movFlag")
+  );
+  const canEditSaved = canEditPharmReciveSavedDocument(
+    form.watch("id"),
+    form.watch("movFlag")
+  );
+  const canDelete = canDeletePharmReciveDocument(
+    form.watch("id"),
+    form.watch("movFlag")
+  );
   const currentId = form.watch("id");
 
   const refreshNavIds = useCallback(async () => {
@@ -231,8 +246,12 @@ export function usePharmRecive(token: string | undefined) {
       toast.message("Save the document first, or load an existing record.");
       return;
     }
+    if (!canEditSaved) {
+      toast.message("This document cannot be edited while it is pending or after acceptance.");
+      return;
+    }
     setMode("edit");
-  }, [currentId]);
+  }, [canEditSaved, currentId]);
 
   const handleSave = useCallback(
     async (
@@ -351,6 +370,10 @@ export function usePharmRecive(token: string | undefined) {
       toast.error("Nothing to delete");
       return;
     }
+    if (!canDelete) {
+      toast.error("Accepted documents cannot be deleted.");
+      return;
+    }
     setSaving(true);
     try {
       await service.delete(currentId);
@@ -362,7 +385,7 @@ export function usePharmRecive(token: string | undefined) {
     } finally {
       setSaving(false);
     }
-  }, [currentId, handleNew, refreshNavIds, service]);
+  }, [canDelete, currentId, handleNew, refreshNavIds, service]);
 
   const handleRefresh = useCallback(
     async (itemByCode?: Map<string, ItemCatalogItem>, catalogItems?: ItemCatalogItem[]) => {
@@ -482,6 +505,8 @@ export function usePharmRecive(token: string | undefined) {
     loading,
     saving,
     isEditable,
+    canEditSaved,
+    canDelete,
     searchOpen,
     setSearchOpen,
     handleNew,

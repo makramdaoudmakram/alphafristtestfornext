@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import type { StockBatchItem } from "@/types/stock";
 import {
   getInventoryStockStatus,
-  inventoryDisplayAvailableQty,
+  inventoryDisplayAvailableQtyInDisplayUnit,
   inventoryDisplayQty,
+  inventoryDisplayTransferQty,
   inventoryItemDisplayName,
   inventoryStatusLabel,
   inventoryStoreDisplayName,
@@ -31,6 +32,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
       <span className="text-sm font-medium">{value}</span>
     </div>
   );
+}
+
+function formatInventoryQty(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 export function InventoryDetailDialog({
@@ -60,21 +65,15 @@ export function InventoryDetailDialog({
           <DetailRow label="Expiry date" value={batch.expDate ?? "—"} />
           <DetailRow
             label="Physical quantity"
-            value={inventoryDisplayQty(batch).toLocaleString(undefined, {
-              maximumFractionDigits: 4,
-            })}
+            value={formatInventoryQty(inventoryDisplayQty(batch))}
           />
           <DetailRow
             label="Pending transfer"
-            value={(batch.transferQty ?? 0).toLocaleString(undefined, {
-              maximumFractionDigits: 4,
-            })}
+            value={formatInventoryQty(inventoryDisplayTransferQty(batch))}
           />
           <DetailRow
             label="Available quantity"
-            value={inventoryDisplayAvailableQty(batch).toLocaleString(undefined, {
-              maximumFractionDigits: 4,
-            })}
+            value={formatInventoryQty(inventoryDisplayAvailableQtyInDisplayUnit(batch))}
           />
           <DetailRow label="Purchase price" value={batch.purshPrice.toFixed(2)} />
           <DetailRow label="Sales price" value={batch.salesPrice.toFixed(2)} />

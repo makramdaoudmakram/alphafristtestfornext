@@ -12,10 +12,13 @@ import {
 import { signOut, useSession } from "next-auth/react";
 import { getMyPermissions, ApiError } from "@/lib/api-client";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 
 interface PermissionContextValue {
   roles: string[];
   permissions: string[];
+  activePharmacyId: string | null;
+  operationalPermissions: string[];
   loading: boolean;
   ready: boolean;
   error: string | null;
@@ -50,8 +53,15 @@ export function canAccessPermission(
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
   const { data: session, status } = useSession();
+  const {
+    activePharmacyId: scopeActivePharmacyId,
+    ready: scopeReady,
+    loading: scopeLoading,
+  } = usePharmacyScope();
   const [roles, setRoles] = useState<string[]>([]);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [activePharmacyId, setActivePharmacyId] = useState<string | null>(null);
+  const [operationalPermissions, setOperationalPermissions] = useState<string[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const signingOutRef = useRef(false);
@@ -70,8 +80,14 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     if (!session?.accessToken) {
       setRoles([]);
       setPermissions([]);
+      setActivePharmacyId(null);
+      setOperationalPermissions([]);
       setError(null);
       setFetching(false);
+      return;
+    }
+
+    if (!scopeReady) {
       return;
     }
 
@@ -82,9 +98,13 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       const data = await getMyPermissions(session.accessToken);
       setRoles(data.roles);
       setPermissions(data.permissions);
+      setActivePharmacyId(data.activePharmacyId);
+      setOperationalPermissions(data.operationalPermissions);
     } catch (err) {
       setRoles([]);
       setPermissions([]);
+      setActivePharmacyId(null);
+      setOperationalPermissions([]);
 
       if (err instanceof ApiError && err.status === 401) {
         redirectToLogin();
@@ -99,19 +119,22 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     } finally {
       setFetching(false);
     }
-  }, [redirectToLogin, session?.accessToken, status]);
+  }, [redirectToLogin, scopeReady, session?.accessToken, status, scopeActivePharmacyId]);
 
   useEffect(() => {
     void loadPermissions();
   }, [loadPermissions]);
 
-  const ready = hydrated && status !== "loading" && !fetching;
+  const ready =
+    hydrated && status !== "loading" && scopeReady && !scopeLoading && !fetching;
   const loading = !ready;
 
   const value = useMemo(
     () => ({
       roles,
       permissions,
+      activePharmacyId,
+      operationalPermissions,
       loading,
       ready,
       error,
@@ -123,7 +146,16 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       canReversePurchase: () => canReversePurchaseInvoice(roles),
       refresh: loadPermissions,
     }),
-    [roles, permissions, loading, ready, error, loadPermissions]
+    [
+      roles,
+      permissions,
+      activePharmacyId,
+      operationalPermissions,
+      loading,
+      ready,
+      error,
+      loadPermissions,
+    ]
   );
 
   return (

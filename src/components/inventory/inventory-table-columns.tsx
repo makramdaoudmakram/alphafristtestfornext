@@ -6,7 +6,9 @@ import type { ColumnDef } from "@/components/data-table";
 import type { StockBatchItem } from "@/types/stock";
 import {
   getInventoryStockStatus,
+  inventoryDisplayAvailableQtyInDisplayUnit,
   inventoryDisplayQty,
+  inventoryDisplayTransferQty,
   inventoryItemDisplayName,
   inventoryStatusLabel,
   inventoryStoreDisplayName,
@@ -101,9 +103,20 @@ export function useInventoryColumns(
         cell: ({ row }) => cellText(inventoryStoreDisplayName(row.original)),
       },
       {
-        id: "availableQty",
-        header: "Physical qty",
+        id: "physicalQty",
+        header: "Book qty",
         cell: ({ row }) => formatQty(inventoryDisplayQty(row.original)),
+      },
+      {
+        id: "pendingQty",
+        header: "Pending qty",
+        cell: ({ row }) => formatQty(inventoryDisplayTransferQty(row.original)),
+      },
+      {
+        id: "availableQty",
+        header: "Available qty",
+        cell: ({ row }) =>
+          formatQty(inventoryDisplayAvailableQtyInDisplayUnit(row.original)),
       },
       {
         id: "stockStatus",

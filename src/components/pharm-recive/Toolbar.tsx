@@ -38,6 +38,8 @@ type ToolbarProps = {
   onSave: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  canEditRecord?: boolean;
+  canDeleteRecord?: boolean;
   onPrint: () => void;
   onRefresh: () => void;
   onFirst: () => void;
@@ -126,6 +128,8 @@ export function Toolbar({
   onSave,
   onEdit,
   onDelete,
+  canEditRecord = false,
+  canDeleteRecord = false,
   onPrint,
   onRefresh,
   onFirst,
@@ -158,13 +162,13 @@ export function Toolbar({
           label="Edit"
           icon={Pencil}
           onClick={onEdit}
-          disabled={!hasRecord || mode === "edit" || saving}
+          disabled={!hasRecord || !canEditRecord || mode === "edit" || saving}
         />
         <ToolbarButton
           label="Delete"
           icon={Trash2}
           onClick={onDelete}
-          disabled={!hasRecord || saving}
+          disabled={!hasRecord || !canDeleteRecord || saving}
           variant="destructive"
         />
         <ToolbarButton label="Print" icon={Printer} onClick={onPrint} disabled={!hasRecord} />

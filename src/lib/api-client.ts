@@ -1,5 +1,9 @@
 import { API_BASE_URL, getAlfaApiHint } from "./api-config";
 import {
+  readAccountKindFromApi,
+  readHomeParmIdFromApi,
+} from "./user-account-classification";
+import {
   API_CLIENT_TIMEOUT_MS,
   ApiTimeoutError,
   timedFetch,
@@ -139,6 +143,8 @@ import type {
   ItemCatalogUpsertRequest,
 } from "@/types/item-catalog";
 import type {
+  AdminCreateUserRequest,
+  UpdateUserRequest,
   UserListItem,
   UserListPagedResult,
   UserListQuery,
@@ -1086,11 +1092,7 @@ export async function loginWithAlfaApi(
 /** Authenticated admin user creation (Users.Create). Not public registration. */
 export async function createUserAsAdmin(
   token: string,
-  input: {
-    email: string;
-    password: string;
-    userName?: string;
-  }
+  input: AdminCreateUserRequest
 ): Promise<AuthResponse> {
   try {
     const data = await apiFetch<Record<string, unknown>>(
@@ -1101,6 +1103,8 @@ export async function createUserAsAdmin(
           email: input.email,
           password: input.password,
           userName: input.userName ?? null,
+          accountKind: input.accountKind,
+          homeParmId: input.homeParmId ?? null,
         }),
       },
       token
@@ -1163,6 +1167,12 @@ export function getMyPermissions(token: string) {
       userId: String(data.userId ?? data.UserId ?? ""),
       roles: (data.roles ?? data.Roles ?? []) as string[],
       permissions: (data.permissions ?? data.Permissions ?? []) as string[],
+      activePharmacyId: (data.activePharmacyId ??
+        data.ActivePharmacyId ??
+        null) as string | null,
+      operationalPermissions: (data.operationalPermissionCodes ??
+        data.OperationalPermissionCodes ??
+        []) as string[],
     })
   );
 }
@@ -1292,6 +1302,8 @@ function normalizeUserListItem(raw: Record<string, unknown>): UserListItem {
     lockoutEnabled: hasDetailFields
       ? readBoolean(raw, "lockoutEnabled", "LockoutEnabled")
       : false,
+    accountKind: readAccountKindFromApi(raw.accountKind ?? raw.AccountKind),
+    homeParmId: readHomeParmIdFromApi(raw.homeParmId ?? raw.HomeParmId),
   };
 }
 
@@ -1370,6 +1382,56 @@ export async function getUsersPage(token: string, query: UserListQuery) {
   }
 
   throw new ApiError(404, "Users list endpoint not found on the API.");
+}
+
+export function getUserById(id: string, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `Users/${encodeURIComponent(id)}`,
+    {},
+    token
+  ).then((data) => normalizeUserListItem(data));
+}
+
+export function updateUser(id: string, data: UpdateUserRequest, token: string) {
+  return apiFetch<Record<string, unknown>>(
+    `Users/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        userName: data.userName,
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        emailConfirmed: data.emailConfirmed,
+        isActive: data.isActive,
+        accountKind: data.accountKind,
+        homeParmId: data.homeParmId,
+      }),
+    },
+    token
+  ).then((response) => normalizeUserListItem(response));
+}
+
+export async function resetUserPassword(
+  id: string,
+  newPassword: string,
+  token: string
+) {
+  const data = await apiFetch<Record<string, unknown>>(
+    `Users/${encodeURIComponent(id)}/reset-password`,
+    {
+      method: "POST",
+      body: JSON.stringify({ newPassword }),
+    },
+    token
+  );
+
+  return {
+    isSuccess:
+      readBoolean(data, "isSuccess", "IsSuccess") ||
+      readString(data, "message", "Message").length > 0,
+    message:
+      readString(data, "message", "Message") || "Password reset successfully.",
+  };
 }
 
 export function getUserRoles(userId: string, token: string) {

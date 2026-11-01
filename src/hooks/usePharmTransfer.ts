@@ -20,6 +20,7 @@ import type {
   PharmTransferSearchFilters,
 } from "@/types/pharm-transfer";
 import { PHARM_TRANSFER_TRA_FLAG_PENDING } from "@/types/pharm-transfer";
+import { isPharmTransferPendingTraFlag } from "@/lib/pharm-transfer-status";
 
 export type PharmTransferFormMode = "view" | "new" | "edit";
 
@@ -42,8 +43,7 @@ export function usePharmTransfer(token: string | undefined) {
   );
 
   const currentId = header.id ?? loadedRecordIdRef.current;
-  const isPending =
-    header.traFlag == null || header.traFlag === PHARM_TRANSFER_TRA_FLAG_PENDING;
+  const isPending = isPharmTransferPendingTraFlag(header.traFlag);
   const isEditable = (mode === "new" || mode === "edit") && isPending;
 
   const applyDocument = useCallback(

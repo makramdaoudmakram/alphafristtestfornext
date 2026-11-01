@@ -15,6 +15,7 @@ export const pharmReciveHeaderSchema = z.object({
   movTotalSalesPrice: z.number().nonnegative(),
   movTotalPurchPrice: z.number().nonnegative(),
   movTotalCostPrice: z.number().nonnegative(),
+  movFlag: z.number().int().nonnegative().nullable(),
 });
 
 export const pharmReciveDetailSchema = z.object({

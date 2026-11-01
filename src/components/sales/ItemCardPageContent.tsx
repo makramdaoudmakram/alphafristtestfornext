@@ -13,6 +13,7 @@ import {
   lookupItemCatalogBySegment,
 } from "@/lib/api-client";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import {
@@ -105,6 +106,7 @@ export function ItemCardPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
+  const { authorizedPharmacies, activePharmacyId, ready: scopeReady } = usePharmacyScope();
 
   const [search, setSearch] = useState("");
   const [matches, setMatches] = useState<ItemCatalogItem[]>([]);
@@ -149,6 +151,29 @@ export function ItemCardPageContent() {
       cancelled = true;
     };
   }, [token]);
+
+  const authorizedParmIdSet = useMemo(
+    () => new Set(authorizedPharmacies.map((p) => p.parmId)),
+    [authorizedPharmacies]
+  );
+
+  const scopedPharmacies = useMemo(
+    () => {
+      if (!scopeReady) return [];
+      if (authorizedParmIdSet.size === 0) return [];
+      return branches.filter((branch) =>
+        authorizedParmIdSet.has(String(branch.parmId))
+      );
+    },
+    [branches, authorizedParmIdSet, scopeReady]
+  );
+
+  useEffect(() => {
+    if (!scopeReady || authorizedParmIdSet.size === 0) return;
+    if (activePharmacyId && !branchId) {
+      setBranchId(activePharmacyId);
+    }
+  }, [scopeReady, activePharmacyId, authorizedParmIdSet.size, branchId]);
 
   useEffect(() => {
     if (!token || selectedItem) {
@@ -204,7 +229,17 @@ export function ItemCardPageContent() {
   }, [search, token, selectedItem]);
 
   const storeOptions = useMemo<ComboboxOption[]>(() => {
+    const allowedStoreKeys = new Set<string>();
+    for (const pharm of scopedPharmacies) {
+      const storKey = pharm.parmStor?.trim();
+      if (storKey) allowedStoreKeys.add(storKey);
+    }
+
     const rows = stores
+      .filter((store) => {
+        if (allowedStoreKeys.size === 0) return false;
+        return allowedStoreKeys.has(String(store.id));
+      })
       .map((store) => ({
         value: String(store.id),
         label:
@@ -216,10 +251,10 @@ export function ItemCardPageContent() {
         a.label.localeCompare(b.label, undefined, { numeric: true })
       );
     return [{ value: "", label: "All Stores" }, ...rows];
-  }, [stores]);
+  }, [stores, scopedPharmacies]);
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
-    const rows = branches
+    const rows = scopedPharmacies
       .map((branch) => {
         const name = (branch.parmEnName || branch.parmArName || "").trim();
         return {
@@ -228,8 +263,11 @@ export function ItemCardPageContent() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
+    if (authorizedParmIdSet.size > 0) {
+      return rows;
+    }
     return [{ value: "", label: "All Branches" }, ...rows];
-  }, [branches]);
+  }, [scopedPharmacies, authorizedParmIdSet.size]);
 
   const loadCard = useCallback(
     async (nextPage = 1) => {
@@ -289,7 +327,7 @@ export function ItemCardPageContent() {
   }
 
   return (
-    <PageGuard permission={PERMISSIONS.sales.view}>
+    <PageGuard permission={PERMISSIONS.itemCard.view}>
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Item Card</h2>

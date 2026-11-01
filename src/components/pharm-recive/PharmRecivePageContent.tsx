@@ -207,6 +207,8 @@ export function PharmRecivePageContent() {
     loading,
     saving,
     isEditable,
+    canEditSaved,
+    canDelete,
     searchOpen,
     setSearchOpen,
     handleNew,
@@ -811,6 +813,8 @@ export function PharmRecivePageContent() {
           }}
           onEdit={handleEdit}
           onDelete={confirmDelete}
+          canEditRecord={canEditSaved}
+          canDeleteRecord={canDelete}
           onPrint={() => {
             if (!hasRecord) {
               toast.message("Load or save a document before printing.");

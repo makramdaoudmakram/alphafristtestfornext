@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PHARM_STORE_RETURN_STATUS_CANCELLED,
   PHARM_STORE_RETURN_STATUS_PENDING,
   collectOutgoingPendingForStorage,
   isPharmStoreReturnCancellable,
@@ -43,6 +44,11 @@ describe("pharm-store-return-pending", () => {
   it("treats only pending status as cancellable", () => {
     expect(isPharmStoreReturnCancellable(header())).toBe(true);
     expect(isPharmStoreReturnCancellable(header({ status: 2 }))).toBe(false);
+    expect(
+      isPharmStoreReturnCancellable(
+        header({ status: PHARM_STORE_RETURN_STATUS_CANCELLED })
+      )
+    ).toBe(false);
     expect(isPharmStoreReturnCancellable(header({ id: 0 }))).toBe(false);
   });
 
@@ -51,6 +57,11 @@ describe("pharm-store-return-pending", () => {
     const duplicateInExpire = header({ id: 10, sourceStoreId: 5 });
     const otherPharm = header({ id: 11, sourceStoreId: 9 });
     const accepted = header({ id: 12, sourceStoreId: 5, status: 2 });
+    const cancelled = header({
+      id: 13,
+      sourceStoreId: 5,
+      status: PHARM_STORE_RETURN_STATUS_CANCELLED,
+    });
 
     const page: PharmStoreReturnPendingPage = {
       ...emptyPage(),
@@ -58,7 +69,7 @@ describe("pharm-store-return-pending", () => {
         storeId: 1,
         storeName: "Main",
         isCurrentStore: false,
-        items: [mainItem, otherPharm, accepted],
+        items: [mainItem, otherPharm, accepted, cancelled],
       },
       expireStore: {
         storeId: 2,

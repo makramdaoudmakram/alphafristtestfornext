@@ -61,16 +61,26 @@ export function groupPharmReciveStockBatches(
 
   for (const item of items) {
     if (!Number.isFinite(item.qty) || item.qty <= 0) continue;
+    const bookBase = item.qty;
+    const transferBase =
+      item.transferQty != null && Number.isFinite(item.transferQty)
+        ? item.transferQty
+        : 0;
+    const availableBase =
+      item.availableQty != null && Number.isFinite(item.availableQty)
+        ? item.availableQty
+        : Math.max(0, bookBase - transferBase);
+    if (availableBase <= 0) continue;
     const key = batchGroupKey(item);
     const existing = grouped.get(key);
     if (existing) {
-      existing.qtyBase += item.qty;
+      existing.qtyBase += availableBase;
       continue;
     }
     grouped.set(key, {
       batchNo: item.batchNo?.trim() ?? "",
       expDate: item.expDate,
-      qtyBase: item.qty,
+      qtyBase: availableBase,
       salesPrice: item.salesPrice,
       purshPrice: item.purshPrice,
       costPrice: item.costPrice,

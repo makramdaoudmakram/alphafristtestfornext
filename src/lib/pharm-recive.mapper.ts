@@ -123,6 +123,7 @@ export function emptyPharmReciveHeader(): PharmReciveHeader {
     movTotalSalesPrice: 0,
     movTotalPurchPrice: 0,
     movTotalCostPrice: 0,
+    movFlag: null,
   };
 }
 
@@ -199,6 +200,7 @@ export function mapHeaderFromApi(raw: Record<string, unknown>): PharmReciveHeade
     movTotalSalesPrice: readNumber(raw, "movTotalSalesPrice", "MovTotalSalesPrice"),
     movTotalPurchPrice: readNumber(raw, "movTotalPurchPrice", "MovTotalPurchPrice"),
     movTotalCostPrice: readNumber(raw, "movTotalCostPrice", "MovTotalCostPrice"),
+    movFlag: readNullableNumber(raw, "movFlag", "MovFlag"),
   };
 }
 
@@ -326,6 +328,7 @@ export function toUpsertPayload(
       monNote: header.monNote ?? "",
       accountDept: header.accountDept?.trim() ?? "",
       accountCREDIT: header.accountCREDIT?.trim() ?? "",
+      movFlag: header.movFlag,
       movTotalTaxPrice: undefined,
     },
     details: details.map((detail) => ({

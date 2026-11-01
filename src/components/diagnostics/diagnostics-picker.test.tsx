@@ -47,7 +47,8 @@ describe("diagnostics pickers", () => {
       "vendor",
       "alpha",
       50,
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      undefined
     );
 
     expect(result.current.entries).toEqual([

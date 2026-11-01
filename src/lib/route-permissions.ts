@@ -7,6 +7,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/admin/roles": "Permissions.Manage",
   "/dashboard/admin/user-roles": "Permissions.Manage",
   "/dashboard/admin/user-permissions": "Permissions.Manage",
+  "/dashboard/admin/pharmacy-authorization": "Permissions.Manage",
   "/dashboard/admin/users": "Users.View",
   "/dashboard/admin/users/create": "Users.Create",
   "/dashboard/customers": "Customer.View",
@@ -42,7 +43,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/brands": "Brand.View",
-  "/dashboard/employ-info": null,
+  "/dashboard/employ-info": "EmployInfo.View",
   "/dashboard/transactions/purchase": null,
   "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-purchase-return": "Sales.View",
@@ -60,8 +61,8 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/settings/sales-push-list": null,
   "/dashboard/sales": "Sales.View",
   "/dashboard/sales-return": "Sales.View",
-  "/dashboard/sales/pharm-expenses": "Sales.View",
-  "/dashboard/sales/item-card": "Sales.View",
+  "/dashboard/sales/pharm-expenses": "PharmExpenses.View",
+  "/dashboard/sales/item-card": "ItemCard.View",
   "/dashboard/sales/customers": "Customer.View",
   "/dashboard/shift": "Sales.View",
 };
@@ -170,6 +171,13 @@ export const PERMISSIONS = {
     create: "EmployInfo.Create",
     edit: "EmployInfo.Edit",
     delete: "EmployInfo.Delete",
+  },
+  itemCard: {
+    view: "ItemCard.View",
+  },
+  pharmExpenses: {
+    view: "PharmExpenses.View",
+    create: "PharmExpenses.Create",
   },
   purchase: {
     /** Set when PurTransH RBAC is seeded on Alfa API */

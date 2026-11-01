@@ -37,4 +37,22 @@ describe("pharm-transfer.repository cancel", () => {
     });
     expect(result.message).toContain("cancelled");
   });
+
+  it("GETs PharmTranH/pending/outgoing", async () => {
+    vi.mocked(timedFetch).mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const repo = createPharmTransferRepository("token-abc");
+    const page = await repo.getOutgoingPending();
+
+    expect(timedFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(timedFetch).mock.calls[0]!;
+    expect(String(url)).toContain("PharmTranH/pending/outgoing");
+    expect(init?.method).toBe("GET");
+    expect(page.items).toEqual([]);
+  });
 });

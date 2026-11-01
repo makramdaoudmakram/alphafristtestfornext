@@ -16,7 +16,9 @@ import type { EmployInfoItem } from "@/types/employ-info";
 import type { EmployInfoFormValues } from "@/types/employ-info";
 import { EmployInfoFormSheet } from "@/components/admin/employ-info-form-sheet";
 import { useEmployInfoColumns } from "@/components/admin/employ-info-table-columns";
-import { PageGuard } from "@/components/permissions/page-guard";
+import { ActionGuard, PageGuard } from "@/components/permissions/page-guard";
+import { usePermissions } from "@/components/permissions/permission-provider";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { isValidEmployType } from "@/lib/employ-info-enums";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +53,7 @@ export function EmployInfoPageContent() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
+  const { hasPermission } = usePermissions();
 
   const [items, setItems] = useState<EmployInfoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +199,7 @@ export function EmployInfoPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.employInfo.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Employee Info</h2>
@@ -207,10 +210,12 @@ export function EmployInfoPageContent() {
 
         <Card>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-            <Button onClick={handleNew} className="sm:w-auto">
-              <Plus className="mr-2 h-4 w-4" />
-              New
-            </Button>
+            <ActionGuard permission={PERMISSIONS.employInfo.create}>
+              <Button onClick={handleNew} className="sm:w-auto">
+                <Plus className="mr-2 h-4 w-4" />
+                New
+              </Button>
+            </ActionGuard>
           </CardContent>
         </Card>
 
@@ -229,8 +234,14 @@ export function EmployInfoPageContent() {
               columns={columns}
               data={items}
               loading={loading}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
+              onEdit={
+                hasPermission(PERMISSIONS.employInfo.edit) ? handleEdit : undefined
+              }
+              onDelete={
+                hasPermission(PERMISSIONS.employInfo.delete)
+                  ? handleDelete
+                  : undefined
+              }
             />
           </CardContent>
         </Card>
