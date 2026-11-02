@@ -23,7 +23,19 @@ export type ReportingMonitorItem = {
   sqliteMovementExists: boolean;
   sqliteComplete: boolean;
   status: string;
+  mismatchReason: string | null;
+  duplicateFindings: string[];
   repairAvailable: boolean;
+  repairUnavailableReason: string | null;
+  detail: {
+    expectedLineCount: number | null;
+    sqliteLineCount: number | null;
+    expectedQuantityTotal: number | null;
+    sqliteFactCount: number | null;
+    expectedPaymentLineCount: number | null;
+    sqlitePaymentLineCount: number | null;
+    verificationProblems: string[];
+  } | null;
 };
 
 export type ReportingMonitorResponse = {
@@ -38,14 +50,22 @@ export type ReportingMonitorResponse = {
     missingJob: number;
     missingSqlite: number;
     mismatch: number;
+    duplicate: number;
     notEligible: number;
   };
+  filteredSummary: ReportingMonitorResponse["summary"] | null;
   page: number;
   pageSize: number;
   totalCount: number;
   from: string;
   to: string;
   rangeTruncated: boolean;
+  maxRangeDays: number;
+  storeFilterNotes: string[];
+  monitoredScope: {
+    documentTypes: string[];
+    excludedJobKinds: string[];
+  };
 };
 
 const DOCUMENT_TYPES = [
@@ -58,12 +78,48 @@ const DOCUMENT_TYPES = [
   "StockTransfer",
   "PharmacyStoreReturn",
   "InventoryAdjustment",
+  "Shift",
 ] as const;
 
 export const REPORTING_DOCUMENT_TYPES = DOCUMENT_TYPES;
 
+/** Matches API `Reporting:Reconciliation:LookbackDays` default (see appsettings). */
+export const RECONCILIATION_DEFAULT_LOOKBACK_DAYS = 3;
+
 function reportingUrl(path: string): string {
   return `${API_BASE_URL}/Reporting/${path}`;
+}
+
+function emptySummary(): ReportingMonitorResponse["summary"] {
+  return {
+    total: 0,
+    completed: 0,
+    pending: 0,
+    processing: 0,
+    retryPending: 0,
+    failed: 0,
+    missingJob: 0,
+    missingSqlite: 0,
+    mismatch: 0,
+    duplicate: 0,
+    notEligible: 0,
+  };
+}
+
+function normalizeMonitorResponse(
+  raw: ReportingMonitorResponse
+): ReportingMonitorResponse {
+  return {
+    ...raw,
+    items: raw.items ?? [],
+    summary: raw.summary ?? emptySummary(),
+    filteredSummary: raw.filteredSummary ?? null,
+    storeFilterNotes: raw.storeFilterNotes ?? [],
+    monitoredScope: raw.monitoredScope ?? {
+      documentTypes: [],
+      excludedJobKinds: [],
+    },
+  };
 }
 
 export async function fetchReportingReconciliation(
@@ -74,6 +130,7 @@ export async function fetchReportingReconciliation(
     to: string;
     status?: string;
     store?: string;
+    search?: string;
     page: number;
     pageSize: number;
   }
@@ -84,6 +141,7 @@ export async function fetchReportingReconciliation(
   params.set("to", query.to);
   if (query.status) params.set("status", query.status);
   if (query.store) params.set("store", query.store);
+  if (query.search) params.set("search", query.search);
   params.set("page", String(query.page));
   params.set("pageSize", String(query.pageSize));
   const response = await fetch(reportingUrl(`reconciliation?${params.toString()}`), {
@@ -92,7 +150,8 @@ export async function fetchReportingReconciliation(
   if (!response.ok) {
     throw new Error(await readError(response));
   }
-  return (await response.json()) as ReportingMonitorResponse;
+  const raw = (await response.json()) as ReportingMonitorResponse;
+  return normalizeMonitorResponse(raw);
 }
 
 export async function repairReportingDocuments(
@@ -103,7 +162,17 @@ export async function repairReportingDocuments(
     documentId: number;
     jobKind: string | null;
   }>
-): Promise<{ staged: number; skipped: number }> {
+): Promise<{
+  staged: number;
+  skipped: number;
+  results: Array<{
+    documentType: string;
+    jobHeaderId: number;
+    documentId: number;
+    outcome: string;
+    message: string | null;
+  }>;
+}> {
   const response = await fetch(reportingUrl("reconciliation/repair"), {
     method: "POST",
     headers: {
@@ -122,7 +191,17 @@ export async function repairReportingDocuments(
   if (!response.ok) {
     throw new Error(await readError(response));
   }
-  return (await response.json()) as { staged: number; skipped: number };
+  return (await response.json()) as {
+    staged: number;
+    skipped: number;
+    results: Array<{
+      documentType: string;
+      jobHeaderId: number;
+      documentId: number;
+      outcome: string;
+      message: string | null;
+    }>;
+  };
 }
 
 async function readError(response: Response): Promise<string> {

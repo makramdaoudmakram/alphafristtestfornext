@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { DiagnosticsAdminGuard } from "@/components/diagnostics/DiagnosticsAdminGuard";
@@ -26,6 +26,7 @@ import {
 import {
   fetchReportingReconciliation,
   repairReportingDocuments,
+  RECONCILIATION_DEFAULT_LOOKBACK_DAYS,
   REPORTING_DOCUMENT_TYPES,
   type ReportingMonitorItem,
   type ReportingMonitorResponse,
@@ -40,29 +41,39 @@ const STATUSES = [
   "Completed",
   "MissingSQLite",
   "SQLiteMismatch",
+  "Duplicate",
   "NotEligible",
 ];
 
-function todayIso(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
+function formatDateIso(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function defaultReconciliationRange(): { from: string; to: string } {
+  const toDate = new Date();
+  const fromDate = new Date(toDate);
+  fromDate.setDate(fromDate.getDate() - (RECONCILIATION_DEFAULT_LOOKBACK_DAYS - 1));
+  return { from: formatDateIso(fromDate), to: formatDateIso(toDate) };
 }
 
 export function CommitDocumentsPageContent() {
   const { data: session } = useSession();
   const token = session?.accessToken;
-  const initialDay = useMemo(() => todayIso(), []);
-  const [type, setType] = useState("Sales");
+  const initialRange = useMemo(() => defaultReconciliationRange(), []);
+  const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
-  const [from, setFrom] = useState(initialDay);
-  const [to, setTo] = useState(initialDay);
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
   const [store, setStore] = useState("");
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ReportingMonitorResponse | null>(null);
   const [selected, setSelected] = useState<Record<string, ReportingMonitorItem>>({});
+  const [detail, setDetail] = useState<ReportingMonitorItem | null>(null);
+  const [confirmRepair, setConfirmRepair] = useState(false);
 
   async function load(nextPage = page) {
     if (!token) {
@@ -77,18 +88,25 @@ export function CommitDocumentsPageContent() {
         to,
         status: status === "all" ? undefined : status,
         store: store.trim() || undefined,
+        search: search.trim() || undefined,
         page: nextPage,
         pageSize: 50,
       });
       setResult(data);
       setPage(data.page);
       setSelected({});
+      setDetail(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Request failed.");
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!token) return;
+    void load(1);
+  }, [token]);
 
   async function repair() {
     if (!token) return;
@@ -97,6 +115,11 @@ export function CommitDocumentsPageContent() {
       toast.error("Select documents that can be repaired.");
       return;
     }
+    if (!confirmRepair) {
+      setConfirmRepair(true);
+      return;
+    }
+    setConfirmRepair(false);
     setLoading(true);
     try {
       const response = await repairReportingDocuments(
@@ -108,7 +131,11 @@ export function CommitDocumentsPageContent() {
           jobKind: item.repairJobKind,
         }))
       );
-      toast.success(`Staged ${response.staged}. Skipped ${response.skipped}.`);
+      const failed = response.results.filter((r) => r.outcome !== "Staged");
+      toast.success(
+        `Staged ${response.staged}. Skipped ${response.skipped}.` +
+          (failed.length > 0 ? ` ${failed.length} item(s) did not stage.` : "")
+      );
       await load(page);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Repair failed.");
@@ -118,6 +145,12 @@ export function CommitDocumentsPageContent() {
   }
 
   const summary = result?.summary;
+  const displaySummary =
+    status !== "all" && result?.filteredSummary ? result.filteredSummary : summary;
+  const summaryLabel =
+    status !== "all" && result?.filteredSummary
+      ? "Counts for filtered status"
+      : "Counts for full scan";
 
   return (
     <DiagnosticsAdminGuard>
@@ -125,12 +158,41 @@ export function CommitDocumentsPageContent() {
         <div>
           <h1 className="text-2xl font-semibold">Commit Documents</h1>
           <p className="text-muted-foreground text-sm">
-            SQL documents that should be in AlfaMovement, and whether the reporting job and SQLite snapshot finished.
+            Monitor SQL documents, reporting jobs, and verified SQLite snapshots in AlfaMovement.
           </p>
         </div>
 
+        {result ? (
+          <Card className="border-muted">
+            <CardContent className="pt-4 text-sm">
+              <p>
+                Scanned <strong>{result.from}</strong> through <strong>{result.to}</strong>
+                {result.rangeTruncated ? (
+                  <span className="text-destructive font-medium">
+                    {" "}
+                    — range shortened to {result.maxRangeDays} day maximum
+                  </span>
+                ) : null}
+              </p>
+              {result.storeFilterNotes.length > 0 ? (
+                <ul className="text-muted-foreground mt-2 list-disc pl-5">
+                  {result.storeFilterNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {(result.monitoredScope?.excludedJobKinds?.length ?? 0) > 0 ? (
+                <p className="text-muted-foreground mt-2">
+                  Maintenance / lifecycle job kinds (not shown as documents):{" "}
+                  {result.monitoredScope?.excludedJobKinds?.join(", ")}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
-          <CardContent className="grid gap-3 pt-6 md:grid-cols-6">
+          <CardContent className="grid gap-3 pt-6 md:grid-cols-7">
             <div>
               <Label>Type</Label>
               <Select value={type} onValueChange={setType}>
@@ -167,102 +229,150 @@ export function CommitDocumentsPageContent() {
               <Label>Store</Label>
               <Input value={store} onChange={(event) => setStore(event.target.value)} />
             </div>
+            <div>
+              <Label>Document id</Label>
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search" />
+            </div>
             <div className="flex items-end gap-2">
               <Button disabled={loading} onClick={() => load(1)}>Load</Button>
-              <Button variant="secondary" disabled={loading} onClick={repair}>Repair</Button>
+              <Button variant="secondary" disabled={loading} onClick={repair}>
+                {confirmRepair ? "Confirm repair" : "Repair"}
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {summary ? (
-          <div className="grid gap-2 md:grid-cols-5">
-            <SummaryCard label="Total" value={summary.total} />
-            <SummaryCard label="Completed" value={summary.completed} />
-            <SummaryCard label="Pending" value={summary.pending} />
-            <SummaryCard label="Processing" value={summary.processing} />
-            <SummaryCard label="Retry pending" value={summary.retryPending} />
-            <SummaryCard label="Failed" value={summary.failed} />
-            <SummaryCard label="Missing job" value={summary.missingJob} />
-            <SummaryCard label="Missing SQLite" value={summary.missingSqlite} />
-            <SummaryCard label="Mismatch" value={summary.mismatch} />
-            <SummaryCard label="Not eligible" value={summary.notEligible} />
-          </div>
+        {confirmRepair ? (
+          <Card className="border-amber-500">
+            <CardContent className="pt-4 text-sm">
+              Re-queue {Object.values(selected).filter((i) => i.repairAvailable).length} reporting job(s).
+              SQLite publishing runs asynchronously in the background worker. Nothing is written to SQLite from this page.
+            </CardContent>
+          </Card>
         ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Documents
-              {result ? ` (${result.totalCount})` : ""}
-              {result?.rangeTruncated ? " — date range was shortened to the configured maximum" : ""}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead />
-                  <TableHead>Type</TableHead>
-                  <TableHead>Document</TableHead>
-                  <TableHead>SQL id</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Job</TableHead>
-                  <TableHead>Attempts</TableHead>
-                  <TableHead>SQLite</TableHead>
-                  <TableHead>Error</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(result?.items ?? []).map((item) => {
-                  const key = `${item.documentType}:${item.jobHeaderId}:${item.documentId}`;
-                  return (
-                    <TableRow key={key}>
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          disabled={!item.repairAvailable}
-                          checked={Boolean(selected[key])}
-                          onChange={(event) => {
-                            setSelected((current) => {
-                              const next = { ...current };
-                              if (event.target.checked) next[key] = item;
-                              else delete next[key];
-                              return next;
-                            });
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>{item.documentType}</TableCell>
-                      <TableCell>{item.documentId}</TableCell>
-                      <TableCell>{item.jobHeaderId}</TableCell>
-                      <TableCell>{item.status}</TableCell>
-                      <TableCell>{item.jobStatus ?? "none"}</TableCell>
-                      <TableCell>{item.attemptCount ?? ""}</TableCell>
-                      <TableCell>
-                        {item.sqliteHeaderExists ? "header " : ""}
-                        {item.sqliteLinesExist ? "lines " : ""}
-                        {item.sqliteMovementExists ? "facts" : ""}
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">{item.lastError}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            <div className="mt-3 flex gap-2">
-              <Button variant="outline" disabled={loading || page <= 1} onClick={() => load(page - 1)}>
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                disabled={loading || !result || page * result.pageSize >= result.totalCount}
-                onClick={() => load(page + 1)}
-              >
-                Next
-              </Button>
+        {displaySummary ? (
+          <>
+            <p className="text-muted-foreground text-xs">{summaryLabel}</p>
+            <div className="grid gap-2 md:grid-cols-5">
+              <SummaryCard label="Total" value={displaySummary.total} />
+              <SummaryCard label="Completed" value={displaySummary.completed} />
+              <SummaryCard label="Missing job" value={displaySummary.missingJob} />
+              <SummaryCard label="Missing SQLite" value={displaySummary.missingSqlite} />
+              <SummaryCard label="Mismatch" value={displaySummary.mismatch} />
+              <SummaryCard label="Duplicate" value={displaySummary.duplicate} />
+              <SummaryCard label="Pending" value={displaySummary.pending} />
+              <SummaryCard label="Processing" value={displaySummary.processing} />
+              <SummaryCard label="Retry pending" value={displaySummary.retryPending} />
+              <SummaryCard label="Failed" value={displaySummary.failed} />
+              <SummaryCard label="Not eligible" value={displaySummary.notEligible} />
             </div>
-          </CardContent>
-        </Card>
+          </>
+        ) : null}
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>
+                Documents
+                {result ? ` (${result.totalCount})` : ""}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead />
+                    <TableHead>Type</TableHead>
+                    <TableHead>Document</TableHead>
+                    <TableHead>Store</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Job</TableHead>
+                    <TableHead>SQLite</TableHead>
+                    <TableHead>Mismatch</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(result?.items ?? []).map((item) => {
+                    const key = `${item.documentType}:${item.jobHeaderId}:${item.documentId}`;
+                    return (
+                      <TableRow
+                        key={key}
+                        className={detail?.documentId === item.documentId && detail.documentType === item.documentType ? "bg-muted/50" : undefined}
+                        onClick={() => setDetail(item)}
+                      >
+                        <TableCell onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            disabled={!item.repairAvailable}
+                            checked={Boolean(selected[key])}
+                            onChange={(event) => {
+                              setSelected((current) => {
+                                const next = { ...current };
+                                if (event.target.checked) next[key] = item;
+                                else delete next[key];
+                                return next;
+                              });
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>{item.documentType}</TableCell>
+                        <TableCell>{item.documentId}</TableCell>
+                        <TableCell>{item.storeId ?? ""}</TableCell>
+                        <TableCell>{item.status}</TableCell>
+                        <TableCell>{item.jobStatus ?? "none"}</TableCell>
+                        <TableCell>
+                          {item.sqliteComplete ? "verified" : item.sqliteHeaderExists ? "header " : ""}
+                          {item.sqliteLinesExist ? "lines " : ""}
+                          {item.sqliteMovementExists ? "facts" : ""}
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate">{item.mismatchReason ?? item.lastError ?? ""}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="mt-3 flex gap-2">
+                <Button variant="outline" disabled={loading || page <= 1} onClick={() => load(page - 1)}>
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={loading || !result || page * result.pageSize >= result.totalCount}
+                  onClick={() => load(page + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Document details</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              {!detail ? (
+                <p className="text-muted-foreground">Select a row to inspect SQL, job, and SQLite verification.</p>
+              ) : (
+                <>
+                  <p><strong>{detail.documentType}</strong> #{detail.documentId} (SQL header id {detail.jobHeaderId})</p>
+                  <p>Status: {detail.status}</p>
+                  <p>Job: {detail.jobStatus ?? "none"} · attempts {detail.attemptCount ?? 0}</p>
+                  <p>Repair: {detail.repairAvailable ? "available" : detail.repairUnavailableReason ?? "not available"}</p>
+                  {detail.mismatchReason ? <p className="text-destructive">{detail.mismatchReason}</p> : null}
+                  {detail.detail?.verificationProblems?.length ? (
+                    <ul className="list-disc pl-5">
+                      {detail.detail.verificationProblems.map((problem) => (
+                        <li key={problem}>{problem}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </DiagnosticsAdminGuard>
   );
