@@ -53,13 +53,15 @@ function databaseStatus(db: SqliteDatabaseVerification): string {
 function DatabaseCard({
   title,
   db,
-  countLabel,
-  countValue,
+  primaryCountLabel,
+  primaryCountValue,
+  extraCounts,
 }: {
   title: string;
   db: SqliteDatabaseVerification;
-  countLabel: string;
-  countValue: number | null;
+  primaryCountLabel: string;
+  primaryCountValue: number | null;
+  extraCounts?: { label: string; value: number | null }[];
 }) {
   return (
     <Card>
@@ -89,11 +91,18 @@ function DatabaseCard({
           {db.walSizeBytes > 0 ? ` · WAL ${formatBytes(db.walSizeBytes)}` : ""}
           {db.shmSizeBytes > 0 ? ` · SHM ${formatBytes(db.shmSizeBytes)}` : ""}
         </p>
-        {countValue != null ? (
+        {primaryCountValue != null ? (
           <p>
-            {countLabel}: {countValue.toLocaleString()}
+            {primaryCountLabel}: {primaryCountValue.toLocaleString()}
           </p>
         ) : null}
+        {extraCounts?.map((row) =>
+          row.value != null ? (
+            <p key={row.label}>
+              {row.label}: {row.value.toLocaleString()}
+            </p>
+          ) : null
+        )}
         {db.errorMessage ? (
           <p className="text-destructive">{db.errorMessage}</p>
         ) : null}
@@ -192,14 +201,24 @@ export function SqliteVerificationPageContent() {
               <DatabaseCard
                 title="AlfaMovement.db"
                 db={data.movement}
-                countLabel="Movement facts"
-                countValue={data.movement.movementFactCount}
+                primaryCountLabel="Movement facts"
+                primaryCountValue={data.movement.movementFactCount}
+                extraCounts={[
+                  {
+                    label: "Document headers",
+                    value: data.movement.documentHeaderCount,
+                  },
+                  {
+                    label: "Document lines",
+                    value: data.movement.documentLineCount,
+                  },
+                ]}
               />
               <DatabaseCard
                 title="AlfaAudit.db"
                 db={data.audit}
-                countLabel="Audit events"
-                countValue={data.audit.auditEventCount}
+                primaryCountLabel="Audit events"
+                primaryCountValue={data.audit.auditEventCount}
               />
             </div>
 

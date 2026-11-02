@@ -37,6 +37,8 @@ const sampleResponse: sqliteApi.SqliteReportingVerificationResponse = {
     walSizeBytes: 0,
     shmSizeBytes: 0,
     movementFactCount: 10,
+    documentHeaderCount: 3,
+    documentLineCount: 12,
     auditEventCount: null,
     schemaValid: true,
     missingTables: [],

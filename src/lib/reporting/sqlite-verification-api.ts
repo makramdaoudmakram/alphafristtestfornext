@@ -10,6 +10,8 @@ export type SqliteDatabaseVerification = {
   walSizeBytes: number;
   shmSizeBytes: number;
   movementFactCount: number | null;
+  documentHeaderCount: number | null;
+  documentLineCount: number | null;
   auditEventCount: number | null;
   schemaValid: boolean;
   missingTables: string[];
