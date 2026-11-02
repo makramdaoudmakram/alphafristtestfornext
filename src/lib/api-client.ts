@@ -166,6 +166,7 @@ import type {
 import type {
   BatchTraceabilityCreatorSource,
   BatchTraceabilityResult,
+  BatchTraceabilitySearchResponse,
   BatchTraceabilityTimelineEntry,
 } from "@/types/batch-traceability";
 import type { ItemCardQuery, ItemCardResponse, ItemCardRow } from "@/types/item-card";
@@ -3169,10 +3170,29 @@ function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult
   };
 }
 
+function normalizeBatchTraceabilitySearchResponse(
+  raw: unknown
+): BatchTraceabilitySearchResponse {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const resultsRaw = obj.results ?? obj.Results ?? null;
+
+  if (Array.isArray(resultsRaw)) {
+    return {
+      results: resultsRaw.map((entry) => normalizeBatchTraceabilityResult(entry)),
+    };
+  }
+
+  if (obj.batch != null || obj.Batch != null) {
+    return { results: [normalizeBatchTraceabilityResult(raw)] };
+  }
+
+  return { results: [] };
+}
+
 export function getBatchTraceability(token: string, batchNo: string) {
   const encoded = encodeURIComponent(batchNo.trim());
   return apiFetch<unknown>(`BatchTraceability/${encoded}`, {}, token).then(
-    normalizeBatchTraceabilityResult
+    normalizeBatchTraceabilitySearchResponse
   );
 }
 

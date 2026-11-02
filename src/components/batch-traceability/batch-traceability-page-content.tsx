@@ -8,7 +8,10 @@ import { toast } from "sonner";
 import { getBatchTraceability, ApiError } from "@/lib/api-client";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { PERMISSIONS } from "@/lib/route-permissions";
-import type { BatchTraceabilityResult } from "@/types/batch-traceability";
+import type {
+  BatchTraceabilityResult,
+  BatchTraceabilitySearchResponse,
+} from "@/types/batch-traceability";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -111,7 +114,9 @@ export function BatchTraceabilityPageContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [batchNoInput, setBatchNoInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<BatchTraceabilityResult | null>(null);
+  const [results, setResults] = useState<BatchTraceabilitySearchResponse["results"]>(
+    []
+  );
   const [searched, setSearched] = useState(false);
 
   const runSearch = useCallback(async () => {
@@ -131,9 +136,9 @@ export function BatchTraceabilityPageContent() {
     setSearched(true);
     try {
       const data = await getBatchTraceability(token, value);
-      setResult(data);
+      setResults(data.results);
     } catch (error) {
-      setResult(null);
+      setResults([]);
       if (error instanceof ApiError && error.status === 404) {
         toast.error("Batch not found");
       } else {
@@ -162,7 +167,7 @@ export function BatchTraceabilityPageContent() {
           <h2 className="text-lg font-semibold">Batch Traceability</h2>
           <p className="text-muted-foreground text-sm">
             Search by batch number to view batch details, current stock locations, and
-            transaction history.
+            transaction history per item.
           </p>
         </div>
 
@@ -212,7 +217,7 @@ export function BatchTraceabilityPageContent() {
           </div>
         ) : null}
 
-        {!loading && searched && !result ? (
+        {!loading && searched && results.length === 0 ? (
           <Card>
             <CardContent className="text-muted-foreground py-10 text-center text-sm">
               Batch not found
@@ -220,153 +225,176 @@ export function BatchTraceabilityPageContent() {
           </Card>
         ) : null}
 
-        {!loading && result ? (
-          <>
-            <Card>
-              <CardHeader>
-                <CardTitle>Batch Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <DetailField label="Batch No" value={result.batch.batchNo} />
-                  <DetailField label="Item Code" value={result.batch.itemCode ?? "—"} />
-                  <DetailField label="Arabic Name" value={result.batch.itemNameAr ?? "—"} />
-                  <DetailField label="English Name" value={result.batch.itemNameEn ?? "—"} />
-                  <DetailField label="Expiry Date" value={result.batch.expDate ?? "—"} />
-                  <DetailField
-                    label="Purchase Price"
-                    value={formatMoney(result.batch.purchasePrice)}
-                  />
-                  <DetailField
-                    label="Sales Price"
-                    value={formatMoney(result.batch.salesPrice)}
-                  />
-                  <DetailField
-                    label="Cost Price"
-                    value={formatMoney(result.batch.costPrice)}
-                  />
-                  <DetailField
-                    label="Creator"
-                    value={formatCreatorDisplay(
-                      result.creator.userName,
-                      result.creator.userId
-                    )}
-                  />
-                  <DetailField
-                    label="Created Date"
-                    value={formatDate(result.creator.createdAt)}
-                  />
-                  <DetailField
-                    label="Creator Source"
-                    value={formatSourceLabel(result.creator.source)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Stock</CardTitle>
-                <CardDescription>Current stock location</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Store</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {result.currentStock.locations.map((row) => (
-                      <TableRow key={row.storeId}>
-                        <TableCell>{row.storeName ?? `Store ${row.storeId}`}</TableCell>
-                        <TableCell className="text-right">
-                          {formatMoney(row.qty)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="font-semibold">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">
-                        {formatMoney(result.currentStock.totalCurrentQty)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Transaction Timeline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {result.timeline.length === 0 ? (
-                  <p className="text-muted-foreground py-8 text-center text-sm">
-                    No transaction history found for this batch.
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Document</TableHead>
-                        <TableHead>Store</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead>User</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {result.timeline.map((row) => (
-                        <TableRow
-                          key={`${row.transactionType}-${row.detailId}-${row.lineNo}`}
-                        >
-                          <TableCell>{formatDate(row.eventDate)}</TableCell>
-                          <TableCell>
-                            {formatTransactionTypeLabel(row.transactionType)}
-                          </TableCell>
-                          <TableCell>
-                            {row.deepLinkRoute ? (
-                              <Link
-                                href={row.deepLinkRoute}
-                                className="text-primary font-medium hover:underline"
-                              >
-                                {row.documentLabel ?? row.documentDisplayNo ?? "—"}
-                              </Link>
-                            ) : (
-                              row.documentLabel ?? row.documentDisplayNo ?? "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {row.storeName ?? row.storeId ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatQtyDelta(row.quantityDelta)}
-                          </TableCell>
-                          <TableCell>
-                            {formatCreatorDisplay(row.userName, row.userId)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-
+        {!loading && results.length > 0 ? (
+          <div className="space-y-6">
+            {results.length > 1 ? (
+              <p className="text-muted-foreground text-sm">
+                This batch number matches {results.length} items. Each item is shown
+                separately below.
+              </p>
+            ) : null}
+            {results.map((result) => (
+              <ItemBatchTraceabilitySection
+                key={`${result.batch.itemId}-${result.batch.batchNo}`}
+                result={result}
+                multiItem={results.length > 1}
+              />
+            ))}
             <p className="text-muted-foreground text-xs leading-relaxed">
               Batch history shows transaction detail records from Purchase, vendor Return,
               Pharmacy Receive, Inventory Adjustment, Pharmacy↔Store Transfer (send and
               accept), Pharmacy→Store Return (send and accept), customer Sale, and Sales
-              Return. The same batch number can exist across multiple stores, so all related
-              stores and events are shown. Running quantity-after values and historical
-              edit/delete deltas are not included in this version.
+              Return. Quantities are grouped by item and batch; the same batch number on
+              different items is never combined. Running quantity-after values and
+              historical edit/delete deltas are not included in this version.
             </p>
-          </>
+          </div>
         ) : null}
       </div>
     </PageGuard>
+  );
+}
+
+function ItemBatchTraceabilitySection({
+  result,
+  multiItem,
+}: {
+  result: BatchTraceabilityResult;
+  multiItem: boolean;
+}) {
+  const sectionTitle =
+    multiItem && result.batch.itemCode
+      ? `${result.batch.itemCode} — Batch ${result.batch.batchNo}`
+      : "Batch Details";
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{sectionTitle}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <DetailField label="Batch No" value={result.batch.batchNo} />
+            <DetailField label="Item Code" value={result.batch.itemCode ?? "—"} />
+            <DetailField label="Arabic Name" value={result.batch.itemNameAr ?? "—"} />
+            <DetailField label="English Name" value={result.batch.itemNameEn ?? "—"} />
+            <DetailField label="Expiry Date" value={result.batch.expDate ?? "—"} />
+            <DetailField
+              label="Purchase Price"
+              value={formatMoney(result.batch.purchasePrice)}
+            />
+            <DetailField
+              label="Sales Price"
+              value={formatMoney(result.batch.salesPrice)}
+            />
+            <DetailField label="Cost Price" value={formatMoney(result.batch.costPrice)} />
+            <DetailField
+              label="Creator"
+              value={formatCreatorDisplay(
+                result.creator.userName,
+                result.creator.userId
+              )}
+            />
+            <DetailField
+              label="Created Date"
+              value={formatDate(result.creator.createdAt)}
+            />
+            <DetailField
+              label="Creator Source"
+              value={formatSourceLabel(result.creator.source)}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Stock</CardTitle>
+          <CardDescription>Current stock by store for this item and batch</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Store</TableHead>
+                <TableHead className="text-right">Quantity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {result.currentStock.locations.map((row) => (
+                <TableRow key={row.storeId}>
+                  <TableCell>{row.storeName ?? `Store ${row.storeId}`}</TableCell>
+                  <TableCell className="text-right">{formatMoney(row.qty)}</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="font-semibold">
+                <TableCell>Total</TableCell>
+                <TableCell className="text-right">
+                  {formatMoney(result.currentStock.totalCurrentQty)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Transaction Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result.timeline.length === 0 ? (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No transaction history found for this batch.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Document</TableHead>
+                  <TableHead>Store</TableHead>
+                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead>User</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {result.timeline.map((row) => (
+                  <TableRow
+                    key={`${row.transactionType}-${row.detailId}-${row.lineNo}`}
+                  >
+                    <TableCell>{formatDate(row.eventDate)}</TableCell>
+                    <TableCell>
+                      {formatTransactionTypeLabel(row.transactionType)}
+                    </TableCell>
+                    <TableCell>
+                      {row.deepLinkRoute ? (
+                        <Link
+                          href={row.deepLinkRoute}
+                          className="text-primary font-medium hover:underline"
+                        >
+                          {row.documentLabel ?? row.documentDisplayNo ?? "—"}
+                        </Link>
+                      ) : (
+                        row.documentLabel ?? row.documentDisplayNo ?? "—"
+                      )}
+                    </TableCell>
+                    <TableCell>{row.storeName ?? row.storeId ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatQtyDelta(row.quantityDelta)}
+                    </TableCell>
+                    <TableCell>
+                      {formatCreatorDisplay(row.userName, row.userId)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

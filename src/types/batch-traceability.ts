@@ -58,3 +58,7 @@ export type BatchTraceabilityResult = {
   currentStock: BatchTraceabilityCurrentStock;
   timeline: BatchTraceabilityTimelineEntry[];
 };
+
+export type BatchTraceabilitySearchResponse = {
+  results: BatchTraceabilityResult[];
+};
