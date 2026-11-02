@@ -38,6 +38,7 @@ function sampleResult(
       storeId: 1,
       storeName: "Main",
       expDate: "2027-01-01",
+      expiryStatus: "Valid",
       purchasePrice: 1,
       salesPrice: 2,
       costPrice: 1.5,
@@ -51,8 +52,19 @@ function sampleResult(
       source: "Purchase",
     },
     currentStock: {
-      locations: [{ storeId: 1, storeName: "Main", qty: 5 }],
+      locations: [
+        {
+          storeId: 1,
+          storeName: "Main",
+          qty: 5,
+          transferQty: 0,
+          availableQty: 5,
+          expDate: "2027-01-01",
+        },
+      ],
       totalCurrentQty: 5,
+      totalReservedQty: 0,
+      totalAvailableQty: 5,
     },
     timeline: [],
   };
@@ -108,10 +120,26 @@ describe("BatchTraceabilityPageContent", () => {
           ...sampleResult(),
           currentStock: {
             locations: [
-              { storeId: 1, storeName: "Store One", qty: 3 },
-              { storeId: 2, storeName: "Store Two", qty: 2 },
+              {
+                storeId: 1,
+                storeName: "Store One",
+                qty: 3,
+                transferQty: 0,
+                availableQty: 3,
+                expDate: null,
+              },
+              {
+                storeId: 2,
+                storeName: "Store Two",
+                qty: 2,
+                transferQty: 0,
+                availableQty: 2,
+                expDate: null,
+              },
             ],
             totalCurrentQty: 5,
+            totalReservedQty: 0,
+            totalAvailableQty: 5,
           },
         },
       ],

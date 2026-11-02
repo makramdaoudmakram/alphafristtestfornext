@@ -9,6 +9,7 @@ import { getBatchTraceability, ApiError } from "@/lib/api-client";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import type {
+  BatchTraceabilityQuery,
   BatchTraceabilityResult,
   BatchTraceabilitySearchResponse,
 } from "@/types/batch-traceability";
@@ -68,6 +69,55 @@ function formatSourceLabel(source: string): string {
   return source;
 }
 
+function formatExpiryStatusLabel(status: string): string {
+  switch (status) {
+    case "Expired":
+      return "Expired";
+    case "NearExpiry":
+      return "Near expiry";
+    case "Valid":
+      return "Valid";
+    default:
+      return "Unknown expiry";
+  }
+}
+
+function expiryStatusClass(status: string): string {
+  switch (status) {
+    case "Expired":
+      return "text-destructive font-semibold";
+    case "NearExpiry":
+      return "text-amber-600 dark:text-amber-400 font-medium";
+    case "Valid":
+      return "text-emerald-600 dark:text-emerald-400";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function formatTransactionStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  switch (status) {
+    case "Pending":
+      return "Pending";
+    case "Accepted":
+      return "Accepted";
+    case "Cancelled":
+      return "Cancelled";
+    case "Completed":
+      return "Completed";
+    default:
+      return status;
+  }
+}
+
+function formatMovementKindLabel(kind: string | null | undefined): string {
+  if (!kind || kind === "None") return "—";
+  if (kind === "Physical") return "Physical";
+  if (kind === "Reservation") return "Reserved";
+  return kind;
+}
+
 function formatTransactionTypeLabel(type: string): string {
   switch (type) {
     case "Purchase":
@@ -113,6 +163,9 @@ export function BatchTraceabilityPageContent() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const [batchNoInput, setBatchNoInput] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStoreId, setFilterStoreId] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<BatchTraceabilitySearchResponse["results"]>(
     []
@@ -135,7 +188,11 @@ export function BatchTraceabilityPageContent() {
     setLoading(true);
     setSearched(true);
     try {
-      const data = await getBatchTraceability(token, value);
+      const query: BatchTraceabilityQuery = {};
+      if (filterType.trim()) query.transactionType = filterType.trim();
+      if (filterStatus.trim()) query.transactionStatus = filterStatus.trim();
+      if (filterStoreId.trim()) query.storeId = filterStoreId.trim();
+      const data = await getBatchTraceability(token, value, query);
       setResults(data.results);
     } catch (error) {
       setResults([]);
@@ -148,7 +205,7 @@ export function BatchTraceabilityPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [token, batchNoInput]);
+  }, [token, batchNoInput, filterType, filterStatus, filterStoreId]);
 
   if (!sessionReady) {
     return (
@@ -206,6 +263,38 @@ export function BatchTraceabilityPageContent() {
                 Search
               </Button>
             </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label htmlFor="bt-filter-type">Transaction type</Label>
+                <Input
+                  id="bt-filter-type"
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  placeholder="e.g. Sale"
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bt-filter-status">Status</Label>
+                <Input
+                  id="bt-filter-status"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  placeholder="Pending, Accepted…"
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bt-filter-store">Store ID</Label>
+                <Input
+                  id="bt-filter-store"
+                  value={filterStoreId}
+                  onChange={(e) => setFilterStoreId(e.target.value)}
+                  placeholder="Store filter"
+                  disabled={loading}
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -241,12 +330,12 @@ export function BatchTraceabilityPageContent() {
               />
             ))}
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Batch history shows transaction detail records from Purchase, vendor Return,
-              Pharmacy Receive, Inventory Adjustment, Pharmacy↔Store Transfer (send and
-              accept), Pharmacy→Store Return (send and accept), customer Sale, and Sales
-              Return. Quantities are grouped by item and batch; the same batch number on
-              different items is never combined. Running quantity-after values and
-              historical edit/delete deltas are not included in this version.
+              Physical quantity is on-hand stock (<strong>Qty</strong>). Reserved
+              quantity is held on transfers/receives (<strong>TransferQty</strong>).
+              Available = Qty − TransferQty. Timeline rows distinguish physical
+              movement, reservations, pending acceptance, and cancellation. The
+              timeline total is not a running balance and may not reconcile to current
+              stock without full opening balances.
             </p>
           </div>
         ) : null}
@@ -281,6 +370,13 @@ function ItemBatchTraceabilitySection({
             <DetailField label="English Name" value={result.batch.itemNameEn ?? "—"} />
             <DetailField label="Expiry Date" value={result.batch.expDate ?? "—"} />
             <DetailField
+              label="Expiry Status"
+              value={formatExpiryStatusLabel(result.batch.expiryStatus)}
+            />
+            <p className={`text-sm sm:col-span-2 ${expiryStatusClass(result.batch.expiryStatus)}`}>
+              Near-expiry threshold: 90 days (UTC calendar).
+            </p>
+            <DetailField
               label="Purchase Price"
               value={formatMoney(result.batch.purchasePrice)}
             />
@@ -311,14 +407,19 @@ function ItemBatchTraceabilitySection({
       <Card>
         <CardHeader>
           <CardTitle>Current Stock</CardTitle>
-          <CardDescription>Current stock by store for this item and batch</CardDescription>
+          <CardDescription>
+            Physical, reserved, and available quantities by store (ItemId + batch)
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Store</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
+                <TableHead className="text-right">Physical</TableHead>
+                <TableHead className="text-right">Reserved</TableHead>
+                <TableHead className="text-right">Available</TableHead>
+                <TableHead>Expiry</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -326,6 +427,13 @@ function ItemBatchTraceabilitySection({
                 <TableRow key={row.storeId}>
                   <TableCell>{row.storeName ?? `Store ${row.storeId}`}</TableCell>
                   <TableCell className="text-right">{formatMoney(row.qty)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatMoney(row.transferQty)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatMoney(row.availableQty)}
+                  </TableCell>
+                  <TableCell>{row.expDate ?? "—"}</TableCell>
                 </TableRow>
               ))}
               <TableRow className="font-semibold">
@@ -333,6 +441,13 @@ function ItemBatchTraceabilitySection({
                 <TableCell className="text-right">
                   {formatMoney(result.currentStock.totalCurrentQty)}
                 </TableCell>
+                <TableCell className="text-right">
+                  {formatMoney(result.currentStock.totalReservedQty)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatMoney(result.currentStock.totalAvailableQty)}
+                </TableCell>
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
@@ -343,7 +458,7 @@ function ItemBatchTraceabilitySection({
         <CardHeader>
           <CardTitle>Transaction Timeline</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {result.timeline.length === 0 ? (
             <p className="text-muted-foreground py-8 text-center text-sm">
               No transaction history found for this batch.
@@ -354,20 +469,37 @@ function ItemBatchTraceabilitySection({
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Movement</TableHead>
                   <TableHead>Document</TableHead>
-                  <TableHead>Store</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
+                  <TableHead>Store / Route</TableHead>
+                  <TableHead className="text-right">Line Qty</TableHead>
+                  <TableHead className="text-right">Physical Δ</TableHead>
+                  <TableHead className="text-right">Reserved Δ</TableHead>
                   <TableHead>User</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {result.timeline.map((row) => (
                   <TableRow
-                    key={`${row.transactionType}-${row.detailId}-${row.lineNo}`}
+                    key={`${row.transactionType}-${row.detailId}-${row.sortSequence}-${row.lineNo}`}
+                    className={
+                      row.transactionStatus === "Pending"
+                        ? "bg-muted/40"
+                        : row.transactionStatus === "Cancelled"
+                          ? "opacity-70"
+                          : undefined
+                    }
                   >
                     <TableCell>{formatDate(row.eventDate)}</TableCell>
                     <TableCell>
                       {formatTransactionTypeLabel(row.transactionType)}
+                    </TableCell>
+                    <TableCell>
+                      {formatTransactionStatusLabel(row.transactionStatus)}
+                    </TableCell>
+                    <TableCell>
+                      {formatMovementKindLabel(row.movementKind)}
                     </TableCell>
                     <TableCell>
                       {row.deepLinkRoute ? (
@@ -381,9 +513,20 @@ function ItemBatchTraceabilitySection({
                         row.documentLabel ?? row.documentDisplayNo ?? "—"
                       )}
                     </TableCell>
-                    <TableCell>{row.storeName ?? row.storeId ?? "—"}</TableCell>
+                    <TableCell className="max-w-[12rem] truncate text-sm">
+                      {row.storeName ?? row.storeId ?? "—"}
+                      {row.sourceStoreId && row.destinationStoreId
+                        ? ` (${row.sourceStoreId} → ${row.destinationStoreId})`
+                        : null}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatMoney(row.transactionQuantity)}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatQtyDelta(row.quantityDelta)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {formatQtyDelta(row.reservedQuantityDelta)}
                     </TableCell>
                     <TableCell>
                       {formatCreatorDisplay(row.userName, row.userId)}

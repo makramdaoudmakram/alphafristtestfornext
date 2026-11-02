@@ -167,6 +167,8 @@ import type {
   BatchTraceabilityCreatorSource,
   BatchTraceabilityResult,
   BatchTraceabilitySearchResponse,
+  BatchTraceabilityQuery,
+  BatchTraceabilityExpiryStatus,
   BatchTraceabilityTimelineEntry,
 } from "@/types/batch-traceability";
 import type { ItemCardQuery, ItemCardResponse, ItemCardRow } from "@/types/item-card";
@@ -3095,7 +3097,30 @@ function normalizeBatchTraceabilityTimelineEntry(
     storeId: readNullableString(obj, "storeId", "StoreId"),
     storeCode: readNullableString(obj, "storeCode", "StoreCode"),
     storeName: readNullableString(obj, "storeName", "StoreName"),
+    sourceStoreId: readNullableString(obj, "sourceStoreId", "SourceStoreId"),
+    destinationStoreId: readNullableString(
+      obj,
+      "destinationStoreId",
+      "DestinationStoreId"
+    ),
+    transactionQuantity: readNumber(
+      obj,
+      "transactionQuantity",
+      "TransactionQuantity"
+    ),
     quantityDelta: readNumber(obj, "quantityDelta", "QuantityDelta"),
+    reservedQuantityDelta: readNumber(
+      obj,
+      "reservedQuantityDelta",
+      "ReservedQuantityDelta"
+    ),
+    transactionStatus: readNullableString(
+      obj,
+      "transactionStatus",
+      "TransactionStatus"
+    ),
+    movementKind: readNullableString(obj, "movementKind", "MovementKind"),
+    sortSequence: readNumber(obj, "sortSequence", "SortSequence"),
     quantityAfter:
       obj.quantityAfter != null || obj.QuantityAfter != null
         ? readNumber(obj, "quantityAfter", "QuantityAfter")
@@ -3120,6 +3145,15 @@ function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult
       ? sourceRaw
       : "Unknown";
 
+  const expiryRaw = readString(batch, "expiryStatus", "ExpiryStatus");
+  const expiryStatus: BatchTraceabilityExpiryStatus =
+    expiryRaw === "Valid" ||
+    expiryRaw === "NearExpiry" ||
+    expiryRaw === "Expired" ||
+    expiryRaw === "Unknown"
+      ? expiryRaw
+      : "Unknown";
+
   return {
     batch: {
       batchNo: readString(batch, "batchNo", "BatchNo"),
@@ -3131,6 +3165,7 @@ function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult
       storeId: readNumber(batch, "storeId", "StoreId"),
       storeName: readNullableString(batch, "storeName", "StoreName"),
       expDate: readNullableString(batch, "expDate", "ExpDate"),
+      expiryStatus,
       purchasePrice: readNumber(batch, "purchasePrice", "PurchasePrice"),
       salesPrice: readNumber(batch, "salesPrice", "SalesPrice"),
       costPrice: readNumber(batch, "costPrice", "CostPrice"),
@@ -3150,6 +3185,9 @@ function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult
               storeId: readNumber(loc, "storeId", "StoreId"),
               storeName: readNullableString(loc, "storeName", "StoreName"),
               qty: readNumber(loc, "qty", "Qty"),
+              transferQty: readNumber(loc, "transferQty", "TransferQty"),
+              availableQty: readNumber(loc, "availableQty", "AvailableQty"),
+              expDate: readNullableString(loc, "expDate", "ExpDate"),
             };
           })
         : [],
@@ -3157,6 +3195,16 @@ function normalizeBatchTraceabilityResult(raw: unknown): BatchTraceabilityResult
         currentStock,
         "totalCurrentQty",
         "TotalCurrentQty"
+      ),
+      totalReservedQty: readNumber(
+        currentStock,
+        "totalReservedQty",
+        "TotalReservedQty"
+      ),
+      totalAvailableQty: readNumber(
+        currentStock,
+        "totalAvailableQty",
+        "TotalAvailableQty"
       ),
     },
     timeline: Array.isArray(obj.timeline ?? obj.Timeline)
@@ -3189,9 +3237,25 @@ function normalizeBatchTraceabilitySearchResponse(
   return { results: [] };
 }
 
-export function getBatchTraceability(token: string, batchNo: string) {
+export function getBatchTraceability(
+  token: string,
+  batchNo: string,
+  query: BatchTraceabilityQuery = {}
+) {
+  const params = new URLSearchParams();
+  if (query.transactionType?.trim())
+    params.set("transactionType", query.transactionType.trim());
+  if (query.storeId?.trim()) params.set("storeId", query.storeId.trim());
+  if (query.fromDate?.trim()) params.set("fromDate", query.fromDate.trim());
+  if (query.toDate?.trim()) params.set("toDate", query.toDate.trim());
+  if (query.transactionStatus?.trim())
+    params.set("transactionStatus", query.transactionStatus.trim());
+  const qs = params.toString();
   const encoded = encodeURIComponent(batchNo.trim());
-  return apiFetch<unknown>(`BatchTraceability/${encoded}`, {}, token).then(
+  const path = qs
+    ? `BatchTraceability/${encoded}?${qs}`
+    : `BatchTraceability/${encoded}`;
+  return apiFetch<unknown>(path, {}, token).then(
     normalizeBatchTraceabilitySearchResponse
   );
 }
