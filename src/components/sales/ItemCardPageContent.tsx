@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import {
   ApiError,
   getItemCard,
+  getItemCardStores,
   getPharms,
-  getStors,
   lookupItemCatalog,
   lookupItemCatalogBySegment,
 } from "@/lib/api-client";
@@ -38,15 +38,21 @@ import {
   SearchableCombobox,
   type ComboboxOption,
 } from "@/components/ui/searchable-combobox";
-import { formatStorDisplayName } from "@/lib/purchase-stores";
 import {
   ITEM_AUTOCOMPLETE_LIMIT,
   hasSearchableCatalogQuery,
 } from "@/lib/item-catalog-search";
-import type { ItemCardResponse } from "@/types/item-card";
+import type { ItemCardResponse, ItemCardStoreOption } from "@/types/item-card";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmItem } from "@/types/pharm";
-import type { StorItem } from "@/types/stor";
+
+function itemCardStoreLabel(store: ItemCardStoreOption): string {
+  const en = store.storEnName?.trim();
+  if (en) return en;
+  const ar = store.storArName?.trim();
+  if (ar) return ar;
+  return `Store ${store.id}`;
+}
 
 /** Values stored on MovementFact.DocumentType — not display-only labels. */
 const ITEM_CARD_DOCUMENT_TYPES: ComboboxOption[] = [
@@ -59,6 +65,7 @@ const ITEM_CARD_DOCUMENT_TYPES: ComboboxOption[] = [
   { value: "Sales", label: "Sales" },
   { value: "SalesReturn", label: "Sales Return" },
   { value: "StockTransfer", label: "Stock Transfer" },
+  { value: "PharmacyStoreReturn", label: "Pharmacy Store Return" },
 ];
 
 function startOfMonthIso(): string {
@@ -117,7 +124,8 @@ export function ItemCardPageContent() {
   const [storeId, setStoreId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [documentType, setDocumentType] = useState("");
-  const [stores, setStores] = useState<StorItem[]>([]);
+  const [itemCardStores, setItemCardStores] = useState<ItemCardStoreOption[]>([]);
+  const [unrestrictedStoreAccess, setUnrestrictedStoreAccess] = useState(false);
   const [branches, setBranches] = useState<PharmItem[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -128,15 +136,17 @@ export function ItemCardPageContent() {
     if (!token) return;
     let cancelled = false;
     setLookupsLoading(true);
-    void Promise.all([getStors(token), getPharms(token)])
-      .then(([storeRows, pharmRows]) => {
+    void Promise.all([getItemCardStores(token), getPharms(token)])
+      .then(([storeScope, pharmRows]) => {
         if (cancelled) return;
-        setStores(storeRows);
+        setItemCardStores(storeScope.stores);
+        setUnrestrictedStoreAccess(storeScope.unrestrictedStoreAccess);
         setBranches(pharmRows);
       })
       .catch((error) => {
         if (cancelled) return;
-        setStores([]);
+        setItemCardStores([]);
+        setUnrestrictedStoreAccess(false);
         setBranches([]);
         toast.error(
           error instanceof Error
@@ -169,11 +179,18 @@ export function ItemCardPageContent() {
   );
 
   useEffect(() => {
-    if (!scopeReady || authorizedParmIdSet.size === 0) return;
+    if (!scopeReady || unrestrictedStoreAccess) return;
+    if (authorizedParmIdSet.size === 0) return;
     if (activePharmacyId && !branchId) {
       setBranchId(activePharmacyId);
     }
-  }, [scopeReady, activePharmacyId, authorizedParmIdSet.size, branchId]);
+  }, [
+    scopeReady,
+    activePharmacyId,
+    authorizedParmIdSet.size,
+    branchId,
+    unrestrictedStoreAccess,
+  ]);
 
   useEffect(() => {
     if (!token || selectedItem) {
@@ -229,32 +246,22 @@ export function ItemCardPageContent() {
   }, [search, token, selectedItem]);
 
   const storeOptions = useMemo<ComboboxOption[]>(() => {
-    const allowedStoreKeys = new Set<string>();
-    for (const pharm of scopedPharmacies) {
-      const storKey = pharm.parmStor?.trim();
-      if (storKey) allowedStoreKeys.add(storKey);
-    }
-
-    const rows = stores
-      .filter((store) => {
-        if (allowedStoreKeys.size === 0) return false;
-        return allowedStoreKeys.has(String(store.id));
-      })
+    const rows = itemCardStores
       .map((store) => ({
         value: String(store.id),
-        label:
-          formatStorDisplayName(store) ||
-          store.storEnName?.trim() ||
-          `Store ${store.id}`,
+        label: itemCardStoreLabel(store),
       }))
       .sort((a, b) =>
         a.label.localeCompare(b.label, undefined, { numeric: true })
       );
     return [{ value: "", label: "All Stores" }, ...rows];
-  }, [stores, scopedPharmacies]);
+  }, [itemCardStores]);
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
-    const rows = scopedPharmacies
+    const sourceBranches = unrestrictedStoreAccess
+      ? branches
+      : scopedPharmacies;
+    const rows = sourceBranches
       .map((branch) => {
         const name = (branch.parmEnName || branch.parmArName || "").trim();
         return {
@@ -263,11 +270,11 @@ export function ItemCardPageContent() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-    if (authorizedParmIdSet.size > 0) {
+    if (unrestrictedStoreAccess || authorizedParmIdSet.size > 0) {
       return rows;
     }
     return [{ value: "", label: "All Branches" }, ...rows];
-  }, [scopedPharmacies, authorizedParmIdSet.size]);
+  }, [scopedPharmacies, branches, unrestrictedStoreAccess, authorizedParmIdSet.size]);
 
   const loadCard = useCallback(
     async (nextPage = 1) => {
@@ -521,6 +528,7 @@ export function ItemCardPageContent() {
                       <TableHead>Date</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Doc #</TableHead>
+                      <TableHead>Description</TableHead>
                       <TableHead>Store</TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead className="text-right">In</TableHead>
@@ -532,7 +540,7 @@ export function ItemCardPageContent() {
                   <TableBody>
                     {result.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-muted-foreground">
+                        <TableCell colSpan={10} className="text-muted-foreground">
                           No movements in this range.
                         </TableCell>
                       </TableRow>
@@ -542,6 +550,7 @@ export function ItemCardPageContent() {
                           <TableCell>{formatDate(row.date)}</TableCell>
                           <TableCell>{row.documentType || "—"}</TableCell>
                           <TableCell>{row.documentNo ?? row.documentId}</TableCell>
+                          <TableCell>{row.description?.trim() || "—"}</TableCell>
                           <TableCell>{row.storeName || row.storeId || "—"}</TableCell>
                           <TableCell>{row.movementDirection || "—"}</TableCell>
                           <TableCell className="text-right">

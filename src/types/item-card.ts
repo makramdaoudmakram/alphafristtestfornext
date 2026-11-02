@@ -17,6 +17,7 @@ export type ItemCardRow = {
   unitValue: number;
   reportingKey: string;
   lineNo: number;
+  description: string | null;
 };
 
 export type ItemCardResponse = {
@@ -45,4 +46,15 @@ export type ItemCardQuery = {
   documentType?: string;
   page?: number;
   pageSize?: number;
+};
+
+export type ItemCardStoreOption = {
+  id: number;
+  storArName: string | null;
+  storEnName: string | null;
+};
+
+export type ItemCardStoresResponse = {
+  stores: ItemCardStoreOption[];
+  unrestrictedStoreAccess: boolean;
 };

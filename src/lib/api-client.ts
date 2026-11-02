@@ -171,7 +171,7 @@ import type {
   BatchTraceabilityExpiryStatus,
   BatchTraceabilityTimelineEntry,
 } from "@/types/batch-traceability";
-import type { ItemCardQuery, ItemCardResponse, ItemCardRow } from "@/types/item-card";
+import type { ItemCardQuery, ItemCardResponse, ItemCardRow, ItemCardStoresResponse } from "@/types/item-card";
 import type {
   ExcelEntityMetadata,
   ExcelImportCommitResponse,
@@ -3280,6 +3280,7 @@ function normalizeItemCardRow(raw: Record<string, unknown>): ItemCardRow {
     unitValue: readNumber(raw, "unitValue", "UnitValue"),
     reportingKey: readString(raw, "reportingKey", "ReportingKey"),
     lineNo: readNumber(raw, "lineNo", "LineNo"),
+    description: readString(raw, "description", "Description") || null,
   };
 }
 
@@ -3309,6 +3310,32 @@ function normalizeItemCardResponse(raw: unknown): ItemCardResponse {
     displayUnitName: readString(obj, "displayUnitName", "DisplayUnitName") || null,
     page: readNumber(obj, "page", "Page") || 1,
     pageSize: readNumber(obj, "pageSize", "PageSize") || 50,
+  };
+}
+
+export function getItemCardStores(token: string) {
+  return apiFetch<unknown>("reports/item-card/stores", {}, token).then(
+    normalizeItemCardStoresResponse
+  );
+}
+
+function normalizeItemCardStoresResponse(raw: unknown): ItemCardStoresResponse {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const storesRaw = obj.stores ?? obj.Stores ?? [];
+  return {
+    stores: Array.isArray(storesRaw)
+      ? storesRaw.map((row) => {
+          const item = (row ?? {}) as Record<string, unknown>;
+          return {
+            id: readNumber(item, "id", "Id"),
+            storArName: readNullableString(item, "storArName", "StorArName"),
+            storEnName: readNullableString(item, "storEnName", "StorEnName"),
+          };
+        })
+      : [],
+    unrestrictedStoreAccess: Boolean(
+      obj.unrestrictedStoreAccess ?? obj.UnrestrictedStoreAccess ?? false
+    ),
   };
 }
 
