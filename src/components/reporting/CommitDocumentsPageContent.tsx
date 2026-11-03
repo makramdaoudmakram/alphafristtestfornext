@@ -358,6 +358,13 @@ export function CommitDocumentsPageContent() {
                 <>
                   <p><strong>{detail.documentType}</strong> #{detail.documentId} (SQL header id {detail.jobHeaderId})</p>
                   <p>Status: {detail.status}</p>
+                  {detail.reportingIneligibilityReason ? (
+                    <p className="text-muted-foreground">{detail.reportingIneligibilityReason}</p>
+                  ) : null}
+                  {detail.currentSqlEligibilityNote ? (
+                    <p className="text-muted-foreground">{detail.currentSqlEligibilityNote}</p>
+                  ) : null}
+                  <p>SQL eligible for new publish: {detail.eligibleForReporting ? "yes" : "no"}</p>
                   <p>Job: {detail.jobStatus ?? "none"} · attempts {detail.attemptCount ?? 0}</p>
                   <p>Repair: {detail.repairAvailable ? "available" : detail.repairUnavailableReason ?? "not available"}</p>
                   {detail.mismatchReason ? <p className="text-destructive">{detail.mismatchReason}</p> : null}

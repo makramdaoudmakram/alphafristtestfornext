@@ -27,6 +27,8 @@ export type ReportingMonitorItem = {
   duplicateFindings: string[];
   repairAvailable: boolean;
   repairUnavailableReason: string | null;
+  reportingIneligibilityReason: string | null;
+  currentSqlEligibilityNote: string | null;
   detail: {
     expectedLineCount: number | null;
     sqliteLineCount: number | null;
