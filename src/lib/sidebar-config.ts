@@ -147,6 +147,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         permission: DIAGNOSTICS_NAV_PERMISSION,
       },
       {
+        title: "SQLite Data Explorer",
+        href: "/dashboard/audit/sqlite-explorer",
+        permission: DIAGNOSTICS_NAV_PERMISSION,
+      },
+      {
         title: "Batch Traceability",
         href: "/dashboard/batch-traceability",
         permission: PERMISSIONS.batchTraceability.view,
@@ -396,6 +401,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/inventory",
         permission: PERMISSIONS.stock.view,
       },
+       {
+        title: "كارت الصنف",
+        href: "/dashboard/sales/item-card",
+        permission: PERMISSIONS.itemCard.view,
+      },
       {
         title: "ملخص مخزون المتجر",
         href: "/dashboard/inventory/store-summary",
@@ -446,6 +456,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/admin/pharmacy-authorization": "صلاحيات الصيدليات",
   "/dashboard/diagnostics": "Diagnostics",
   "/dashboard/audit/sqlite-verification": "SQLite Server Verification",
+  "/dashboard/audit/sqlite-explorer": "SQLite Data Explorer",
   "/dashboard/customers": "Customers",
   "/dashboard/item-formats": "Dosage Form",
   "/dashboard/item-origins": "Item Origins",

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { signIn, signOut } from "next-auth/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -99,15 +98,7 @@ export function LoginForm() {
           <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading ? "Signing in..." : "Sign in"}
           </Button>
-          <p className="text-muted-foreground text-center text-xs">
-            Connected to your Alfa API (aghapany_AlphaAPI)
-          </p>
-          <p className="text-muted-foreground text-center text-sm">
-            No account?{" "}
-            <Link href="/register" className="text-foreground underline">
-              Register
-            </Link>
-          </p>
+         
         </form>
       </CardContent>
     </Card>
