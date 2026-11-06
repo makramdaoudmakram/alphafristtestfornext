@@ -164,6 +164,13 @@ export class PurchaseService {
     if (purchaseId <= 0) return [];
     return this.repository.getStockBarcodeLabels(purchaseId);
   }
+
+  async getTransferCandidates(purchaseId: number) {
+    if (purchaseId <= 0) {
+      return { purchaseId: 0, candidates: [] };
+    }
+    return this.repository.getTransferCandidates(purchaseId);
+  }
 }
 
 export function createPurchaseService(token: string) {

@@ -31,7 +31,7 @@ export const pharmReciveDetailSchema = z.object({
   itemCostPrice: z.number().nonnegative(),
   unitId: z.number().int().positive().nullable(),
   itmStock: z.number().nonnegative(),
-  batchNo: z.string().max(15),
+  batchNo: z.string().max(10),
   lineTotal: z.number().nonnegative(),
 });
 

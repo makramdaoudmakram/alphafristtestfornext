@@ -49,6 +49,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/pharm/transactions/pharmacy-purchase-return": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
+  "/dashboard/pharm/transactions/accepted-pharmacy-orders": "PharmReciveAcceptedOrders.View",
   "/dashboard/pharm/transactions/pharm-to-store": "Sales.View",
   "/dashboard/pharm/transactions/pharm-to-store-send": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Sales.View",
@@ -208,6 +209,9 @@ export const PERMISSIONS = {
   },
   sales: {
     view: "Sales.View",
+  },
+  pharmReciveAcceptedOrders: {
+    view: "PharmReciveAcceptedOrders.View",
   },
   users: {
     view: "Users.View",

@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
 import {
   searchPharmPurchaseReturnItemsWithStock,
+  searchPharmReciveItemsWithStock,
   searchReturnItemsWithStock,
 } from "@/lib/api-client";
 import {
@@ -40,9 +41,12 @@ type ReturnItemStockSearchBoxProps = {
   showBatchDetails?: boolean;
   /**
    * `pharm-purchase-return` uses PharmPurchaseReturnH/item-search (server-resolved store).
+   * `pharm-recive` uses PharmReciveH/item-search (Movment parent 8 MovStor).
    * Default uses Stock/return-item-search or SalesReturn/item-search.
    */
-  searchSource?: "default" | "pharm-purchase-return";
+  searchSource?: "default" | "pharm-purchase-return" | "pharm-recive";
+  /** Required when searchSource is `pharm-recive` — selected Movment row id (parent 8). */
+  movmentRowId?: number | null;
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
 };
@@ -63,6 +67,7 @@ export function ReturnItemStockSearchBox({
   preferAvailableQty = false,
   showBatchDetails = false,
   searchSource = "default",
+  movmentRowId = null,
   onItemSelected,
 }: ReturnItemStockSearchBoxProps) {
   const listId = useId();
@@ -76,7 +81,10 @@ export function ReturnItemStockSearchBox({
   const [lookupLoading, setLookupLoading] = useState(false);
 
   const storeReady = Boolean(token?.trim());
-  const inputDisabled = disabled || !storeReady;
+  const movementReady =
+    searchSource !== "pharm-recive" ||
+    (movmentRowId != null && movmentRowId > 0);
+  const inputDisabled = disabled || !storeReady || !movementReady;
 
   const showList =
     wantList &&
@@ -94,6 +102,13 @@ export function ReturnItemStockSearchBox({
           width: Math.max(rect.width, 800),
     });
   }, []);
+
+  useEffect(() => {
+    if (searchSource !== "pharm-recive") return;
+    setResults([]);
+    setQuery("");
+    setWantList(true);
+  }, [movmentRowId, searchSource]);
 
   useEffect(() => {
     const rawQuery = query;
@@ -120,7 +135,19 @@ export function ReturnItemStockSearchBox({
                 signal: controller.signal,
                 doubleSpaceWildcard: true,
               })
-            : await searchReturnItemsWithStock(
+            : searchSource === "pharm-recive"
+              ? await searchPharmReciveItemsWithStock(
+                  token,
+                  movmentRowId!,
+                  rawQuery,
+                  {
+                    take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+                    language: itemLanguage,
+                    signal: controller.signal,
+                    doubleSpaceWildcard: true,
+                  }
+                )
+              : await searchReturnItemsWithStock(
                 token,
                 rawQuery,
                 storeId?.trim() || undefined,
@@ -145,7 +172,7 @@ export function ReturnItemStockSearchBox({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, token, storeId, wantList, inputDisabled, itemLanguage, searchSource]);
+  }, [query, token, storeId, wantList, inputDisabled, itemLanguage, searchSource, movmentRowId]);
 
   useEffect(() => {
     setHighlight(0);

@@ -8,18 +8,49 @@ import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PharmReciveDetail, PharmReciveDetailPatch } from "@/types/pharm-recive";
 import type { ReturnItemStockSearchItem } from "@/types/stock";
 
+/** Available quantity in the search row's display units (same as return-item-search DTO). */
+export function resolvePharmReciveSearchAvailableQty(
+  searchResult: ReturnItemStockSearchItem
+): number {
+  if (
+    searchResult.availableQty != null &&
+    Number.isFinite(searchResult.availableQty)
+  ) {
+    return Math.max(0, searchResult.availableQty);
+  }
+
+  const physical = Number.isFinite(searchResult.totalQuantity)
+    ? searchResult.totalQuantity
+    : 0;
+  const reserved =
+    searchResult.transferQty != null && Number.isFinite(searchResult.transferQty)
+      ? searchResult.transferQty
+      : 0;
+
+  return Math.max(0, physical - reserved);
+}
+
 /** Item search selection keeps the picked batch (batchNo / expDate / prices), not all batches. */
 export function patchPharmReciveDetailFromItemSearch(
   catalogItem: ItemCatalogItem,
   searchResult: ReturnItemStockSearchItem
-): PharmReciveDetailPatch {
-  const searchQty = Number.isFinite(searchResult.totalQuantity)
-    ? Math.max(1, Math.floor(searchResult.totalQuantity))
-    : 1;
+): PharmReciveDetailPatch | { error: string } {
+  const availableQty = resolvePharmReciveSearchAvailableQty(searchResult);
+  const batchLabel = searchResult.batchNo?.trim() || "—";
+  const itemLabel = searchResult.itemCode?.trim() || catalogItem.itmCode?.trim() || "item";
+
+  if (availableQty <= 0) {
+    return {
+      error: `Insufficient available stock for item "${itemLabel}" batch "${batchLabel}". Available: 0.`,
+    };
+  }
+
+  const maxSearchQty = Math.floor(availableQty);
+  const qnty = Math.min(1, maxSearchQty);
 
   return {
     ...patchDetailFromCatalogItem(catalogItem),
-    qnty: searchQty,
+    qnty,
     unitId: getItemDefaultUnitId(catalogItem),
     batchNo: searchResult.batchNo?.trim() ?? "",
     expDate: formatReturnItemStockSearchExpDate(searchResult.expDate),
@@ -29,8 +60,8 @@ export function patchPharmReciveDetailFromItemSearch(
     itemCostPrice: Number.isFinite(searchResult.costPrice)
       ? searchResult.costPrice
       : 0,
-    maxSearchQty: searchQty,
-    itmStock: searchQty,
+    maxSearchQty,
+    itmStock: maxSearchQty,
   };
 }
 
@@ -39,7 +70,8 @@ export const patchPharmReciveDetailFromStockSearchResult =
   patchPharmReciveDetailFromItemSearch;
 
 export function validatePharmReciveDetailQuantity(
-  nextQty: number
+  nextQty: number,
+  maxSearchQty?: number
 ): { ok: true } | { ok: false; message: string } {
   if (!Number.isFinite(nextQty)) {
     return { ok: false, message: "Quantity must be a valid number." };
@@ -47,6 +79,17 @@ export function validatePharmReciveDetailQuantity(
 
   if (nextQty < 1) {
     return { ok: false, message: "Quantity must be at least 1." };
+  }
+
+  if (
+    maxSearchQty != null &&
+    Number.isFinite(maxSearchQty) &&
+    nextQty > maxSearchQty
+  ) {
+    return {
+      ok: false,
+      message: `Quantity cannot exceed available quantity (${formatReturnAvailableQty(maxSearchQty)}).`,
+    };
   }
 
   return { ok: true };

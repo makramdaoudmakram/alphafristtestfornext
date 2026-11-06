@@ -8,6 +8,7 @@ import {
   ApiTimeoutError,
   timedFetch,
 } from "./timed-fetch";
+import { stockBarcodeExpDateFromApi } from "@/lib/stock-barcode-exp-date-from-api";
 import type { AuthResponse } from "@/types/auth";
 import type {
   CreatePermissionRequest,
@@ -221,6 +222,18 @@ function readNullableString(
 ): string | null {
   const value = readString(obj, ...keys);
   return value ? value : null;
+}
+
+/** ISO date string from API (string or { year, month, day } DateOnly JSON). */
+function readNullableIsoDateString(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const parsed = stockBarcodeExpDateFromApi(obj[key]);
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 function readNumber(
@@ -3629,6 +3642,45 @@ export function searchPharmPurchaseReturnItemsWithStock(
   });
 }
 
+/** Pharmacy receive — source store from selected general movement (Movment parent 8 MovStor). */
+export function searchPharmReciveItemsWithStock(
+  token: string,
+  movmentRowId: number,
+  search: string,
+  options?: {
+    take?: number;
+    language?: "en" | "ar";
+    signal?: AbortSignal;
+    doubleSpaceWildcard?: boolean;
+  }
+) {
+  const useWildcard = options?.doubleSpaceWildcard === true;
+  const q = useWildcard ? search : search.trim();
+  const params = new URLSearchParams();
+  params.set("movmentRowId", String(movmentRowId));
+  if (q.trim()) params.set("search", q);
+  if (options?.take != null && options.take > 0) {
+    params.set("take", String(options.take));
+  }
+  if (options?.language === "en" || options?.language === "ar") {
+    params.set("language", options.language);
+  }
+  if (useWildcard) params.set("doubleSpaceWildcard", "true");
+
+  return apiFetch<unknown>(
+    `PharmReciveH/item-search?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((item) =>
+        normalizeReturnItemStockSearchItem(item as Record<string, unknown>)
+      );
+    }
+    return parseArrayOrPaged(data, normalizeReturnItemStockSearchItem);
+  });
+}
+
 function normalizeStockBarcodeLabel(item: Record<string, unknown>): StockBarcodeLabel {
   const batchNo = readString(item, "batchNo", "BatchNo");
   const barcodeValue =
@@ -3641,7 +3693,7 @@ function normalizeStockBarcodeLabel(item: Record<string, unknown>): StockBarcode
     itemNameAr: readNullableString(item, "itemNameAr", "ItemNameAr"),
     itemNameEn: readNullableString(item, "itemNameEn", "ItemNameEn"),
     storeId: readNumber(item, "storeId", "StoreId"),
-    expDate: readNullableString(item, "expDate", "ExpDate"),
+    expDate: readNullableIsoDateString(item, "expDate", "ExpDate"),
     qty: readNumber(item, "qty", "Qty"),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
     allowPrintBarcode: readBoolean(
@@ -3676,6 +3728,15 @@ export function getStockBarcodeLabelById(token: string, stockId: number) {
 
 export function getPurchaseStockBarcodeLabels(token: string, purchaseId: number) {
   return apiFetch<unknown>(`PurTransH/${purchaseId}/stock-batches`, {}, token).then((data) => {
+    if (!Array.isArray(data)) return [];
+    return data.map((item) =>
+      normalizeStockBarcodeLabel(item as Record<string, unknown>)
+    );
+  });
+}
+
+export function getPharmReciveStockBarcodeLabels(token: string, pharmReciveId: number) {
+  return apiFetch<unknown>(`PharmReciveH/${pharmReciveId}/stock-batches`, {}, token).then((data) => {
     if (!Array.isArray(data)) return [];
     return data.map((item) =>
       normalizeStockBarcodeLabel(item as Record<string, unknown>)

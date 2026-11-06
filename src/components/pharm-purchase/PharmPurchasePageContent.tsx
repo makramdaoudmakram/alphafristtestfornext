@@ -17,6 +17,7 @@ import { HeaderPrimaryFields } from "@/components/purchase/HeaderForm";
 import { SearchDialog } from "@/components/purchase/SearchDialog";
 import { Toolbar } from "@/components/purchase/Toolbar";
 import { ItemLanguageToggle } from "@/components/pharm-recive/ItemLanguageToggle";
+import { PharmPurchaseTransferSheet } from "@/components/pharm-purchase/PharmPurchaseTransferSheet";
 import { PharmPurchaseEmployeeShiftFields } from "@/components/pharm-purchase/PharmPurchaseEmployeeShiftFields";
 import { PharmPurchaseHeaderTotals } from "@/components/pharm-purchase/PharmPurchaseHeaderTotals";
 import { PageGuard } from "@/components/permissions/page-guard";
@@ -72,6 +73,10 @@ export function PharmPurchasePageContent() {
     addDetailRow,
     removeDetailRow,
     updateDetailRow,
+    isTransferButtonVisible,
+    handleTransfer,
+    transferSheetOpen,
+    setTransferSheetOpen,
   } = usePharmPurchase(token);
   const searchParams = useSearchParams();
   const loadedFromUrlRef = useRef<number | null>(null);
@@ -379,13 +384,13 @@ export function PharmPurchasePageContent() {
           hasRecord={hasRecord}
           isPosted={isPosted}
           isPostButtonVisible={false}
-          isTransferButtonVisible={false}
+          isTransferButtonVisible={isTransferButtonVisible}
           isBarcodeButtonVisible={false}
           barcodeLoading={false}
           nav={navState}
           onNew={handleNew}
           onSave={handleSave}
-          onTransfer={() => undefined}
+          onTransfer={handleTransfer}
           onPost={() => undefined}
           onPrintBarcode={() => undefined}
           onEdit={handleEdit}
@@ -539,6 +544,16 @@ export function PharmPurchasePageContent() {
           onSelect={async (row) => {
             await loadRecord(row.id, itemByCode, catalogItems);
           }}
+        />
+
+        <PharmPurchaseTransferSheet
+          open={transferSheetOpen}
+          onOpenChange={setTransferSheetOpen}
+          purchaseId={recordId ?? null}
+          purchasePthId={pthId}
+          pharmacyStoreId={context?.storeId}
+          pharmacyStoreName={context?.storeName}
+          token={token}
         />
       </div>
     </PageGuard>

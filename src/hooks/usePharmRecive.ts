@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { ApiError } from "@/lib/api-client";
 import type { Resolver } from "react-hook-form";
 import {
   applyPharmReciveDetailPatch,
@@ -35,6 +36,7 @@ import {
 import type { PharmReciveDetail, PharmReciveDetailPatch, PharmReciveHeader, PharmReciveSearchFilters } from "@/types/pharm-recive";
 import type { MovmentLookupItem } from "@/types/movment";
 import type { ItemCatalogItem } from "@/types/item-catalog";
+import type { StockBarcodeLabel } from "@/types/stock";
 import {
   pharmReciveHeaderSchema,
   type PharmReciveHeaderFormValues,
@@ -69,6 +71,9 @@ export function usePharmRecive(token: string | undefined) {
   const [saving, setSaving] = useState(false);
   const [navIds, setNavIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [stockBarcodePrintOpen, setStockBarcodePrintOpen] = useState(false);
+  const [stockBarcodeLabels, setStockBarcodeLabels] = useState<StockBarcodeLabel[]>([]);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const loadedRecordIdRef = useRef<number | null>(null);
   const initialDetailIdsRef = useRef<number[]>([]);
   const deletedDetailIdsRef = useRef<number[]>([]);
@@ -156,6 +161,53 @@ export function usePharmRecive(token: string | undefined) {
     form.watch("movFlag")
   );
   const currentId = form.watch("id");
+
+  const isBarcodeButtonVisible = useMemo(() => {
+    const recordId = currentId ?? loadedRecordIdRef.current;
+    return recordId != null && recordId > 0;
+  }, [currentId]);
+
+  const handlePrintBarcode = useCallback(async () => {
+    if (!service) return;
+
+    const recordId =
+      (form.getValues("id") != null && form.getValues("id")! > 0
+        ? form.getValues("id")
+        : null) ??
+      (currentId != null && currentId > 0 ? currentId : null) ??
+      (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+        ? loadedRecordIdRef.current
+        : null);
+
+    if (recordId == null) {
+      toast.error("Save the document first.");
+      return;
+    }
+
+    setBarcodeLoading(true);
+    try {
+      const labels = await service.getStockBarcodeLabels(recordId);
+      const valid = labels.filter(
+        (label) => label.batchNo.trim().length > 0 && label.barcodeValue.trim().length > 0
+      );
+
+      if (valid.length === 0) {
+        toast.error("No barcode labels are available for eligible items on this document.");
+        return;
+      }
+
+      setStockBarcodeLabels(valid);
+      setStockBarcodePrintOpen(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        toast.error("Barcode API not available. Restart the Alfa API and try again.");
+      } else {
+        toast.error("Could not load barcode labels for this document.");
+      }
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [currentId, form, service]);
 
   const refreshNavIds = useCallback(async () => {
     if (!service) return;
@@ -478,7 +530,10 @@ export function usePharmRecive(token: string | undefined) {
             : patch;
 
         if (nextPatch.qnty != null) {
-          const validation = validatePharmReciveDetailQuantity(Number(nextPatch.qnty));
+          const validation = validatePharmReciveDetailQuantity(
+            Number(nextPatch.qnty),
+            row.maxSearchQty
+          );
           if (!validation.ok) {
             toast.error(validation.message);
             return row;
@@ -509,6 +564,12 @@ export function usePharmRecive(token: string | undefined) {
     canDelete,
     searchOpen,
     setSearchOpen,
+    isBarcodeButtonVisible,
+    stockBarcodePrintOpen,
+    setStockBarcodePrintOpen,
+    stockBarcodeLabels,
+    barcodeLoading,
+    handlePrintBarcode,
     handleNew,
     handleEdit,
     handleSave,

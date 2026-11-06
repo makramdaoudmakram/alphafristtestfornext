@@ -4,6 +4,7 @@ import {
   createPharmReciveRepository,
   PharmReciveRepositoryError,
 } from "@/repository/pharm-recive.repository";
+import type { StockBarcodeLabel } from "@/types/stock";
 import type {
   PharmReciveDetail,
   PharmReciveDocument,
@@ -121,6 +122,10 @@ export class PharmReciveService {
 
   async delete(id: number): Promise<void> {
     return this.repository.delete(id);
+  }
+
+  async getStockBarcodeLabels(pharmReciveId: number): Promise<StockBarcodeLabel[]> {
+    return this.repository.getStockBarcodeLabels(pharmReciveId);
   }
 }
 

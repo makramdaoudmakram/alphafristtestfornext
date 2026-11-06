@@ -10,6 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+const LOGIN_PAGE_BACKGROUND =
+  "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?auto=format&fit=crop&w=1920&q=80";
+
 export default async function LoginPage() {
   const configError = getAuthConfigError();
   const session = await getSession();
@@ -19,8 +22,15 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-md space-y-4">
+    <main
+      className="relative flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat p-4"
+      style={{ backgroundImage: `url('${LOGIN_PAGE_BACKGROUND}')` }}
+    >
+      <div
+        className="absolute inset-0 bg-black/45"
+        aria-hidden
+      />
+      <div className="relative z-10 w-full max-w-md space-y-4">
         {configError ? (
           <Card className="border-destructive">
             <CardHeader>

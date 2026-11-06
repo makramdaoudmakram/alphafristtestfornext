@@ -31,6 +31,7 @@ import { SearchDialog } from "@/components/purchase/SearchDialog";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { PurchasePrintReport } from "@/components/purchase/PurchasePrintReport";
 import { Toolbar } from "@/components/purchase/Toolbar";
+import { PurchaseTransferSheet } from "@/components/purchase/PurchaseTransferSheet";
 import {
   getPurchasePrintReport,
   type PurchasePrintReport as PurchasePrintReportData,
@@ -229,6 +230,9 @@ export function PurchasePageContent() {
     setSearchOpen,
     stockBarcodePrintOpen,
     setStockBarcodePrintOpen,
+    transferSheetOpen,
+    setTransferSheetOpen,
+    transferPurchaseId,
     stockBarcodeLabels,
     barcodeLoading,
     handleNew,
@@ -845,6 +849,13 @@ export function PurchasePageContent() {
         {printReport ? (
           <PurchasePrintReport report={printReport} onClose={closePrint} />
         ) : null}
+
+        <PurchaseTransferSheet
+          open={transferSheetOpen}
+          onOpenChange={setTransferSheetOpen}
+          purchaseId={transferPurchaseId}
+          token={token}
+        />
       </div>
     </PageGuard>
   );

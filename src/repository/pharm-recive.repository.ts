@@ -1,4 +1,5 @@
 import { API_BASE_URL, getAlfaApiHint } from "@/lib/api-config";
+import { getPharmReciveStockBarcodeLabels } from "@/lib/api-client";
 import { timedFetch } from "@/lib/timed-fetch";
 import {
   mapDocumentFromApi,
@@ -12,6 +13,7 @@ import type {
   PharmReciveUpsertPayload,
   PharmReciveAuditHistoryItem,
 } from "@/types/pharm-recive";
+import type { StockBarcodeLabel } from "@/types/stock";
 
 type PharmReciveApiValidationError = {
   detailIndex?: number;
@@ -279,6 +281,10 @@ export class PharmReciveRepository {
     if (!response.ok && response.status !== 204) {
       await this.handle(response);
     }
+  }
+
+  async getStockBarcodeLabels(pharmReciveId: number): Promise<StockBarcodeLabel[]> {
+    return getPharmReciveStockBarcodeLabels(this.token, pharmReciveId);
   }
 }
 

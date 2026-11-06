@@ -92,6 +92,11 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/pharm/transactions/stor-to-pharm",
         permission: PERMISSIONS.sales.view,
       },
+      {
+        title: "Accepted pharmacy orders",
+        href: "/dashboard/pharm/transactions/accepted-pharmacy-orders",
+        permission: PERMISSIONS.pharmReciveAcceptedOrders.view,
+      },
      
       {
         title: "تحويل الصيدليات",
@@ -467,6 +472,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/transactions/pharmacy-purchase-return": "Pharmacy Purchase Return",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Pharmacy Acceptance",
   "/dashboard/pharm/transactions/stor-to-pharm": "Store-to-Pharm",
+  "/dashboard/pharm/transactions/accepted-pharmacy-orders": "Accepted Pharmacy Orders",
   "/dashboard/pharm/transactions/pharm-to-store": "Pharm-to-Store",
   "/dashboard/pharm/transactions/pharm-to-store-send": "Pharmacy → Main Store Return",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",

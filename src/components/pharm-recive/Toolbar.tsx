@@ -3,6 +3,7 @@
 import type { ComponentType } from "react";
 import Link from "next/link";
 import {
+  Barcode,
   ChevronFirst,
   ChevronLast,
   ChevronLeft,
@@ -41,6 +42,9 @@ type ToolbarProps = {
   canEditRecord?: boolean;
   canDeleteRecord?: boolean;
   onPrint: () => void;
+  isBarcodeButtonVisible?: boolean;
+  barcodeLoading?: boolean;
+  onPrintBarcode?: () => void;
   onRefresh: () => void;
   onFirst: () => void;
   onPrev: () => void;
@@ -131,6 +135,9 @@ export function Toolbar({
   canEditRecord = false,
   canDeleteRecord = false,
   onPrint,
+  isBarcodeButtonVisible = false,
+  barcodeLoading = false,
+  onPrintBarcode,
   onRefresh,
   onFirst,
   onPrev,
@@ -172,6 +179,15 @@ export function Toolbar({
           variant="destructive"
         />
         <ToolbarButton label="Print" icon={Printer} onClick={onPrint} disabled={!hasRecord} />
+        {isBarcodeButtonVisible && onPrintBarcode ? (
+          <ToolbarButton
+            label="Print Barcode"
+            icon={Barcode}
+            onClick={onPrintBarcode}
+            disabled={saving || loading || barcodeLoading}
+            loading={barcodeLoading}
+          />
+        ) : null}
         <ToolbarButton
           label="Refresh"
           icon={RefreshCw}

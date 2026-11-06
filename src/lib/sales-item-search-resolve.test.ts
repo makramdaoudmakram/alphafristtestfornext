@@ -122,7 +122,7 @@ describe("batch barcode resolution", () => {
       stocks: [
         {
           stockId: 500,
-          batchNo: "000000000000001",
+          batchNo: "0000000001",
           expDate: "2026-12-01",
           availableQty: 5,
           salesPrice: 12,
@@ -136,8 +136,8 @@ describe("batch barcode resolution", () => {
 
     const client: SalesSearchClient = {
       lookupStockByBarcodeScan: vi.fn().mockResolvedValue({
-        normalizedBatchNo: "000000000000001",
-        batch: batch({ id: 500, batchNo: "000000000000001" }),
+        normalizedBatchNo: "0000000001",
+        batch: batch({ id: 500, batchNo: "0000000001" }),
       }),
       searchSalesItems: vi.fn().mockResolvedValue({ storId: 8, items: [catalogHit] }),
     };
@@ -145,7 +145,7 @@ describe("batch barcode resolution", () => {
     const result = await tryResolveBatchBarcodeScan(
       client,
       "token",
-      "000000000000001",
+      "0000000001",
       "CurrentPharmacy",
       8
     );

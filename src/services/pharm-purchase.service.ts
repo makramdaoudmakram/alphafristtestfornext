@@ -10,6 +10,7 @@ import type {
   PurchaseDocument,
   PurchaseSearchFilters,
   PurchaseSearchResult,
+  PurchaseTransferCandidatesResponse,
 } from "@/types/purchase";
 import type { PharmPurchaseContext } from "@/types/pharm-purchase";
 import type { PurchaseHeaderFormValues } from "@/validation/purchase.schema";
@@ -70,6 +71,10 @@ export class PharmPurchaseService {
 
   loadById(id: number): Promise<PurchaseDocument> {
     return this.repository.getById(id);
+  }
+
+  getTransferCandidates(id: number): Promise<PurchaseTransferCandidatesResponse> {
+    return this.repository.getTransferCandidates(id);
   }
 
   async save(input: {

@@ -77,6 +77,7 @@ export function usePharmPurchase(token: string | undefined) {
   const [navIds, setNavIds] = useState<number[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [stockBarcodePrintOpen, setStockBarcodePrintOpen] = useState(false);
+  const [transferSheetOpen, setTransferSheetOpen] = useState(false);
   const [stockBarcodeLabels, setStockBarcodeLabels] = useState<StockBarcodeLabel[]>([]);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   /** Synchronous mirrors — React state can lag one frame behind Save. */
@@ -391,8 +392,22 @@ export function usePharmPurchase(token: string | undefined) {
   }, [currentId, form, handleNew, refreshNavIds, service]);
 
   const handleTransfer = useCallback(() => {
-    toast.message("Under construction");
-  }, []);
+    const recordId =
+      (form.getValues("id") != null && form.getValues("id")! > 0
+        ? form.getValues("id")
+        : null) ??
+      (currentId != null && currentId > 0 ? currentId : null) ??
+      (loadedRecordIdRef.current != null && loadedRecordIdRef.current > 0
+        ? loadedRecordIdRef.current
+        : null);
+
+    if (recordId == null) {
+      toast.error("Save the document first, or load an existing pharmacy purchase.");
+      return;
+    }
+
+    setTransferSheetOpen(true);
+  }, [currentId, form]);
 
   const handlePost = useCallback(
     async (
@@ -573,6 +588,8 @@ export function usePharmPurchase(token: string | undefined) {
     setSearchOpen,
     stockBarcodePrintOpen,
     setStockBarcodePrintOpen,
+    transferSheetOpen,
+    setTransferSheetOpen,
     stockBarcodeLabels,
     barcodeLoading,
     handleNew,

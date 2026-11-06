@@ -307,3 +307,29 @@ export type PurchaseInvoiceReverseResult = {
   pthNotice: string;
   reversedLedgerRows: number;
 };
+
+export type PurchaseTransferCandidate = {
+  purchaseDetailId: number;
+  itemId: string | null;
+  itemNameEn: string | null;
+  itemNameAr: string | null;
+  stockId: number | null;
+  batchNo: string | null;
+  expDate: string | null;
+  sourceStoreId: string | null;
+  unitId: number;
+  purchaseQty: number;
+  availableQty: number;
+  baseAvailableQty: number;
+  itmPurPrice: number | null;
+  itmSellPrice: number | null;
+  itemCostPrice: number | null;
+  itmUnit1Unit3: number | null;
+  transferable: boolean;
+  statusReason: string | null;
+};
+
+export type PurchaseTransferCandidatesResponse = {
+  purchaseId: number;
+  candidates: PurchaseTransferCandidate[];
+};

@@ -4,10 +4,12 @@ import {
   mapDocumentFromApi,
   mapSearchResultFromApi,
 } from "@/lib/purchase.mapper";
+import { mapTransferCandidatesResponseFromApi } from "@/lib/purchase-to-pharm-recive-transfer";
 import type {
   PurchaseDocument,
   PurchaseSearchFilters,
   PurchaseSearchResult,
+  PurchaseTransferCandidatesResponse,
   PurchaseUpsertPayload,
 } from "@/types/purchase";
 import type { PharmPurchaseContext } from "@/types/pharm-purchase";
@@ -180,6 +182,15 @@ export class PharmPurchaseRepository {
     });
     const raw = await this.handle<Record<string, unknown>>(response);
     return mapDocumentFromApi(raw);
+  }
+
+  async getTransferCandidates(id: number): Promise<PurchaseTransferCandidatesResponse> {
+    const response = await timedFetch(this.url(`PharmPurchaseH/${id}/transfer-candidates`), {
+      headers: this.authHeaders(),
+      cache: "no-store",
+    });
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return mapTransferCandidatesResponseFromApi(raw);
   }
 
   private toApiBody(payload: PurchaseUpsertPayload) {

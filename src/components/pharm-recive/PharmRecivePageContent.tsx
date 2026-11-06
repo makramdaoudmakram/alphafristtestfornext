@@ -36,6 +36,7 @@ import {
 import {
   findEmptyPharmReciveDetailRowIndex,
   patchPharmReciveDetailFromItemSearch,
+  validatePharmReciveDetailQuantity,
 } from "@/lib/pharm-recive-item-stock-search";
 import {
   allocatePharmReciveReceivingQuantity,
@@ -63,6 +64,7 @@ import { SearchDialog } from "@/components/pharm-recive/SearchDialog";
 import { Toolbar } from "@/components/pharm-recive/Toolbar";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
+import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { PageGuard } from "@/components/permissions/page-guard";
 import { FormFieldInlineWrap } from "@/components/ui/form-field-inline";
 import { Card, CardContent } from "@/components/ui/card";
@@ -211,6 +213,12 @@ export function PharmRecivePageContent() {
     canDelete,
     searchOpen,
     setSearchOpen,
+    isBarcodeButtonVisible,
+    stockBarcodePrintOpen,
+    setStockBarcodePrintOpen,
+    stockBarcodeLabels,
+    barcodeLoading,
+    handlePrintBarcode,
     handleNew,
     handleEdit,
     handleSave,
@@ -356,6 +364,17 @@ export function PharmRecivePageContent() {
         return;
       }
 
+      if (hasPinnedBatch && patch.qnty != null) {
+        const validation = validatePharmReciveDetailQuantity(
+          Number(patch.qnty),
+          row.maxSearchQty
+        );
+        if (!validation.ok) {
+          toast.error(validation.message);
+          return;
+        }
+      }
+
       updateDetailRow(index, patch);
     },
     [allocateDetailRowsAtIndex, updateDetailRow]
@@ -404,7 +423,14 @@ export function PharmRecivePageContent() {
 
       handleCatalogItemApplied(catalogItem);
 
-      const patch = patchPharmReciveDetailFromItemSearch(catalogItem, searchResult);
+      const patchResult = patchPharmReciveDetailFromItemSearch(
+        catalogItem,
+        searchResult
+      );
+      if ("error" in patchResult) {
+        toast.error(patchResult.error);
+        return;
+      }
 
       const emptyIndex = findEmptyPharmReciveDetailRowIndex(details);
       const targetIndex = emptyIndex >= 0 ? emptyIndex : details.length;
@@ -413,7 +439,7 @@ export function PharmRecivePageContent() {
         emptyIndex >= 0 && emptyIndex < details.length
           ? details[emptyIndex]!
           : createEmptyDetailRow();
-      const templateRow = applyPharmReciveDetailPatch(baseRow, patch);
+      const templateRow = applyPharmReciveDetailPatch(baseRow, patchResult);
 
       setSelectedRowIndex(targetIndex);
       setDetails((rows) => {
@@ -822,6 +848,9 @@ export function PharmRecivePageContent() {
             }
             window.print();
           }}
+          isBarcodeButtonVisible={isBarcodeButtonVisible}
+          barcodeLoading={barcodeLoading}
+          onPrintBarcode={() => void handlePrintBarcode()}
           onRefresh={() => {
             void loadItemCatalog();
             void loadUnits();
@@ -893,8 +922,10 @@ export function PharmRecivePageContent() {
                   <div className="space-y-2">
                     <ReturnItemStockSearchBox
                       token={token}
-                      storeId={getDefaultMovementStoreId(selectedMovement)}
+                      searchSource="pharm-recive"
+                      movmentRowId={selectedMovement?.id ?? null}
                       itemLanguage={itemLanguage}
+                      preferAvailableQty
                       disabled={!sessionAuthenticated || loading || !isEditable}
                       onItemSelected={(item) => void handleStockSearchItemSelected(item)}
                     />
@@ -944,6 +975,12 @@ export function PharmRecivePageContent() {
           movementParentId={PHARM_RECIVE_MOV_PARENT_ID}
           token={token}
           onSelect={(result) => void loadRecord(result.id, itemByCode, catalogItems)}
+        />
+
+        <StockBarcodePrintDialog
+          open={stockBarcodePrintOpen}
+          onOpenChange={setStockBarcodePrintOpen}
+          labels={stockBarcodeLabels}
         />
       </div>
     </PageGuard>

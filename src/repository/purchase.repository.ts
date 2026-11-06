@@ -5,11 +5,13 @@ import {
   mapSaveResponseFromApi,
   mapSearchResultFromApi,
 } from "@/lib/purchase.mapper";
+import { mapTransferCandidatesResponseFromApi } from "@/lib/purchase-to-pharm-recive-transfer";
 import { getPurchaseStockBarcodeLabels } from "@/lib/api-client";
 import type {
   PurchaseDocument,
   PurchaseSearchFilters,
   PurchaseSearchResult,
+  PurchaseTransferCandidatesResponse,
   PurchaseUpsertPayload,
 } from "@/types/purchase";
 import type { StockBarcodeLabel } from "@/types/stock";
@@ -182,6 +184,15 @@ export class PurchaseRepository {
     });
     const raw = await this.handle<Record<string, unknown>>(response);
     return mapDocumentFromApi(raw);
+  }
+
+  async getTransferCandidates(id: number): Promise<PurchaseTransferCandidatesResponse> {
+    const response = await timedFetch(this.url(`PurTransH/${id}/transfer-candidates`), {
+      headers: this.authHeaders(),
+      cache: "no-store",
+    });
+    const raw = await this.handle<Record<string, unknown>>(response);
+    return mapTransferCandidatesResponseFromApi(raw);
   }
 
   /** Build API body with PascalCase property names for reliable ASP.NET binding. */
