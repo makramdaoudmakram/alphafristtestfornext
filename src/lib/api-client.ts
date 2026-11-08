@@ -7010,6 +7010,97 @@ export async function getFinalizedSalesInvoices(
   return normalizeFinalizedSaleListPage(data);
 }
 
+function normalizeSalesDetailsReportPage(
+  data: unknown
+): import("@/types/sales-details-report").SalesDetailsReportPage {
+  const raw = (data ?? {}) as Record<string, unknown>;
+  const itemsRaw = raw.items ?? raw.Items;
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+
+  return {
+    items: items.map((row) => {
+      const item = row as Record<string, unknown>;
+      return {
+        shiftNo: readNullableNumber(
+          item,
+          "shiftNo",
+          "ShiftNo"
+        ),
+        invoiceSerial: readNumber(
+          item,
+          "invoiceSerial",
+          "InvoiceSerial"
+        ),
+        paymentType: readNullableString(
+          item,
+          "paymentType",
+          "PaymentType"
+        ),
+        itemNameArabic: readNullableString(
+          item,
+          "itemNameArabic",
+          "ItemNameArabic"
+        ),
+        itemNameEnglish: readNullableString(
+          item,
+          "itemNameEnglish",
+          "ItemNameEnglish"
+        ),
+        quantity: readNumber(item, "quantity", "Quantity"),
+        salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+        salesTime: readNullableString(item, "salesTime", "SalesTime"),
+      };
+    }),
+    pageNumber:
+      readNumber(raw, "pageNumber", "PageNumber", "page", "Page") || 1,
+    pageSize: readNumber(raw, "pageSize", "PageSize") || 20,
+    totalRecords: readNumber(raw, "totalRecords", "TotalRecords"),
+    totalPages: readNumber(raw, "totalPages", "TotalPages"),
+    hasPreviousPage: Boolean(raw.hasPreviousPage ?? raw.HasPreviousPage),
+    hasNextPage: Boolean(raw.hasNextPage ?? raw.HasNextPage),
+    totalQuantity: readNumber(raw, "totalQuantity", "TotalQuantity"),
+    totalSales: readNumber(raw, "totalSales", "TotalSales"),
+    appliedDateFrom:
+      readNullableIsoDateString(raw, "appliedDateFrom", "AppliedDateFrom") ??
+      readString(raw, "appliedDateFrom", "AppliedDateFrom") ??
+      "",
+    appliedDateTo:
+      readNullableIsoDateString(raw, "appliedDateTo", "AppliedDateTo") ??
+      readString(raw, "appliedDateTo", "AppliedDateTo") ??
+      "",
+    historySearchAllowed: readBoolean(
+      raw,
+      "historySearchAllowed",
+      "HistorySearchAllowed"
+    ),
+    pharmacyName: readNullableString(raw, "pharmacyName", "PharmacyName"),
+  };
+}
+
+export async function getSalesDetailsReport(
+  token: string,
+  query: {
+    pageNumber: number;
+    pageSize: number;
+    dateFrom?: string;
+    dateTo?: string;
+    signal?: AbortSignal;
+  }
+) {
+  const params = new URLSearchParams();
+  params.set("pageNumber", String(query.pageNumber));
+  params.set("pageSize", String(query.pageSize));
+  if (query.dateFrom?.trim()) params.set("dateFrom", query.dateFrom.trim());
+  if (query.dateTo?.trim()) params.set("dateTo", query.dateTo.trim());
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `SalesDetailsReport?${params.toString()}`,
+    { signal: query.signal },
+    token
+  );
+  return normalizeSalesDetailsReportPage(data);
+}
+
 export async function getClosedShifts(
   token: string,
   query: {
@@ -7055,4 +7146,388 @@ export async function createSalesNotExistItems(
     movId: readNumber(data, "movId", "MovId"),
     pharmId: readString(data, "pharmId", "PharmId"),
   } satisfies import("@/types/sales-not-exist-item").CreateSalesNotExistItemsResponse;
+}
+
+function normalizeDeliveryMonitoringPendingSales(
+  data: Record<string, unknown>
+): import("@/types/delivery-monitoring").DeliveryMonitoringPendingSalesPage {
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          deliveryInfoId: readNumber(item, "deliveryInfoId", "DeliveryInfoId"),
+          sthId: readNumber(item, "sth_Id", "Sth_Id", "sthId"),
+          orderDateTimeCairo: readNullableString(
+            item,
+            "orderDateTimeCairo",
+            "OrderDateTimeCairo"
+          ),
+          pharmacyId: readNullableNumber(item, "pharmacyId", "PharmacyId"),
+          pharmacyName: readNullableString(item, "pharmacyName", "PharmacyName"),
+          deliveryEmployeeId: readNullableNumber(
+            item,
+            "deliveryEmployeeId",
+            "DeliveryEmployeeId"
+          ),
+          deliveryEmployeeName: readNullableString(
+            item,
+            "deliveryEmployeeName",
+            "DeliveryEmployeeName"
+          ),
+          orderTotal: readNullableNumber(item, "orderTotal", "OrderTotal"),
+        };
+      })
+    : [];
+
+  return {
+    items,
+    totalRecords: readNumber(data, "totalRecords", "TotalRecords"),
+  };
+}
+
+function normalizeDeliveryMonitoringPendingTransfers(
+  data: Record<string, unknown>
+): import("@/types/delivery-monitoring").DeliveryMonitoringPendingTransfersPage {
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          transferHeaderId: readNumber(
+            item,
+            "transferHeaderId",
+            "TransferHeaderId"
+          ),
+          serialNo: readNullableNumber(item, "serialNo", "SerialNo"),
+          transferDate: readNullableString(item, "transferDate", "TransferDate"),
+          transferDateTimeCairo: readNullableString(
+            item,
+            "transferDateTimeCairo",
+            "TransferDateTimeCairo"
+          ),
+          deliveryEmployeeId: readNullableNumber(
+            item,
+            "deliveryEmployeeId",
+            "DeliveryEmployeeId"
+          ),
+          deliveryEmployeeName: readNullableString(
+            item,
+            "deliveryEmployeeName",
+            "DeliveryEmployeeName"
+          ),
+          sourcePharmacyId: readNullableNumber(
+            item,
+            "sourcePharmacyId",
+            "SourcePharmacyId"
+          ),
+          sourcePharmacyName: readNullableString(
+            item,
+            "sourcePharmacyName",
+            "SourcePharmacyName"
+          ),
+          destinationPharmacyId: readNullableNumber(
+            item,
+            "destinationPharmacyId",
+            "DestinationPharmacyId"
+          ),
+          destinationPharmacyName: readNullableString(
+            item,
+            "destinationPharmacyName",
+            "DestinationPharmacyName"
+          ),
+        };
+      })
+    : [];
+
+  return {
+    items,
+    totalRecords: readNumber(data, "totalRecords", "TotalRecords"),
+  };
+}
+
+function normalizeDeliveryMonitoringStatistics(
+  data: Record<string, unknown>
+): import("@/types/delivery-monitoring").DeliveryMonitoringStatisticsPage {
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          employeeId: readNumber(item, "employeeId", "EmployeeId"),
+          employeeName: readNullableString(item, "employeeName", "EmployeeName"),
+          salesDeliveryCount: readNumber(
+            item,
+            "salesDeliveryCount",
+            "SalesDeliveryCount"
+          ),
+          acceptedTransferCount: readNumber(
+            item,
+            "acceptedTransferCount",
+            "AcceptedTransferCount"
+          ),
+          totalCompletedOrders: readNumber(
+            item,
+            "totalCompletedOrders",
+            "TotalCompletedOrders"
+          ),
+        };
+      })
+    : [];
+
+  return {
+    items,
+    appliedDateFrom: readString(data, "appliedDateFrom", "AppliedDateFrom"),
+    appliedDateTo: readString(data, "appliedDateTo", "AppliedDateTo"),
+    totalSalesDeliveries: readNumber(
+      data,
+      "totalSalesDeliveries",
+      "TotalSalesDeliveries"
+    ),
+    totalAcceptedTransfers: readNumber(
+      data,
+      "totalAcceptedTransfers",
+      "TotalAcceptedTransfers"
+    ),
+    totalCompletedOrders: readNumber(
+      data,
+      "totalCompletedOrders",
+      "TotalCompletedOrders"
+    ),
+  };
+}
+
+export async function getDeliveryMonitoringPendingSales(
+  token: string,
+  opts?: { signal?: AbortSignal }
+): Promise<import("@/types/delivery-monitoring").DeliveryMonitoringPendingSalesPage> {
+  const data = await apiFetch<Record<string, unknown>>(
+    "DeliveryMonitoring/pending-sales",
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeDeliveryMonitoringPendingSales(data);
+}
+
+export async function getDeliveryMonitoringPendingTransfers(
+  token: string,
+  opts?: { signal?: AbortSignal }
+): Promise<import("@/types/delivery-monitoring").DeliveryMonitoringPendingTransfersPage> {
+  const data = await apiFetch<Record<string, unknown>>(
+    "DeliveryMonitoring/pending-transfers",
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeDeliveryMonitoringPendingTransfers(data);
+}
+
+export async function getDeliveryMonitoringStatistics(
+  token: string,
+  query: { dateFrom?: string; dateTo?: string; signal?: AbortSignal }
+): Promise<import("@/types/delivery-monitoring").DeliveryMonitoringStatisticsPage> {
+  const params = new URLSearchParams();
+  if (query.dateFrom?.trim()) params.set("dateFrom", query.dateFrom.trim());
+  if (query.dateTo?.trim()) params.set("dateTo", query.dateTo.trim());
+  const suffix = params.toString();
+  const data = await apiFetch<Record<string, unknown>>(
+    `DeliveryMonitoring/statistics${suffix ? `?${suffix}` : ""}`,
+    { signal: query.signal },
+    token
+  );
+  return normalizeDeliveryMonitoringStatistics(data);
+}
+
+function normalizeInventoryAdjustmentReportList(
+  data: Record<string, unknown>
+): import("@/types/inventory-adjustment-report").InventoryAdjustmentReportList {
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          headerId: readNumber(item, "headerId", "HeaderId"),
+          adjustmentNumber: readNullableNumber(
+            item,
+            "adjustmentNumber",
+            "AdjustmentNumber"
+          ),
+          adjustmentDate: readNullableString(
+            item,
+            "adjustmentDate",
+            "AdjustmentDate"
+          ),
+          storeId: readNullableString(item, "storeId", "StoreId"),
+          storeName: readNullableString(item, "storeName", "StoreName"),
+          totalIncreaseValue: readNumber(
+            item,
+            "totalIncreaseValue",
+            "TotalIncreaseValue"
+          ),
+          totalDecreaseValue: readNumber(
+            item,
+            "totalDecreaseValue",
+            "TotalDecreaseValue"
+          ),
+          isPosted:
+            "isPosted" in item || "IsPosted" in item
+              ? readBoolean(item, "isPosted", "IsPosted")
+              : true,
+        };
+      })
+    : [];
+
+  return {
+    items,
+    totalRecords: readNumber(data, "totalRecords", "TotalRecords"),
+  };
+}
+
+function normalizeInventoryAdjustmentReportDetail(
+  data: Record<string, unknown>
+): import("@/types/inventory-adjustment-report").InventoryAdjustmentReportDetail {
+  const linesRaw = data.lines ?? data.Lines;
+  const lines = Array.isArray(linesRaw)
+    ? linesRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          itemCode: readNullableString(item, "itemCode", "ItemCode"),
+          itemNameArabic: readNullableString(item, "itemNameArabic", "ItemNameArabic"),
+          itemNameEnglish: readNullableString(item, "itemNameEnglish", "ItemNameEnglish"),
+          increaseQuantity: readNumber(
+            item,
+            "increaseQuantity",
+            "IncreaseQuantity"
+          ),
+          decreaseQuantity: readNumber(
+            item,
+            "decreaseQuantity",
+            "DecreaseQuantity"
+          ),
+          salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
+          increaseValue: readNumber(item, "increaseValue", "IncreaseValue"),
+          decreaseValue: readNumber(item, "decreaseValue", "DecreaseValue"),
+        };
+      })
+    : [];
+
+  return {
+    headerId: readNumber(data, "headerId", "HeaderId"),
+    adjustmentNumber: readNullableNumber(
+      data,
+      "adjustmentNumber",
+      "AdjustmentNumber"
+    ),
+    adjustmentDate: readNullableString(data, "adjustmentDate", "AdjustmentDate"),
+    storeId: readNullableString(data, "storeId", "StoreId"),
+    storeName: readNullableString(data, "storeName", "StoreName"),
+    totalIncreaseValue: readNumber(data, "totalIncreaseValue", "TotalIncreaseValue"),
+    totalDecreaseValue: readNumber(data, "totalDecreaseValue", "TotalDecreaseValue"),
+    isPosted:
+      "isPosted" in data || "IsPosted" in data
+        ? readBoolean(data, "isPosted", "IsPosted")
+        : true,
+    lines,
+  };
+}
+
+function normalizeInventoryAdjustmentReportStores(
+  data: unknown
+): import("@/types/inventory-adjustment-report").InventoryAdjustmentReportStoreOption[] {
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      storeId: readString(r, "storeId", "StoreId") ?? "",
+      storeName: readNullableString(r, "storeName", "StoreName"),
+    };
+  });
+}
+
+export async function getInventoryHOperationalStores(
+  token: string,
+  opts?: { signal?: AbortSignal }
+): Promise<import("@/types/inventory-adjustment-report").InventoryAdjustmentReportStoreOption[]> {
+  const data = await apiFetch<unknown>(
+    "InventoryH/operational-stores",
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeInventoryAdjustmentReportStores(data);
+}
+
+export async function getInventoryAdjustmentReportStores(
+  token: string,
+  opts?: { signal?: AbortSignal }
+): Promise<import("@/types/inventory-adjustment-report").InventoryAdjustmentReportStoreOption[]> {
+  const data = await apiFetch<unknown>(
+    "InventoryAdjustmentReport/stores",
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeInventoryAdjustmentReportStores(data);
+}
+
+export async function getInventoryAdjustmentReport(
+  token: string,
+  opts?: {
+    signal?: AbortSignal;
+    dateFrom?: string;
+    dateTo?: string;
+    storeId?: string;
+  }
+): Promise<import("@/types/inventory-adjustment-report").InventoryAdjustmentReportList> {
+  const params = new URLSearchParams();
+  if (opts?.dateFrom) params.set("dateFrom", opts.dateFrom);
+  if (opts?.dateTo) params.set("dateTo", opts.dateTo);
+  if (opts?.storeId) params.set("storeId", opts.storeId);
+  const query = params.toString();
+  const path = query
+    ? `InventoryAdjustmentReport?${query}`
+    : "InventoryAdjustmentReport";
+
+  const data = await apiFetch<Record<string, unknown>>(
+    path,
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeInventoryAdjustmentReportList(data);
+}
+
+export async function getInventoryAdjustmentReportUnposted(
+  token: string,
+  opts?: {
+    signal?: AbortSignal;
+    dateFrom?: string;
+    dateTo?: string;
+    storeId?: string;
+  }
+): Promise<import("@/types/inventory-adjustment-report").InventoryAdjustmentReportList> {
+  const params = new URLSearchParams();
+  if (opts?.dateFrom) params.set("dateFrom", opts.dateFrom);
+  if (opts?.dateTo) params.set("dateTo", opts.dateTo);
+  if (opts?.storeId) params.set("storeId", opts.storeId);
+  const query = params.toString();
+  const path = query
+    ? `InventoryAdjustmentReport/unposted?${query}`
+    : "InventoryAdjustmentReport/unposted";
+
+  const data = await apiFetch<Record<string, unknown>>(
+    path,
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeInventoryAdjustmentReportList(data);
+}
+
+export async function getInventoryAdjustmentReportDetail(
+  token: string,
+  headerId: number,
+  opts?: { signal?: AbortSignal }
+): Promise<import("@/types/inventory-adjustment-report").InventoryAdjustmentReportDetail> {
+  const data = await apiFetch<Record<string, unknown>>(
+    `InventoryAdjustmentReport/${headerId}`,
+    { signal: opts?.signal },
+    token
+  );
+  return normalizeInventoryAdjustmentReportDetail(data);
 }

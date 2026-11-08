@@ -18,11 +18,12 @@ import { formControlFocusClass } from "@/components/ui/form-field-inline";
 import { ApiError } from "@/lib/api-client";
 import {
   getPharmExpenseContext,
+  getPharmExpenseCurrentShift,
   savePharmExpensesBulk,
 } from "@/lib/pharm-expense-api";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import { cn } from "@/lib/utils";
-import type { PharmExpenseContext } from "@/types/pharm-expense";
+import type { PharmExpenseContext, PharmExpenseSavedItem } from "@/types/pharm-expense";
 
 type ExpenseRow = {
   key: string;
@@ -67,11 +68,38 @@ export function PharmExpensesPageContent() {
   const sessionReady = status !== "loading";
 
   const [contextLoading, setContextLoading] = useState(true);
+  const [savedLoading, setSavedLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [context, setContext] = useState<PharmExpenseContext | null>(null);
+  const [savedItems, setSavedItems] = useState<PharmExpenseSavedItem[]>([]);
+  const [savedShiftTotal, setSavedShiftTotal] = useState(0);
   const [rows, setRows] = useState<ExpenseRow[]>([newRow()]);
   const lastDescRef = useRef<HTMLInputElement | null>(null);
   const focusNextDesc = useRef(false);
+
+  const loadSavedExpenses = useCallback(async () => {
+    if (!token) {
+      setSavedItems([]);
+      setSavedShiftTotal(0);
+      setSavedLoading(false);
+      return;
+    }
+
+    setSavedLoading(true);
+    try {
+      const result = await getPharmExpenseCurrentShift(token);
+      setSavedItems(result.items);
+      setSavedShiftTotal(result.totalExpenses);
+    } catch (error) {
+      setSavedItems([]);
+      setSavedShiftTotal(0);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load saved shift expenses."
+      );
+    } finally {
+      setSavedLoading(false);
+    }
+  }, [token]);
 
   const loadContext = useCallback(async () => {
     if (!token) {
@@ -93,10 +121,14 @@ export function PharmExpensesPageContent() {
     }
   }, [token]);
 
+  const loadPageData = useCallback(async () => {
+    await Promise.all([loadContext(), loadSavedExpenses()]);
+  }, [loadContext, loadSavedExpenses]);
+
   useEffect(() => {
     if (!sessionReady) return;
-    void loadContext();
-  }, [sessionReady, loadContext]);
+    void loadPageData();
+  }, [sessionReady, loadPageData]);
 
   useEffect(() => {
     if (!focusNextDesc.current) return;
@@ -180,6 +212,7 @@ export function PharmExpensesPageContent() {
       const result = await savePharmExpensesBulk(token, validItems);
       toast.success(`Saved ${result.savedCount} expense row(s).`);
       setRows([newRow()]);
+      await loadSavedExpenses();
     } catch (error) {
       toast.error(
         error instanceof ApiError
@@ -199,7 +232,8 @@ export function PharmExpensesPageContent() {
         <div>
           <h2 className="text-lg font-semibold">Pharm Expenses</h2>
           <p className="text-sm text-muted-foreground">
-            Enter expense rows locally, then save all together for the current pharmacy open shift.
+            Save expenses for the current open shift. Saved rows below are loaded from the
+            database and stay visible until the shift is closed.
           </p>
         </div>
 
@@ -304,7 +338,7 @@ export function PharmExpensesPageContent() {
                 Add Expense
               </Button>
               <p className="text-sm font-medium tabular-nums">
-                Total Expenses: {total.toFixed(2)}
+                New rows total: {total.toFixed(2)}
               </p>
             </div>
 
@@ -326,6 +360,70 @@ export function PharmExpensesPageContent() {
                 </Button>
               </ActionGuard>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Saved expenses — current shift</CardTitle>
+            <CardDescription>
+              Records stored for shift{" "}
+              {context?.hasOpenShift && context.shiftId
+                ? String(context.shiftId)
+                : "—"}{" "}
+              at {context?.pharmacyName ?? "current pharmacy"}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {savedLoading ? (
+              <p className="text-muted-foreground flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading saved expenses…
+              </p>
+            ) : null}
+            {!savedLoading && savedItems.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                {context?.canSave
+                  ? "No expenses saved for this shift yet."
+                  : "No open shift — saved expenses are not available."}
+              </p>
+            ) : null}
+            {!savedLoading && savedItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[28rem] text-sm">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="w-10 p-2">#</th>
+                      <th className="p-2">Expense Description</th>
+                      <th className="w-40 p-2 text-right">Expense Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {savedItems.map((item, index) => (
+                      <tr key={item.id} className="border-b">
+                        <td className="p-2 tabular-nums text-muted-foreground">
+                          {index + 1}
+                        </td>
+                        <td className="p-2">{item.expensesDisc ?? "—"}</td>
+                        <td className="p-2 text-right tabular-nums">
+                          {item.expensesVal.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            <p className="text-sm font-semibold tabular-nums">
+              Shift total saved:{" "}
+              {savedShiftTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </p>
           </CardContent>
         </Card>
       </div>

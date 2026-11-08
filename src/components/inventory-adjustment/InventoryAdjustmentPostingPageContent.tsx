@@ -59,7 +59,7 @@ import {
 } from "@/components/ui/table";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { getStors } from "@/lib/api-client";
+import { getInventoryHOperationalStores } from "@/lib/api-client";
 import { formatExpDateMmYyyy } from "@/lib/purchase-exp-date";
 import { formatStorDisplayName } from "@/lib/purchase-stores";
 import { useGridPreferences } from "@/hooks/use-grid-preferences";
@@ -151,11 +151,11 @@ export function InventoryAdjustmentPostingPageContent() {
     }
 
     try {
-      const stores = await getStors(token);
+      const stores = await getInventoryHOperationalStores(token);
       setStoreOptions(
         stores.map((store) => ({
-          value: String(store.id),
-          label: formatStorDisplayName(store) || `Store ${store.id}`,
+          value: store.storeId,
+          label: store.storeName?.trim() || `Store ${store.storeId}`,
         }))
       );
     } catch (error) {
@@ -316,7 +316,7 @@ export function InventoryAdjustmentPostingPageContent() {
   const processing = postingId != null;
 
   return (
-    <PageGuard permission={PERMISSIONS.stock.view}>
+    <PageGuard permission={PERMISSIONS.inventoryAdjustment.view}>
       <TooltipProvider>
         <div className="space-y-4">
           <Breadcrumb>

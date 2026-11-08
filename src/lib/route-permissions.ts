@@ -16,6 +16,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/item-origins": "ItemOrigin.View",
   "/dashboard/companies": "Company.View",
   "/dashboard/pharm": "Pharm.View",
+  "/dashboard/pharmacy": "Sales.View",
   "/dashboard/accounts-chart": null,
   "/dashboard/collection-voucher": null,
   "/dashboard/payment-voucher": null,
@@ -36,10 +37,12 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/stock": "Stock.View",
   "/dashboard/inventory": "Stock.View",
   "/dashboard/inventory/store-summary": "Stock.View",
+  "/dashboard/stores/delivery-monitoring": "DeliveryMonitoring.View",
+  "/dashboard/stores/inventory-adjustment-report": "InventoryAdjustmentReport.View",
   "/dashboard/batch-management": "Stock.View",
   "/dashboard/batch-traceability": "BatchTraceability.View",
-  "/dashboard/transactions/inventory-adjustment": "Stock.View",
-  "/dashboard/transactions/inventory-adjustment/posting": "Stock.View",
+  "/dashboard/transactions/inventory-adjustment": "InventoryAdjustment.View",
+  "/dashboard/transactions/inventory-adjustment/posting": "InventoryAdjustment.View",
   "/dashboard/item-catalog": "ItemCatalog.View",
   "/dashboard/groups": "Group.View",
   "/dashboard/brands": "Brand.View",
@@ -66,6 +69,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/sales/item-card": "ItemCard.View",
   "/dashboard/sales/customers": "Customer.View",
   "/dashboard/shift": "Sales.View",
+  "/dashboard/pharm/sales-details-report": "SalesDetailsReport.View",
 };
 
 export const PERMISSIONS = {
@@ -113,6 +117,13 @@ export const PERMISSIONS = {
   },
   stock: {
     view: "Stock.View",
+  },
+  inventoryAdjustment: {
+    view: "InventoryAdjustment.View",
+    create: "InventoryAdjustment.Create",
+    edit: "InventoryAdjustment.Edit",
+    delete: "InventoryAdjustment.Delete",
+    post: "InventoryAdjustment.Post",
   },
   batchTraceability: {
     view: "BatchTraceability.View",
@@ -209,6 +220,16 @@ export const PERMISSIONS = {
   },
   sales: {
     view: "Sales.View",
+  },
+  salesDetailsReport: {
+    view: "SalesDetailsReport.View",
+    historySearch: "SalesDetailsReport.HistorySearch",
+  },
+  deliveryMonitoring: {
+    view: "DeliveryMonitoring.View",
+  },
+  inventoryAdjustmentReport: {
+    view: "InventoryAdjustmentReport.View",
   },
   pharmReciveAcceptedOrders: {
     view: "PharmReciveAcceptedOrders.View",

@@ -22,3 +22,17 @@ export type PharmExpenseContext = {
   canSave: boolean;
   error: string | null;
 };
+
+export type PharmExpenseSavedItem = {
+  id: number;
+  expensesDisc: string | null;
+  expensesVal: number;
+  addedAt: string | null;
+};
+
+export type PharmExpenseCurrentShift = {
+  pharmId: string;
+  shiftId: number;
+  items: PharmExpenseSavedItem[];
+  totalExpenses: number;
+};

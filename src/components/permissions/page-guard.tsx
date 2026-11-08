@@ -25,7 +25,7 @@ export function PageGuard({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { roles, permissions, loading, ready, error, refresh } =
+  const { roles, permissions, operationalPermissions, loading, ready, error, refresh } =
     usePermissions();
   const hydrated = useHydrated();
   const signingOutRef = useRef(false);
@@ -48,9 +48,9 @@ export function PageGuard({
       ? true
       : Array.isArray(permission)
         ? permission.some((code) =>
-            canAccessPermission(code, roles, permissions)
+            canAccessPermission(code, roles, permissions, operationalPermissions)
           )
-        : canAccessPermission(permission, roles, permissions);
+        : canAccessPermission(permission, roles, permissions, operationalPermissions);
 
   useEffect(() => {
     if (!redirectTo || redirectedRef.current) return;

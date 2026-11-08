@@ -45,9 +45,14 @@ export function canReversePurchaseInvoice(roles: string[]) {
 export function canAccessPermission(
   code: string,
   roles: string[],
-  permissions: string[]
+  permissions: string[],
+  operationalPermissions?: string[]
 ) {
-  return isAdminRole(roles) || permissions.includes(code);
+  return (
+    isAdminRole(roles) ||
+    permissions.includes(code) ||
+    (operationalPermissions?.includes(code) ?? false)
+  );
 }
 
 export function PermissionProvider({ children }: { children: React.ReactNode }) {

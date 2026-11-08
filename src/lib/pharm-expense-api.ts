@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api-client";
 import type {
   PharmExpenseBulkResponse,
   PharmExpenseContext,
+  PharmExpenseCurrentShift,
   PharmExpenseLineRequest,
 } from "@/types/pharm-expense";
 
@@ -42,6 +43,51 @@ export async function getPharmExpenseContext(
     hasOpenShift: Boolean(data.hasOpenShift ?? data.HasOpenShift),
     canSave: Boolean(data.canSave ?? data.CanSave),
     error: error || null,
+  };
+}
+
+function readNullableString(
+  obj: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  const value = readString(obj, ...keys);
+  return value || null;
+}
+
+export async function getPharmExpenseCurrentShift(
+  token: string
+): Promise<PharmExpenseCurrentShift> {
+  const data = await apiFetch<Record<string, unknown>>(
+    "PharmExpenses/current-shift",
+    {},
+    token
+  );
+
+  const itemsRaw = data.items ?? data.Items;
+  const items = Array.isArray(itemsRaw)
+    ? itemsRaw.map((row) => {
+        const item = row as Record<string, unknown>;
+        const addedRaw =
+          item.addedAt ?? item.AddedAt ?? item.addtime ?? item.Addtime;
+        return {
+          id: readNumber(item, "id", "Id"),
+          expensesDisc: readNullableString(item, "expensesDisc", "ExpensesDisc"),
+          expensesVal: readNumber(item, "expensesVal", "ExpensesVal"),
+          addedAt:
+            typeof addedRaw === "string"
+              ? addedRaw
+              : addedRaw instanceof Date
+                ? addedRaw.toISOString()
+                : null,
+        };
+      })
+    : [];
+
+  return {
+    pharmId: readString(data, "pharmId", "PharmId"),
+    shiftId: readNumber(data, "shiftId", "ShiftId"),
+    items,
+    totalExpenses: readNumber(data, "totalExpenses", "TotalExpenses"),
   };
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { DashboardHomeRedirect } from "@/components/dashboard/dashboard-home-redirect";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { AdminBadge } from "@/components/permissions/page-guard";
 import {
@@ -19,6 +20,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <DashboardHomeRedirect />
       {error ? (
         <Card className="border-destructive/50 bg-destructive/5">
           <CardHeader>

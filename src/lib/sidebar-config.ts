@@ -37,6 +37,11 @@ export const SIDEBAR_NAV: NavItem[] = [
     permission: PERMISSIONS.sales.view,
     items: [
       {
+        title: "لوحة الصيدلية",
+        href: "/dashboard/pharmacy",
+        permission: PERMISSIONS.sales.view,
+      },
+      {
         title: "المبيعات",
         href: "/dashboard/sales",
         permission: PERMISSIONS.sales.view,
@@ -108,6 +113,17 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/pharm/transactions/pharm-to-store-send",
         permission: PERMISSIONS.sales.view,
       },
+        {
+        title: "جرود",
+        href: "/dashboard/transactions/inventory-adjustment",
+        permission: PERMISSIONS.stock.view,
+      },
+
+       {
+        title: "تقرير تسويات المخزون",
+        href: "/dashboard/stores/inventory-adjustment-report",
+        permission: PERMISSIONS.inventoryAdjustmentReport.view,
+      },
     ],
     groups: [
       {
@@ -123,6 +139,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             title: "تقرير فواتير المبيعات",
             href: "/dashboard/pharm/sales-invoice-report",
             permission: PERMISSIONS.sales.view,
+          },
+          {
+            title: "تقرير تفاصيل المبيعات",
+            href: "/dashboard/pharm/sales-details-report",
+            permission: PERMISSIONS.salesDetailsReport.view,
           },
         ],
       },
@@ -436,6 +457,16 @@ export const SIDEBAR_NAV: NavItem[] = [
         href: "/dashboard/pharm/transactions/pharm-to-store",
         permission: PERMISSIONS.sales.view,
       },
+      {
+        title: "متابعة المناديب والإحصائيات",
+        href: "/dashboard/stores/delivery-monitoring",
+        permission: PERMISSIONS.deliveryMonitoring.view,
+      },
+      {
+        title: "تقرير تسويات المخزون",
+        href: "/dashboard/stores/inventory-adjustment-report",
+        permission: PERMISSIONS.inventoryAdjustmentReport.view,
+      },
     ],
   },
 ];
@@ -478,6 +509,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/transactions/pharmacy-transfer": "Pharmacy Transfer",
   "/dashboard/pharm/shift-print": "Shift Print",
   "/dashboard/pharm/sales-invoice-report": "Sales Invoice Report",
+  "/dashboard/pharm/sales-details-report": "Sales Details Report",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",
   "/dashboard/payment-voucher": "Payment Voucher",
@@ -489,6 +521,8 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/cost-centers": "Cost Centers",
   "/dashboard/employ-info": "Employee Info",
   "/dashboard/stores": "Stores",
+  "/dashboard/stores/delivery-monitoring": "Delivery Monitoring & Statistics",
+  "/dashboard/stores/inventory-adjustment-report": "Inventory Adjustment Report",
   "/dashboard/vendors": "Vendors",
   "/dashboard/item-catalog": "Master Data",
   "/dashboard/groups": "Groups",

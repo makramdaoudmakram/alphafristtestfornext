@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   getItemCatalog,
   getNextMovValue,
-  getStors,
+  getInventoryHOperationalStores,
   getUnitConversionInfo,
   searchStockBatchesForInventoryAdjustment,
   type StockUnitConversionResult,
@@ -169,7 +169,18 @@ export function InventoryAdjustmentPageContent() {
     }
     setStoresLoading(true);
     try {
-      setStores(await getStors(token));
+      const rows = await getInventoryHOperationalStores(token);
+      setStores(
+        rows.map((row) => ({
+          id: Number(row.storeId),
+          storArName: row.storeName ?? row.storeId,
+          storEnName: row.storeName,
+          costCenterId: 0,
+          accountNo: null,
+          costCenterName: null,
+          accountName: null,
+        }))
+      );
     } catch {
       setStores([]);
       toast.error("Could not load stores.");
@@ -601,7 +612,7 @@ export function InventoryAdjustmentPageContent() {
   }
 
   return (
-    <PageGuard permission={PERMISSIONS.stock.view}>
+    <PageGuard permission={PERMISSIONS.inventoryAdjustment.view}>
       <input
         type="hidden"
         {...form.register("id", {
