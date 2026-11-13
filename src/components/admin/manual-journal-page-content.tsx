@@ -26,6 +26,7 @@ import {
 } from "@/lib/manual-journal-api";
 import type { AccountSelectItem } from "@/types/collected-voucher";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { CostCenterCombobox } from "@/components/admin/cost-center-combobox";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { Badge } from "@/components/ui/badge";
@@ -399,7 +400,7 @@ export function ManualJournalPageContent() {
   const voucherDisplay = refNo || receiptNo || "—";
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.generalLedger.createJournal}>
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 p-4 pb-28 md:p-6 md:pb-32">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">

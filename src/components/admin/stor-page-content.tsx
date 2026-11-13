@@ -17,6 +17,7 @@ import {
 import { StorAccountCombobox } from "@/components/admin/stor-account-combobox";
 import { useStorColumns } from "@/components/admin/stor-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -184,7 +185,10 @@ export function StorPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard
+      permission={PERMISSIONS.stor.view}
+      redirectTo="/unauthorized?from=stores&permission=Stor.View"
+    >
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Stores</h2>

@@ -7,6 +7,7 @@ import { Building2, Loader2, Plus, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { createVendor, getNextVendorAccount, getVendors } from "@/lib/vendor-api";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -295,7 +296,7 @@ export function VendorsPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.vendor.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Vendors</h2>

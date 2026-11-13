@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Eraser, FileSpreadsheet, ListChecks, Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { getStors } from "@/lib/api-client";
+import { getOperationalStors } from "@/lib/api-client";
 import {
   flattenPharmReciveExcelValidationErrors,
   formatPharmReciveExcelFieldError,
@@ -30,6 +30,7 @@ import {
 } from "@/lib/purchase-stores";
 import { cn } from "@/lib/utils";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -236,7 +237,7 @@ export function PharmReciveExcelImportPage() {
 
   useEffect(() => {
     if (!token) return;
-    void getStors(token)
+    void getOperationalStors(token)
       .then((items) => setStores(items))
       .catch(() => setStores([]));
   }, [token]);
@@ -539,7 +540,7 @@ export function PharmReciveExcelImportPage() {
 
   if (!hasMovementContext) {
     return (
-      <PageGuard permission={null}>
+      <PageGuard permission={PERMISSIONS.movment.view}>
         <div className="min-w-0 max-w-full space-y-4">
           <h2 className="text-lg font-semibold">Pharmacy Receiving Excel Import</h2>
           <Card>
@@ -562,7 +563,7 @@ export function PharmReciveExcelImportPage() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.movment.view}>
       <div className="min-w-0 max-w-full space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

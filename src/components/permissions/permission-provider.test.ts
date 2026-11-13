@@ -26,6 +26,15 @@ describe("canAccessPermission with pharmacy-scoped permissions", () => {
     expect(allowed).toBe(true);
   });
 
+  it("preserves SuperAdmin role bypass for UI navigation", () => {
+    const allowed = canAccessPermission(
+      PERMISSIONS.pharmacyPageAccess.manage,
+      ["SuperAdmin"],
+      []
+    );
+    expect(allowed).toBe(true);
+  });
+
   it("preserves global Identity permissions without operational grants", () => {
     const allowed = canAccessPermission(
       PERMISSIONS.sales.view,

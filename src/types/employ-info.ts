@@ -1,3 +1,15 @@
+export type EmployInfoLinkedLoginAccount = {
+  userId: string;
+  email: string | null;
+  userName: string | null;
+};
+
+export type EmployInfoLoginAccountOption = {
+  userId: string;
+  email: string | null;
+  userName: string | null;
+};
+
 export type EmployInfoItem = {
   id: number;
   name: string | null;
@@ -7,6 +19,8 @@ export type EmployInfoItem = {
   employType: number;
   employTypeName: string | null;
   active: boolean;
+  identityUserId?: string | null;
+  linkedLoginAccount?: EmployInfoLinkedLoginAccount | null;
   /** Present when loaded by id for edit; never in list/grid. */
   password?: string | null;
 };
@@ -18,6 +32,7 @@ export type CreateEmployInfoRequest = {
   employType: number;
   active: boolean;
   previewPassword?: string | null;
+  identityUserId?: string | null;
 };
 
 export type UpdateEmployInfoRequest = Omit<CreateEmployInfoRequest, "previewPassword">;
@@ -34,6 +49,7 @@ export type EmployInfoFormValues = {
   pharm: number | null;
   employType: string;
   active: boolean;
+  identityUserId: string;
 };
 
 export const emptyEmployInfoFormValues: EmployInfoFormValues = {
@@ -43,4 +59,5 @@ export const emptyEmployInfoFormValues: EmployInfoFormValues = {
   pharm: null,
   employType: "1",
   active: true,
+  identityUserId: "",
 };

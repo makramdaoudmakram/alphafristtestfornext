@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Loader2, Plus, Save, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getMovmentById, getStors } from "@/lib/api-client";
+import { getMovmentById, getOperationalStors } from "@/lib/api-client";
 import { fetchOperationalPharmacyStoreId } from "@/lib/pharmacy-operational-store";
 import { collectOutgoingPendingForStorage } from "@/lib/pharm-store-return-pending";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
@@ -185,7 +185,7 @@ export function PharmStoreReturnSendPageContent() {
       .catch(() => {
         if (!cancelled) setUnits([]);
       });
-    void getStors(token)
+    void getOperationalStors(token)
       .then((rows) => {
         if (!cancelled) setStores(rows);
       })
@@ -214,17 +214,27 @@ export function PharmStoreReturnSendPageContent() {
       setDetails([createEmptySendDetailRow(0)]);
       if (!token) return;
 
-      // Movment/lookup omits MovStor2 (and can omit other header fields); the source
-      // store for the stock search and the destination store live on the full row.
-      // Fetch it, exactly like the Pharm Receive page, so MovStor2 (Main Store) is present.
+      if (item.movStor2?.trim()) {
+        // Movment/lookup includes MovStor2 for pharmacy transaction pages (no Movment.GetById needed).
+        return;
+      }
+
+      // Enrich from the full row when legacy lookup data lacks a destination store.
       const requestId = ++movementReqRef.current;
       void getMovmentById(item.id, token)
         .then((full) => {
           if (requestId !== movementReqRef.current) return;
           setMovement(toMovmentLookupItem(full));
+          if (!full.movStor2?.trim()) {
+            toast.error(
+              "Selected movement has no destination store. Configure MovStor2 to Main Store or Expire Store."
+            );
+          }
         })
         .catch(() => {
-          // Keep the lookup value; Send will surface a clear server error if incomplete.
+          toast.error(
+            "Could not load the movement destination store. Pick a movement with a Main Store destination."
+          );
         });
     },
     [token]

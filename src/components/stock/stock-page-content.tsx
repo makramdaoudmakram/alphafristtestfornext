@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { getStors, searchStockBatches } from "@/lib/api-client";
+import { getOperationalStors, searchStockBatches } from "@/lib/api-client";
 import { useStockColumns } from "@/components/stock/stock-table-columns";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { StockBarcodeScanCard } from "@/components/stock/stock-barcode-scan-card";
@@ -112,7 +112,7 @@ export function StockPageContent() {
       setStores([]);
       return;
     }
-    void getStors(token)
+    void getOperationalStors(token)
       .then(setStores)
       .catch(() => setStores([]));
   }, [token]);

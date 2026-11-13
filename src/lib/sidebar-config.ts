@@ -34,7 +34,6 @@ export const SIDEBAR_NAV: NavItem[] = [
   
   {
     title: "صيدليات",
-    permission: PERMISSIONS.sales.view,
     items: [
       {
         title: "لوحة الصيدلية",
@@ -80,12 +79,12 @@ export const SIDEBAR_NAV: NavItem[] = [
       {
         title: "مشتريات الفرع",
         href: "/dashboard/pharm/transactions/pharmacy-purchase",
-        permission: PERMISSIONS.sales.view,
+        permission: PERMISSIONS.pharmPurchase.view,
       },
       {
         title: "مرتجع مشتريات الفرع",
         href: "/dashboard/pharm/transactions/pharmacy-purchase-return",
-        permission: PERMISSIONS.sales.view,
+        permission: PERMISSIONS.pharmPurchaseReturn.view,
       },
       {
         title: "التحويلات من الصيدليات",
@@ -116,7 +115,7 @@ export const SIDEBAR_NAV: NavItem[] = [
         {
         title: "جرود",
         href: "/dashboard/transactions/inventory-adjustment",
-        permission: PERMISSIONS.stock.view,
+        permission: PERMISSIONS.inventoryAdjustment.view,
       },
 
        {
@@ -128,7 +127,6 @@ export const SIDEBAR_NAV: NavItem[] = [
     groups: [
       {
         title: "Report",
-        permission: PERMISSIONS.sales.view,
         items: [
           {
             title: "Shift Print",
@@ -218,6 +216,21 @@ export const SIDEBAR_NAV: NavItem[] = [
             title: "صلاحيات الصيدليات",
             href: "/dashboard/admin/pharmacy-authorization",
             permission: PERMISSIONS.permissions.manage,
+          },
+          {
+            title: "Head Office Stores",
+            href: "/dashboard/admin/head-office-store-assignments",
+            permission: PERMISSIONS.users.edit,
+          },
+          {
+            title: "صلاحيات صفحات الصيدليات",
+            href: "/dashboard/admin/pharmacy-page-access",
+            permission: PERMISSIONS.pharmacyPageAccess.manage,
+          },
+          {
+            title: "Responsibility Profiles",
+            href: "/dashboard/admin/responsibility-profiles",
+            permission: PERMISSIONS.responsibilityProfiles.manage,
           },
           {
             title: "Role Permissions",
@@ -328,6 +341,7 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "الصيدليات",
             href: "/dashboard/pharm",
+            permission: PERMISSIONS.pharm.view,
           },
           {
             title: "الشركات",
@@ -342,14 +356,17 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "شجره الحسابات",
             href: "/dashboard/accounts-chart",
+            permission: PERMISSIONS.accountsChart.view,
           },
           {
             title: "التحصيلات",
             href: "/dashboard/collection-voucher",
+            permission: PERMISSIONS.collectedVoucher.view,
           },
           {
             title: "المدفوعات",
             href: "/dashboard/payment-voucher",
+            permission: PERMISSIONS.paymentVoucher.view,
           },
           {
             title: "الاذون المعلقه",
@@ -358,14 +375,17 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Manual Journal",
             href: "/dashboard/manual-journal",
+            permission: PERMISSIONS.generalLedger.createJournal,
           },
           {
             title: "Journal",
             href: "/dashboard/journal",
+            permission: PERMISSIONS.generalLedger.view,
           },
           {
             title: "Ledger",
             href: "/dashboard/ledger",
+            permission: PERMISSIONS.generalLedger.view,
           },
           {
             title: "استيراد الأرصدة القديمة",
@@ -375,6 +395,7 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "مراكز التكلفه",
             href: "/dashboard/cost-centers",
+            permission: PERMISSIONS.costCenter.view,
           },
           {
             title: "بيانات الموظف",
@@ -384,16 +405,18 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "المخازن",
             href: "/dashboard/stores",
+            permission: PERMISSIONS.stor.view,
           },
          
           {
             title: "الموردين",
             href: "/dashboard/vendors",
+            permission: PERMISSIONS.vendor.view,
           },
           {
         title: "تعديل الفواتير المحفوظه",
         href: "/dashboard/transactions/purchase/reversal",
-        permission: null,
+        permission: PERMISSIONS.purchase.view,
       },
         ],
   
@@ -404,23 +427,23 @@ export const SIDEBAR_NAV: NavItem[] = [
       {
         title: "المشتريات",
         href: "/dashboard/transactions/purchase",
-        permission: null,
+        permission: PERMISSIONS.purchase.view,
       },
     
       {
         title: "تسويه المشتريات",
         href: "/dashboard/transactions/purchase/invoice-draft",
-        permission: null,
+        permission: PERMISSIONS.purchase.view,
       },
       {
         title: "مرتجع موردين",
         href: "/dashboard/transactions/return",
-        permission: null,
+        permission: PERMISSIONS.purchaseReturn.view,
       },
       {
         title: "صادر صيدليات",
         href: "/dashboard/transactions/pharm-recive",
-        permission: null,
+        permission: PERMISSIONS.movment.view,
       },
       {
         title: "الارصده",
@@ -435,22 +458,20 @@ export const SIDEBAR_NAV: NavItem[] = [
       {
         title: "ملخص مخزون المتجر",
         href: "/dashboard/inventory/store-summary",
-        permission: PERMISSIONS.stock.view,
       },
       {
         title: "تعديل الباتشات",
         href: "/dashboard/batch-management",
-        permission: PERMISSIONS.stock.view,
       },
       {
         title: "جرود",
         href: "/dashboard/transactions/inventory-adjustment",
-        permission: PERMISSIONS.stock.view,
+        permission: PERMISSIONS.inventoryAdjustment.view,
       },
       {
         title: "تسويات الجرود",
         href: "/dashboard/transactions/inventory-adjustment/posting",
-        permission: PERMISSIONS.stock.view,
+        permission: PERMISSIONS.inventoryAdjustment.view,
       },
        {
         title: "التحويل من الصيدليات",
@@ -490,6 +511,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/sales-test": "Sales Test",
   "/dashboard/admin/pharmacy-scope": "Pharmacy Scope",
   "/dashboard/admin/pharmacy-authorization": "صلاحيات الصيدليات",
+  "/dashboard/admin/head-office-store-assignments": "Head Office Store Assignments",
+  "/dashboard/admin/pharmacy-page-access": "Pharmacy Page Access",
+  "/dashboard/admin/responsibility-profiles": "Responsibility Profiles",
   "/dashboard/diagnostics": "Diagnostics",
   "/dashboard/audit/sqlite-verification": "SQLite Server Verification",
   "/dashboard/audit/sqlite-explorer": "SQLite Data Explorer",

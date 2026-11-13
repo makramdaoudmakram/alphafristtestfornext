@@ -24,6 +24,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FormFieldInline } from "@/components/ui/form-field-inline";
 import { Separator } from "@/components/ui/separator";
+import { UserResponsibilitiesSection } from "@/components/admin/user-responsibilities-section";
+import { UserEffectiveAccessSection } from "@/components/admin/user-effective-access-section";
+import { ActionGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import {
   Sheet,
   SheetContent,
@@ -278,8 +282,7 @@ export function UserEditSheet({
         <SheetHeader>
           <SheetTitle>Edit user</SheetTitle>
           <SheetDescription>
-            Update account details or set a new password. Roles and permissions
-            are managed elsewhere.
+            Update account details, responsibility profiles, or set a new password.
           </SheetDescription>
         </SheetHeader>
 
@@ -396,6 +399,25 @@ export function UserEditSheet({
                 </Button>
               </SheetFooter>
             </form>
+
+            <Separator />
+
+            {token && userId ? (
+              <ActionGuard permission={PERMISSIONS.users.edit}>
+                <UserEffectiveAccessSection userId={userId} token={token} />
+              </ActionGuard>
+            ) : null}
+
+            <Separator />
+
+            {token && userId ? (
+              <ActionGuard
+                permission={PERMISSIONS.responsibilityProfiles.manage}
+                requireGrantedPermission
+              >
+                <UserResponsibilitiesSection userId={userId} token={token} />
+              </ActionGuard>
+            ) : null}
 
             <Separator />
 

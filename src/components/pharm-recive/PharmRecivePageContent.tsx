@@ -9,7 +9,7 @@ import {
   getItemCatalog,
   getMovmentById,
   getNextMovValue,
-  getStors,
+  getOperationalStors,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
@@ -66,6 +66,7 @@ import { MovementLookup } from "@/components/movement/MovementLookup";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { FormFieldInlineWrap } from "@/components/ui/form-field-inline";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -142,7 +143,7 @@ export function PharmRecivePageContent() {
       return;
     }
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } catch {
       setStores([]);
     }
@@ -816,7 +817,7 @@ export function PharmRecivePageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.movment.view}>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold">Pharmacy Receiving</h2>

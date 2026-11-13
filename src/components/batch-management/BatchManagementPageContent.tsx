@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   listBatchManagement,
   saveBatchManagement,
-  getStors,
+  getOperationalStors,
 } from "@/lib/api-client";
 import { catalogDefaultPrices } from "@/lib/item-catalog-search";
 import { formatExpDateMmYyyy, mmYyyyToExpDate } from "@/lib/purchase-exp-date";
@@ -286,7 +286,7 @@ export function BatchManagementPageContent() {
       return;
     }
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to load stores"

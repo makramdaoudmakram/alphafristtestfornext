@@ -16,6 +16,7 @@ import {
 } from "@/components/admin/sales-kind-form-sheet";
 import { useSalesKindColumns } from "@/components/admin/sales-kind-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -162,7 +163,7 @@ export function SalesKindPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.salesKind.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Sales Kind</h2>

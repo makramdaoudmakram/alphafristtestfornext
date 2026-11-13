@@ -9,7 +9,7 @@ import {
   getItemCatalog,
   getMovmentById,
   getNextMovValue,
-  getStors,
+  getOperationalStors,
   getUnitConversionInfo,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
@@ -39,6 +39,7 @@ import { Toolbar } from "@/components/return/Toolbar";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import {
   FormFieldInlineWrap,
 } from "@/components/ui/form-field-inline";
@@ -128,7 +129,7 @@ export function ReturnPageContent() {
 
     setStoresLoading(true);
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } catch (err) {
       setStores([]);
       toast.error("Could not load stores.", {
@@ -572,7 +573,7 @@ export function ReturnPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.purchaseReturn.view}>
       {/* Keep header id registered while the detail card shows a loading skeleton */}
       <input
         type="hidden"

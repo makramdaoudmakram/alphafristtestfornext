@@ -16,6 +16,7 @@ import {
 } from "@/components/admin/sales-payment-classify-form-sheet";
 import { useSalesPaymentClassifyColumns } from "@/components/admin/sales-payment-classify-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -160,7 +161,7 @@ export function SalesPaymentClassifyPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.salesPaymentClassify.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Sales Payment Classification</h2>

@@ -21,6 +21,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { EMPLOY_TYPE_OPTIONS } from "@/lib/employ-info-enums";
+import type { EmployInfoLoginAccountOption } from "@/types/employ-info";
+
+function loginOptionLabel(option: EmployInfoLoginAccountOption) {
+  const email = option.email?.trim() || "—";
+  const userName = option.userName?.trim();
+  return userName ? `${email} — ${userName}` : email;
+}
 
 function toFormValues(item: EmployInfoItem): EmployInfoFormValues {
   return {
@@ -30,6 +37,7 @@ function toFormValues(item: EmployInfoItem): EmployInfoFormValues {
     pharm: item.pharm,
     employType: String(item.employType),
     active: item.active,
+    identityUserId: item.identityUserId?.trim() ?? "",
   };
 }
 
@@ -40,6 +48,8 @@ export function EmployInfoFormSheet({
   saving,
   passwordLoading,
   onRequestGeneratedPassword,
+  loginAccountOptions,
+  loginAccountOptionsLoading,
   onSubmit,
 }: {
   open: boolean;
@@ -48,6 +58,8 @@ export function EmployInfoFormSheet({
   saving?: boolean;
   passwordLoading?: boolean;
   onRequestGeneratedPassword: () => Promise<string>;
+  loginAccountOptions: EmployInfoLoginAccountOption[];
+  loginAccountOptionsLoading?: boolean;
   onSubmit: (values: EmployInfoFormValues, mode: "create" | "edit") => Promise<void>;
 }) {
   const isCreateMode = item == null;
@@ -156,6 +168,34 @@ export function EmployInfoFormSheet({
               }
               fallbackLabel={item?.costCenterName}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sheet-login-account">Login Account</Label>
+            <SearchableCombobox
+              value={values.identityUserId}
+              onValueChange={(next) =>
+                setValues((current) => ({ ...current, identityUserId: next }))
+              }
+              options={[
+                { value: "", label: "(No login account)" },
+                ...loginAccountOptions.map((option) => ({
+                  value: option.userId,
+                  label: loginOptionLabel(option),
+                })),
+              ]}
+              placeholder={
+                loginAccountOptionsLoading
+                  ? "Loading login accounts..."
+                  : "Select login account"
+              }
+              disabled={loginAccountOptionsLoading}
+              size="lg"
+            />
+            <p className="text-muted-foreground text-xs">
+              Links this employee record to an existing ERP login. Does not
+              create users or change permissions.
+            </p>
           </div>
 
           <div className="space-y-2">

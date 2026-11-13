@@ -16,6 +16,7 @@ import {
 import { useCostCenterColumns } from "@/components/admin/cost-center-table-columns";
 import { CostCenterCombobox } from "@/components/admin/cost-center-combobox";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -157,7 +158,7 @@ export function CostCenterPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.costCenter.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Cost Centers</h2>

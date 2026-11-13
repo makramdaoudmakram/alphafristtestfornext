@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { PageGuard } from "@/components/permissions/page-guard";
+import { ActionGuard, PageGuard } from "@/components/permissions/page-guard";
 import { ItemLanguageToggle } from "@/components/pharm-recive/ItemLanguageToggle";
 import { SalesAddCustomerSheet } from "@/components/sales/SalesAddCustomerSheet";
 import { SalesPageToolbar } from "@/components/sales/SalesPageToolbar";
@@ -22,6 +22,12 @@ import {
 } from "@/components/ui/card";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
+import { resolveWorkspaceActiveTabId } from "@/lib/workspace-active-tab";
+import {
+  classifyShiftApiError,
+  shiftApiErrorMessage,
+  shiftSessionStatusLabel,
+} from "@/lib/shift-session-errors";
 import {
   ApiError,
   createSalesReturn,
@@ -135,7 +141,20 @@ export function SalesReturnWorkspacePageContent() {
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
 
-  const active = tabs.find((t) => t.clientId === activeId) ?? null;
+  const tabBootstrapRef = useRef(false);
+  const workspaceDataInitRef = useRef(false);
+
+  const resolvedActiveId = resolveWorkspaceActiveTabId(tabs, activeId);
+  const active =
+    resolvedActiveId != null
+      ? (tabs.find((t) => t.clientId === resolvedActiveId) ?? null)
+      : null;
+
+  useEffect(() => {
+    if (resolvedActiveId != null && activeId !== resolvedActiveId) {
+      setActiveId(resolvedActiveId);
+    }
+  }, [activeId, resolvedActiveId]);
   const activeSalesKindId =
     active?.salesKindId != null && active.salesKindId > 0
       ? active.salesKindId
@@ -187,7 +206,24 @@ export function SalesReturnWorkspacePageContent() {
   const ensureReturnShift = useCallback(async () => {
     if (!token) return;
     try {
-      const movements = await getShiftMovements(token).catch(() => []);
+      let movements: Awaited<ReturnType<typeof getShiftMovements>>;
+      try {
+        movements = await getShiftMovements(token);
+      } catch (movementError) {
+        const kind = classifyShiftApiError(movementError);
+        if (kind === "authorization" || kind === "missing_pharmacy") {
+          const msg = shiftApiErrorMessage(
+            movementError,
+            "Missing permission to load shift movements."
+          );
+          toast.error(msg);
+          setReturnShiftReady(false);
+          setSessionStatus(shiftSessionStatusLabel(kind));
+          setShiftNumber("—");
+          return;
+        }
+        movements = [];
+      }
       const returnMovements = movements.filter((m) => m.movParint === RETURN_MOV_PARINT);
       const returnMov = returnMovements[0];
       if (!returnMov?.movId) {
@@ -241,29 +277,44 @@ export function SalesReturnWorkspacePageContent() {
       setShiftNumber(
         status.scId != null && status.scId > 0 ? String(status.scId) : "—"
       );
-    } catch {
+    } catch (error) {
+      const kind = classifyShiftApiError(error);
+      if (kind === "authorization" || kind === "missing_pharmacy") {
+        toast.error(
+          shiftApiErrorMessage(error, "Missing permission to access the pharmacy shift.")
+        );
+      } else if (kind === "network") {
+        toast.error(shiftApiErrorMessage(error, "Could not reach the shift service."));
+      }
       setReturnShiftReady(false);
       setPharmacyName("—");
       setCurrentParmId(null);
       setCurrentStoreId(null);
-      setSessionStatus("Unavailable");
+      setSessionStatus(shiftSessionStatusLabel(kind));
       setShiftNumber("—");
     }
   }, [token, activePharmacyId, pharmacyScopeReady]);
 
   useEffect(() => {
     if (!token) {
+      tabBootstrapRef.current = false;
+      workspaceDataInitRef.current = false;
       setPaymentKindsReady(false);
       return;
     }
+    if (tabBootstrapRef.current) return;
+    tabBootstrapRef.current = true;
+    const first = createEmptyReturnTab(1, "Loading...");
+    setTabs([first]);
+    setActiveId(first.clientId);
+    setSeq(2);
+  }, [token]);
 
-    setTabs((prev) => {
-      if (prev.length > 0) return prev;
-      const first = createEmptyReturnTab(1, "Loading...");
-      setActiveId(first.clientId);
-      setSeq(2);
-      return [first];
-    });
+  useEffect(() => {
+    if (!token) return;
+    if (tabs.length === 0) return;
+    if (workspaceDataInitRef.current) return;
+    workspaceDataInitRef.current = true;
 
     let cancelled = false;
     void (async () => {
@@ -299,7 +350,7 @@ export function SalesReturnWorkspacePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, ensureReturnShift]);
+  }, [token, tabs.length, ensureReturnShift]);
 
   const handleNewTab = () => {
     const tab = createEmptyReturnTab(seq, egyptTime);
@@ -840,7 +891,7 @@ export function SalesReturnWorkspacePageContent() {
                   <Button
                     type="button"
                     size="sm"
-                    variant={tab.clientId === activeId ? "default" : "outline"}
+                    variant={tab.clientId === resolvedActiveId ? "default" : "outline"}
                     onClick={() => setActiveId(tab.clientId)}
                   >
                     {tab.label}
@@ -858,7 +909,7 @@ export function SalesReturnWorkspacePageContent() {
               ))}
             </div>
 
-            {!active ? (
+            {tabs.length === 0 || !active ? (
               <Card>
                 <CardContent className="py-8 text-sm text-muted-foreground">
                   Loading Sales Return workspace…
@@ -1142,13 +1193,15 @@ export function SalesReturnWorkspacePageContent() {
                     </div>
 
                     <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-                      <Button
-                        type="button"
-                        disabled={!canSave}
-                        onClick={() => void handleSave()}
-                      >
-                        {saving ? "Saving…" : "Save Return"}
-                      </Button>
+                      <ActionGuard permission={PERMISSIONS.salesReturn.create}>
+                        <Button
+                          type="button"
+                          disabled={!canSave}
+                          onClick={() => void handleSave()}
+                        >
+                          {saving ? "Saving…" : "Save Return"}
+                        </Button>
+                      </ActionGuard>
                       <Button
                         type="button"
                         variant="outline"

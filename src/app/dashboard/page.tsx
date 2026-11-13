@@ -56,7 +56,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle>Your roles</CardTitle>
-            <CardDescription>App roles assigned to your account</CardDescription>
+            <CardDescription>
+              ERP app roles from <code className="text-xs">AppUserRoles</code>{" "}
+              (not Identity login roles). New users may include automatic{" "}
+              <code className="text-xs">Viewer</code> from provisioning.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             {loading ? (

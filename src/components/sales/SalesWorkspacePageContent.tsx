@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { resolveWorkspaceActiveTabId } from "@/lib/workspace-active-tab";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Bike, Check } from "lucide-react";
@@ -27,6 +28,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PERMISSIONS } from "@/lib/route-permissions";
+import {
+  classifyShiftApiError,
+  shiftApiErrorMessage,
+  shiftSessionStatusLabel,
+} from "@/lib/shift-session-errors";
 import {
   ApiError,
   createSale,
@@ -156,7 +162,20 @@ export function SalesWorkspacePageContent() {
   const [units, setUnits] = useState<UnitItem[]>([]);
   const [unitsLoading, setUnitsLoading] = useState(false);
 
-  const active = tabs.find((t) => t.clientId === activeId) ?? null;
+  const tabBootstrapRef = useRef(false);
+  const workspaceDataInitRef = useRef(false);
+
+  const resolvedActiveId = resolveWorkspaceActiveTabId(tabs, activeId);
+  const active =
+    resolvedActiveId != null
+      ? (tabs.find((t) => t.clientId === resolvedActiveId) ?? null)
+      : null;
+
+  useEffect(() => {
+    if (resolvedActiveId != null && activeId !== resolvedActiveId) {
+      setActiveId(resolvedActiveId);
+    }
+  }, [activeId, resolvedActiveId]);
 
   const deliveryMandatory = Boolean(
     active?.salesKindId != null &&
@@ -351,7 +370,23 @@ export function SalesWorkspacePageContent() {
     try {
       let status = await getCurrentOpenShift(token);
       if (!status.hasOpenShift) {
-        const movements = await getShiftMovements(token).catch(() => []);
+        let movements: Awaited<ReturnType<typeof getShiftMovements>>;
+        try {
+          movements = await getShiftMovements(token);
+        } catch (movementError) {
+          const kind = classifyShiftApiError(movementError);
+          if (kind === "authorization" || kind === "missing_pharmacy") {
+            const msg = shiftApiErrorMessage(
+              movementError,
+              "Missing permission to load shift movements."
+            );
+            toast.error(msg);
+            setSessionStatus(shiftSessionStatusLabel(kind));
+            setShiftNumber("—");
+            return;
+          }
+          movements = [];
+        }
         const movId = movements[0]?.movId;
         if (!movId) {
           setPharmacyName(status.pharmacyName?.trim() || "—");
@@ -385,25 +420,42 @@ export function SalesWorkspacePageContent() {
       setShiftNumber(
         status.scId != null && status.scId > 0 ? String(status.scId) : "—"
       );
-    } catch {
+    } catch (error) {
+      const kind = classifyShiftApiError(error);
+      if (kind === "authorization" || kind === "missing_pharmacy") {
+        toast.error(
+          shiftApiErrorMessage(error, "Missing permission to access the pharmacy shift.")
+        );
+      } else if (kind === "network") {
+        toast.error(shiftApiErrorMessage(error, "Could not reach the shift service."));
+      }
       setPharmacyName("—");
       setCurrentParmId(null);
-      setSessionStatus("Unavailable");
+      setSessionStatus(shiftSessionStatusLabel(kind));
       setShiftNumber("—");
     }
   }, [token]);
 
-  // Shell-first: open first in-memory tab immediately; load supporting data in background.
+  useEffect(() => {
+    if (!token) {
+      tabBootstrapRef.current = false;
+      workspaceDataInitRef.current = false;
+      return;
+    }
+    if (tabBootstrapRef.current) return;
+    tabBootstrapRef.current = true;
+    const first = createEmptyTab(1, "Loading...");
+    setTabs([first]);
+    setActiveId(first.clientId);
+    setSeq(2);
+  }, [token]);
+
+  // Shell-first: load supporting data after the first tab exists (do not set activeId inside setTabs).
   useEffect(() => {
     if (!token) return;
-
-    setTabs((prev) => {
-      if (prev.length > 0) return prev;
-      const first = createEmptyTab(1, "Loading...");
-      setActiveId(first.clientId);
-      setSeq(2);
-      return [first];
-    });
+    if (tabs.length === 0) return;
+    if (workspaceDataInitRef.current) return;
+    workspaceDataInitRef.current = true;
 
     let cancelled = false;
     void (async () => {
@@ -441,7 +493,7 @@ export function SalesWorkspacePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, ensureShift]);
+  }, [token, tabs.length, ensureShift]);
 
   useEffect(() => {
     if (!token || salesKinds.length === 0) return;
@@ -1002,7 +1054,7 @@ export function SalesWorkspacePageContent() {
               <Button
                 type="button"
                 size="sm"
-                variant={tab.clientId === activeId ? "default" : "outline"}
+                variant={tab.clientId === resolvedActiveId ? "default" : "outline"}
                 onClick={() => setActiveId(tab.clientId)}
               >
                 {tab.label}
@@ -1022,7 +1074,7 @@ export function SalesWorkspacePageContent() {
           ))}
         </div>
 
-        {!active ? (
+        {tabs.length === 0 || !active ? (
           <Card>
             <CardContent className="py-8 text-sm text-muted-foreground">
               Loading Sales workspace…

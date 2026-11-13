@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { ApiError, getStors, previewPurTransDExcel } from "@/lib/api-client";
+import { ApiError, getOperationalStors, previewPurTransDExcel } from "@/lib/api-client";
 import { enrichPurTransDExcelPreview } from "@/lib/purtransd-excel-enrich";
 import {
   flattenPurTransDExcelValidationErrors,
@@ -33,6 +33,7 @@ import {
   type ExcelImportEditableField,
 } from "@/components/purchase/PurchaseExcelImportEditableCell";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -521,7 +522,7 @@ export function PurchaseExcelImportPage() {
         if (!cancelled) setUnitsLoading(false);
       });
 
-    void getStors(token)
+    void getOperationalStors(token)
       .then((loaded) => {
         if (!cancelled) setStores(loaded);
       })
@@ -573,7 +574,7 @@ export function PurchaseExcelImportPage() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.purchase.view}>
       <div className="min-w-0 max-w-full space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

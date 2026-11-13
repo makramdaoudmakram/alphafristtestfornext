@@ -22,6 +22,7 @@ import { SalesPushListFormSheet } from "@/components/admin/sales-push-list-form-
 import { SalesPushListImportPreviewDialog } from "@/components/admin/sales-push-list-import-preview-dialog";
 import { useSalesPushListColumns } from "@/components/admin/sales-push-list-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -235,7 +236,7 @@ export function SalesPushListPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.salesPushList.view}>
       <div className="space-y-6">
         <div>
           <h2 className="text-lg font-semibold">Sales Push List</h2>

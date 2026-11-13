@@ -13,6 +13,7 @@ import { BookOpen, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { usePurchaseInvoiceDraftColumns } from "@/components/purchase/purchase-invoice-draft-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { DataTablePagination } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -209,7 +210,7 @@ export function InvoiceDraftPageContent() {
   const processing = postingId != null;
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.purchase.view}>
       <TooltipProvider>
         <div className="space-y-4">
           <Breadcrumb>

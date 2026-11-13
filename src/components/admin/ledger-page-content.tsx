@@ -14,6 +14,7 @@ import {
 import { formatAccountLabel, normalizeLedgerCode } from "@/lib/journal-binding";
 import type { AccountSelectItem } from "@/types/collected-voucher";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { CostCenterMultiFilter } from "@/components/admin/cost-center-multi-filter";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import {
@@ -308,7 +309,7 @@ export function LedgerPageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.generalLedger.view}>
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-4 md:p-6">
         <div className="space-y-2">
           <Breadcrumb>

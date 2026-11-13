@@ -8,7 +8,7 @@ import {
   getCurrentOpenShift,
   getItemCatalog,
   getNextMovValue,
-  getStors,
+  getOperationalStors,
   getUnitConversionInfo,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
@@ -197,7 +197,7 @@ export function PharmPurchaseReturnPageContent() {
     if (!token) return;
     setStoresLoading(true);
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } finally {
       setStoresLoading(false);
     }
@@ -479,8 +479,8 @@ export function PharmPurchaseReturnPageContent() {
 
   return (
     <PageGuard
-      permission={PERMISSIONS.sales.view}
-      redirectTo="/unauthorized?from=sales&permission=Sales.View"
+      permission={PERMISSIONS.pharmPurchaseReturn.view}
+      redirectTo="/unauthorized?from=pharmacy-purchase-return&permission=PharmPurchaseReturn.View"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 print:gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">

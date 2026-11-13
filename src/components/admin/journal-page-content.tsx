@@ -37,6 +37,7 @@ import {
 import type { AccountSelectItem } from "@/types/collected-voucher";
 import type { CostCenterCompoItem } from "@/types/cost-center";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { CostCenterCombobox } from "@/components/admin/cost-center-combobox";
 import { CostCenterMultiFilter } from "@/components/admin/cost-center-multi-filter";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -968,7 +969,7 @@ export function JournalPageContent() {
   }, [token, dateFrom, dateTo, costCenterMode, selectedCostCenters]);
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.generalLedger.view}>
       <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 p-4 md:p-6">
         <div className="space-y-2">
           <Breadcrumb>

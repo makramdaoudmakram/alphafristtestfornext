@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   getCurrentOpenShift,
   getNextMovValue,
-  getStors,
+  getOperationalStors,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
@@ -195,7 +195,7 @@ export function PharmPurchasePageContent() {
     if (!token) return;
     setStoresLoading(true);
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } finally {
       setStoresLoading(false);
     }
@@ -358,8 +358,8 @@ export function PharmPurchasePageContent() {
 
   return (
     <PageGuard
-      permission={PERMISSIONS.sales.view}
-      redirectTo="/unauthorized?from=sales&permission=Sales.View"
+      permission={PERMISSIONS.pharmPurchase.view}
+      redirectTo="/unauthorized?from=pharmacy-purchase&permission=PharmPurchase.View"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-3 print:gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">

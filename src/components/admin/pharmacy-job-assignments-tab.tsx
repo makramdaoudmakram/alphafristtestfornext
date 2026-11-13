@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { getPharms, getUsers } from "@/lib/api-client";
+import { getPharms, getUsersPickerSummaries } from "@/lib/api-client";
 import {
   createPharmacyJobAssignment,
   deactivatePharmacyJobAssignment,
@@ -137,7 +137,7 @@ export function PharmacyJobAssignmentsTab() {
     void (async () => {
       try {
         const [userRows, pharmRows, titleRows] = await Promise.all([
-          getUsers(token),
+          getUsersPickerSummaries(token),
           getPharms(token),
           getPharmacyJobTitles(token),
         ]);

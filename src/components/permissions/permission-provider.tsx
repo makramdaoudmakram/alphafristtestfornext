@@ -10,7 +10,12 @@ import {
   useState,
 } from "react";
 import { signOut, useSession } from "next-auth/react";
-import { getMyPermissions, ApiError } from "@/lib/api-client";
+import { getAuthorizationRegistry, getMyPermissions, ApiError } from "@/lib/api-client";
+import { setAuthorizationRegistry } from "@/lib/authorization/registry-state";
+import {
+  buildPharmacyPageEnabledMap,
+  canAccessPage,
+} from "@/lib/pharmacy-page-access";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { usePharmacyScope } from "@/components/pharmacy/pharmacy-scope-provider";
 
@@ -19,19 +24,28 @@ interface PermissionContextValue {
   permissions: string[];
   activePharmacyId: string | null;
   operationalPermissions: string[];
+  accountKind: string | null;
+  pharmacyPageAccessApplies: boolean;
+  pharmacyPageEnabledByKey: ReadonlyMap<string, boolean>;
   loading: boolean;
   ready: boolean;
   error: string | null;
   hasPermission: (code: string) => boolean;
+  hasGrantedPermission: (code: string) => boolean;
   hasRole: (role: string) => boolean;
+  canAccessPage: (pageKey: string | null) => boolean;
   canReversePurchase: () => boolean;
   refresh: () => Promise<void>;
 }
 
 const PermissionContext = createContext<PermissionContextValue | null>(null);
 
+/** Matches backend administrative UI bypass for Admin and SuperAdmin (not Head Office path semantics). */
 export function isAdminRole(roles: string[]) {
-  return roles.some((role) => role.toLowerCase() === "admin");
+  return roles.some((role) => {
+    const normalized = role.toLowerCase();
+    return normalized === "admin" || normalized === "superadmin";
+  });
 }
 
 /** Admin or Account — required for posted purchase invoice reversal. */
@@ -55,6 +69,20 @@ export function canAccessPermission(
   );
 }
 
+/** Matches API effective grants from Permissions/me (no Admin role UI bypass). */
+export function hasGrantedPermission(
+  code: string,
+  permissions: string[],
+  operationalPermissions?: string[]
+) {
+  return (
+    permissions.includes(code) ||
+    (operationalPermissions?.includes(code) ?? false)
+  );
+}
+
+export { canAccessPage };
+
 export function PermissionProvider({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
   const { data: session, status } = useSession();
@@ -67,6 +95,12 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
   const [permissions, setPermissions] = useState<string[]>([]);
   const [activePharmacyId, setActivePharmacyId] = useState<string | null>(null);
   const [operationalPermissions, setOperationalPermissions] = useState<string[]>([]);
+  const [accountKind, setAccountKind] = useState<string | null>(null);
+  const [pharmacyPageAccessApplies, setPharmacyPageAccessApplies] =
+    useState(false);
+  const [pharmacyPageEnabledByKey, setPharmacyPageEnabledByKey] = useState<
+    ReadonlyMap<string, boolean>
+  >(new Map());
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const signingOutRef = useRef(false);
@@ -87,6 +121,9 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       setPermissions([]);
       setActivePharmacyId(null);
       setOperationalPermissions([]);
+      setAccountKind(null);
+      setPharmacyPageAccessApplies(false);
+      setPharmacyPageEnabledByKey(new Map());
       setError(null);
       setFetching(false);
       return;
@@ -100,16 +137,29 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
     setError(null);
 
     try {
-      const data = await getMyPermissions(session.accessToken);
+      const [data, registry] = await Promise.all([
+        getMyPermissions(session.accessToken),
+        getAuthorizationRegistry(session.accessToken).catch(() => null),
+      ]);
+      setAuthorizationRegistry(registry);
       setRoles(data.roles);
       setPermissions(data.permissions);
       setActivePharmacyId(data.activePharmacyId);
       setOperationalPermissions(data.operationalPermissions);
+      setAccountKind(data.accountKind);
+      setPharmacyPageAccessApplies(data.pharmacyPageAccessApplies);
+      setPharmacyPageEnabledByKey(
+        buildPharmacyPageEnabledMap(data.pharmacyPages)
+      );
     } catch (err) {
       setRoles([]);
       setPermissions([]);
       setActivePharmacyId(null);
       setOperationalPermissions([]);
+      setAccountKind(null);
+      setPharmacyPageAccessApplies(false);
+      setPharmacyPageEnabledByKey(new Map());
+      setAuthorizationRegistry(null);
 
       if (err instanceof ApiError && err.status === 401) {
         redirectToLogin();
@@ -143,7 +193,19 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       loading,
       ready,
       error,
-      hasPermission: (code: string) => canAccessPermission(code, roles, permissions),
+      accountKind,
+      pharmacyPageAccessApplies,
+      pharmacyPageEnabledByKey,
+      hasPermission: (code: string) =>
+        canAccessPermission(code, roles, permissions, operationalPermissions),
+      hasGrantedPermission: (code: string) =>
+        hasGrantedPermission(code, permissions, operationalPermissions),
+      canAccessPage: (pageKey: string | null) =>
+        canAccessPage(
+          pageKey,
+          pharmacyPageAccessApplies,
+          pharmacyPageEnabledByKey
+        ),
       hasRole: (role: string) =>
         role.toLowerCase() === "admin"
           ? isAdminRole(roles)
@@ -156,6 +218,9 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       permissions,
       activePharmacyId,
       operationalPermissions,
+      accountKind,
+      pharmacyPageAccessApplies,
+      pharmacyPageEnabledByKey,
       loading,
       ready,
       error,

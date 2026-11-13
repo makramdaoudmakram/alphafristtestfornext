@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import { UserProvisioningWizardPageContent } from "@/components/admin/user-provisioning-wizard-page-content";
 
-/** Legacy route — user creation uses the shared Register page. */
 export default function AdminUsersCreatePage() {
-  redirect("/register?from=users");
+  return <UserProvisioningWizardPageContent />;
 }

@@ -25,7 +25,6 @@ import {
   WalletCards,
   Activity,
 } from "lucide-react";
-import { usePermissions } from "@/components/permissions/permission-provider";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import { isDiagnosticsAdmin } from "@/lib/diagnostics/diagnostics-api";
@@ -41,6 +40,9 @@ import {
   type NavLinkItem,
 } from "@/lib/sidebar-config";
 import { useSidebar } from "@/components/dashboard/sidebar-context";
+import { resolvePageKeyFromPathname } from "@/lib/pharmacy-page-access";
+import { resolveNavLinkPermission } from "@/lib/route-permissions";
+import { usePermissions } from "@/components/permissions/permission-provider";
 
 const ICONS: Record<string, ElementType> = {
   Overview: LayoutDashboard,
@@ -122,18 +124,16 @@ function NavLeafLink({
   );
 }
 
-function filterNavLinks(
+export function filterNavLinks(
   items: NavLinkItem[],
-  canAccess: (permission?: string | null) => boolean
+  canAccess: (permission: string | null | undefined, href: string) => boolean
 ) {
-  return items.filter(
-    (sub) => !sub.permission || canAccess(sub.permission)
-  );
+  return items.filter((sub) => canAccess(sub.permission, sub.href));
 }
 
-function filterNavGroups(
+export function filterNavGroups(
   groups: NavGroupItem[],
-  canAccess: (permission?: string | null) => boolean
+  canAccess: (permission: string | null | undefined, href: string) => boolean
 ) {
   return groups
     .map((group) => ({
@@ -141,6 +141,16 @@ function filterNavGroups(
       items: filterNavLinks(group.items, canAccess),
     }))
     .filter((group) => group.items.length > 0);
+}
+
+/** True when a parent nav item should render (at least one visible child). */
+export function pharmacyNavSectionHasVisibleChildren(
+  item: NavItem,
+  canAccess: (permission: string | null | undefined, href: string) => boolean
+): boolean {
+  const visibleFlatItems = filterNavLinks(item.items ?? [], canAccess);
+  const visibleGroups = filterNavGroups(item.groups ?? [], canAccess);
+  return visibleFlatItems.length > 0 || visibleGroups.length > 0;
 }
 
 function NavGroupSection({
@@ -154,7 +164,7 @@ function NavGroupSection({
   pathname: string;
   collapsed: boolean;
   onNavigate?: () => void;
-  canAccess: (permission?: string | null) => boolean;
+  canAccess: (permission: string | null | undefined, href: string) => boolean;
 }) {
   const visibleItems = filterNavLinks(group.items, canAccess);
   const active = visibleItems.some((item) => pathname === item.href);
@@ -221,7 +231,7 @@ function NavParentSection({
   collapsed: boolean;
   onNavigate?: () => void;
   onExpandSidebar: () => void;
-  canAccess: (permission?: string | null) => boolean;
+  canAccess: (permission: string | null | undefined, href: string) => boolean;
 }) {
   const flatItems = filterNavLinks(item.items ?? [], canAccess);
   const groups = filterNavGroups(item.groups ?? [], canAccess);
@@ -319,13 +329,20 @@ function NavItemRenderer({
 }: {
   item: NavItem;
   pathname: string;
-  canAccess: (permission?: string | null) => boolean;
+  canAccess: (permission: string | null | undefined, href: string) => boolean;
   collapsed: boolean;
   onNavigate?: () => void;
   onExpandSidebar: () => void;
 }) {
-  if (item.permission && !canAccess(item.permission)) {
+  const { hasPermission, loading, ready } = usePermissions();
+  const hydrated = useHydrated();
+
+  if (item.href && !canAccess(item.permission, item.href)) {
     return null;
+  }
+  if (!item.href && item.permission) {
+    if (!hydrated || loading || !ready) return null;
+    if (!hasPermission(item.permission)) return null;
   }
 
   if (item.groups?.length || item.items?.length) {
@@ -409,22 +426,34 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const hydrated = useHydrated();
-  const { hasPermission, roles, loading } = usePermissions();
+  const { hasPermission, canAccessPage, roles, loading } = usePermissions();
   const { collapsed, setCollapsed } = useSidebar();
   const isCollapsed = forceExpanded ? false : collapsed;
 
-  const canAccess = (permission?: string | null) => {
+  const canAccess = (permission: string | null | undefined, href: string) => {
+    if (!hydrated || loading) return false;
+
+    const pageKey = resolvePageKeyFromPathname(href);
+    if (!canAccessPage(pageKey)) return false;
+
     if (permission === DIAGNOSTICS_NAV_PERMISSION) {
-      if (!hydrated || loading) return false;
       return isDiagnosticsAdmin(roles);
     }
     if (permission === LEGACY_LEDGER_NAV_PERMISSION) {
-      if (!hydrated || loading) return false;
       return isLegacyLedgerAdmin(roles);
     }
-    if (!permission) return true;
-    if (!hydrated || loading) return true;
-    return hasPermission(permission);
+
+    const routePerm = resolveNavLinkPermission(href, permission ?? undefined);
+    if (routePerm === null) {
+      return true;
+    }
+    if (routePerm === false) {
+      return false;
+    }
+    if (Array.isArray(routePerm)) {
+      return routePerm.some((code) => hasPermission(code));
+    }
+    return hasPermission(routePerm);
   };
 
   function handleExpandSidebar() {

@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   getStockStoreItemPendingMovements,
-  getStors,
+  getOperationalStors,
   searchStockStoreItemSummary,
 } from "@/lib/api-client";
 import { formatStorDisplayName } from "@/lib/purchase-stores";
@@ -218,7 +218,7 @@ export function StoreStockSummaryPageContent() {
       setStores([]);
       return;
     }
-    void getStors(token)
+    void getOperationalStors(token)
       .then(setStores)
       .catch(() => setStores([]));
   }, [token]);

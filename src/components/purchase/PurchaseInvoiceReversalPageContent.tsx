@@ -13,6 +13,7 @@ import { RefreshCw, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePurchaseInvoiceReversalColumns } from "@/components/purchase/purchase-invoice-reversal-table-columns";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import { DataTablePagination } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
@@ -220,7 +221,7 @@ export function PurchaseInvoiceReversalPageContent() {
   const processing = reversingId != null;
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.purchase.view}>
       <TooltipProvider>
         <div className="space-y-4">
           <Breadcrumb>

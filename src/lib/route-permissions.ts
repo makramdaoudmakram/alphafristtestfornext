@@ -1,5 +1,8 @@
+/** `false` = registered dashboard route is unknown → deny (fail closed). */
+export type RouteViewPermission = string | string[] | null | false;
+
 /** Maps dashboard routes to required page permissions */
-export const ROUTE_PERMISSIONS: Record<string, string | null> = {
+export const ROUTE_PERMISSIONS: Record<string, RouteViewPermission> = {
   "/dashboard": null,
   "/dashboard/audit": "Permissions.Manage",
   "/dashboard/permissions": "Permissions.Manage",
@@ -8,6 +11,7 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/admin/user-roles": "Permissions.Manage",
   "/dashboard/admin/user-permissions": "Permissions.Manage",
   "/dashboard/admin/pharmacy-authorization": "Permissions.Manage",
+  "/dashboard/admin/head-office-store-assignments": "Users.Edit",
   "/dashboard/admin/users": "Users.View",
   "/dashboard/admin/users/create": "Users.Create",
   "/dashboard/customers": "Customer.View",
@@ -17,18 +21,18 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/companies": "Company.View",
   "/dashboard/pharm": "Pharm.View",
   "/dashboard/pharmacy": "Sales.View",
-  "/dashboard/accounts-chart": null,
-  "/dashboard/collection-voucher": null,
-  "/dashboard/payment-voucher": null,
-  "/dashboard/pending-vouchers": null,
-  "/dashboard/manual-journal": null,
-  "/dashboard/journal": null,
-  "/dashboard/ledger": null,
-  "/dashboard/cost-centers": null,
-  "/dashboard/stores": null,
-  "/dashboard/vendors": null,
-  "/dashboard/sales-kind": null,
-  "/dashboard/sales-payment-classify": null,
+  "/dashboard/accounts-chart": "AccountsChart.View",
+  "/dashboard/collection-voucher": "CollectedVoucher.View",
+  "/dashboard/payment-voucher": "PaymentVoucher.View",
+  "/dashboard/pending-vouchers": ["CollectedVoucher.View", "PaymentVoucher.View"],
+  "/dashboard/manual-journal": "GeneralLedger.CreateJournal",
+  "/dashboard/journal": "GeneralLedger.View",
+  "/dashboard/ledger": "GeneralLedger.View",
+  "/dashboard/cost-centers": "CostCenter.View",
+  "/dashboard/stores": "Stor.View",
+  "/dashboard/vendors": "Vendor.View",
+  "/dashboard/sales-kind": "SalesKind.View",
+  "/dashboard/sales-payment-classify": "SalesPaymentClassify.View",
   "/dashboard/sales-kind-assignment": "SalesKindAssignment.View",
   "/dashboard/sales-pay-method": "SalesPayMethod.View",
   "/dashboard/sales-service": "SalesService.View",
@@ -36,10 +40,13 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/sales-payment-assiment": "SalesPaymentAssiment.View",
   "/dashboard/stock": "Stock.View",
   "/dashboard/inventory": "Stock.View",
-  "/dashboard/inventory/store-summary": "Stock.View",
+  "/dashboard/inventory/store-summary": [
+    "StoreStockSummary.View",
+    "Stock.View",
+  ],
   "/dashboard/stores/delivery-monitoring": "DeliveryMonitoring.View",
   "/dashboard/stores/inventory-adjustment-report": "InventoryAdjustmentReport.View",
-  "/dashboard/batch-management": "Stock.View",
+  "/dashboard/batch-management": ["BatchManagement.View", "Stock.View"],
   "/dashboard/batch-traceability": "BatchTraceability.View",
   "/dashboard/transactions/inventory-adjustment": "InventoryAdjustment.View",
   "/dashboard/transactions/inventory-adjustment/posting": "InventoryAdjustment.View",
@@ -47,22 +54,41 @@ export const ROUTE_PERMISSIONS: Record<string, string | null> = {
   "/dashboard/groups": "Group.View",
   "/dashboard/brands": "Brand.View",
   "/dashboard/employ-info": "EmployInfo.View",
-  "/dashboard/transactions/purchase": null,
-  "/dashboard/pharm/transactions/pharmacy-purchase": "Sales.View",
-  "/dashboard/pharm/transactions/pharmacy-purchase-return": "Sales.View",
+  "/dashboard/transactions/purchase": "Purchase.View",
+  "/dashboard/pharm/transactions/pharmacy-purchase": "PharmPurchase.View",
+  "/dashboard/pharm/transactions/pharmacy-purchase-return": "PharmPurchaseReturn.View",
+  "/dashboard/sales/pending": "Sales.View",
+  "/dashboard/sales/delivery": "Sales.View",
+  "/dashboard/pharm/shift-print": "Sales.View",
+  "/dashboard/pharm/sales-invoice-report": "Sales.View",
+  "/dashboard/admin/pharmacy-scope": "PharmacyScope.Manage",
+  "/dashboard/admin/pharmacy-page-access": "PharmacyPageAccess.Manage",
+  "/dashboard/admin/responsibility-profiles": "ResponsibilityProfiles.Manage",
+  "/dashboard/transactions/pharm-recive": "Movment.View",
+  "/dashboard/transactions/pharm-recive/import": "Movment.View",
+  "/dashboard/transactions/purchase/import": "Purchase.View",
+  "/dashboard/ledger-import": "LegacyLedger.Import",
+  "/dashboard/diagnostics": null,
+  "/dashboard/reporting/commit-documents": null,
+  "/dashboard/audit/sqlite-verification": null,
+  "/dashboard/audit/sqlite-explorer": null,
+  "/dashboard/sales-test": "Sales.View",
+  "/dashboard/reporting/mongo-test": null,
+  "/dashboard/customers/:accountId": "Customer.View",
+  "/dashboard/vendors/:accountId": "Vendor.View",
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
   "/dashboard/pharm/transactions/accepted-pharmacy-orders": "PharmReciveAcceptedOrders.View",
   "/dashboard/pharm/transactions/pharm-to-store": "Sales.View",
   "/dashboard/pharm/transactions/pharm-to-store-send": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Sales.View",
-  "/dashboard/transactions/purchase/reversal": null,
-  "/dashboard/transactions/purchase/invoice-draft": null,
-  "/dashboard/transactions/return": null,
-  "/dashboard/item-transactions": null,
-  "/dashboard/movement-setting": null,
-  "/dashboard/sales-movement-setting": null,
-  "/dashboard/settings/sales-push-list": null,
+  "/dashboard/transactions/purchase/reversal": "Purchase.View",
+  "/dashboard/transactions/purchase/invoice-draft": "Purchase.View",
+  "/dashboard/transactions/return": "PurchaseReturn.View",
+  "/dashboard/item-transactions": "MovParient.View",
+  "/dashboard/movement-setting": "Movment.View",
+  "/dashboard/sales-movement-setting": "Salesmovment.View",
+  "/dashboard/settings/sales-push-list": "SalesPushList.View",
   "/dashboard/sales": "Sales.View",
   "/dashboard/sales-return": "Sales.View",
   "/dashboard/sales/pharm-expenses": "PharmExpenses.View",
@@ -101,6 +127,18 @@ export const PERMISSIONS = {
     edit: "ItemOrigin.Edit",
     delete: "ItemOrigin.Delete",
   },
+  vendor: {
+    view: "Vendor.View",
+    create: "Vendor.Create",
+    edit: "Vendor.Edit",
+    delete: "Vendor.Delete",
+  },
+  costCenter: {
+    view: "CostCenter.View",
+    create: "CostCenter.Create",
+    edit: "CostCenter.Edit",
+    delete: "CostCenter.Delete",
+  },
   company: {
     view: "Company.View",
     create: "Company.Create",
@@ -117,6 +155,18 @@ export const PERMISSIONS = {
   },
   stock: {
     view: "Stock.View",
+  },
+  batchManagement: {
+    view: "BatchManagement.View",
+  },
+  storeStockSummary: {
+    view: "StoreStockSummary.View",
+  },
+  stor: {
+    view: "Stor.View",
+    create: "Stor.Create",
+    edit: "Stor.Edit",
+    delete: "Stor.Delete",
   },
   inventoryAdjustment: {
     view: "InventoryAdjustment.View",
@@ -166,6 +216,15 @@ export const PERMISSIONS = {
     edit: "SalesServiceAssignment.Edit",
     delete: "SalesServiceAssignment.Delete",
   },
+  salesKind: {
+    view: "SalesKind.View",
+  },
+  salesPaymentClassify: {
+    view: "SalesPaymentClassify.View",
+  },
+  salesPushList: {
+    view: "SalesPushList.View",
+  },
   salesKindAssignment: {
     view: "SalesKindAssignment.View",
     create: "SalesKindAssignment.Create",
@@ -191,19 +250,33 @@ export const PERMISSIONS = {
     view: "PharmExpenses.View",
     create: "PharmExpenses.Create",
   },
+  accountsChart: {
+    view: "AccountsChart.View",
+  },
+  collectedVoucher: {
+    view: "CollectedVoucher.View",
+  },
+  paymentVoucher: {
+    view: "PaymentVoucher.View",
+  },
+  generalLedger: {
+    view: "GeneralLedger.View",
+    createJournal: "GeneralLedger.CreateJournal",
+  },
   purchase: {
-    /** Set when PurTransH RBAC is seeded on Alfa API */
-    view: null as string | null,
+    view: "Purchase.View",
+  },
+  purchaseReturn: {
+    view: "PurchaseReturn.View",
   },
   movParient: {
-    /** Set when MovParient RBAC is seeded on Alfa API */
-    view: null as string | null,
+    view: "MovParient.View",
     create: null as string | null,
     edit: null as string | null,
     delete: null as string | null,
   },
   movment: {
-    view: null as string | null,
+    view: "Movment.View",
     create: null as string | null,
     edit: null as string | null,
     delete: null as string | null,
@@ -215,11 +288,18 @@ export const PERMISSIONS = {
   permissions: {
     manage: "Permissions.Manage",
   },
+  responsibilityProfiles: {
+    manage: "ResponsibilityProfiles.Manage",
+  },
   pharmacyScope: {
     manage: "PharmacyScope.Manage",
   },
   sales: {
     view: "Sales.View",
+  },
+  salesReturn: {
+    view: "Sales.View",
+    create: "SalesReturn.Create",
   },
   salesDetailsReport: {
     view: "SalesDetailsReport.View",
@@ -240,7 +320,51 @@ export const PERMISSIONS = {
     edit: "Users.Edit",
     delete: "Users.Delete",
   },
+  pharmPurchase: {
+    view: "PharmPurchase.View",
+  },
+  pharmPurchaseReturn: {
+    view: "PharmPurchaseReturn.View",
+  },
+  pharmacyPageAccess: {
+    manage: "PharmacyPageAccess.Manage",
+  },
 } as const;
+
+import { resolveCentralRoutePermission } from "@/lib/authorization/registry-state";
+
+/** Resolve Level 2 permission for a dashboard path (exact or dynamic customer/vendor detail). */
+export function getRoutePermissionForPath(pathname: string): RouteViewPermission {
+  const fromRegistry = resolveCentralRoutePermission(pathname);
+  if (fromRegistry !== undefined) {
+    return fromRegistry;
+  }
+
+  const normalized = pathname.replace(/\/$/, "") || "/dashboard";
+  if (normalized in ROUTE_PERMISSIONS) {
+    return ROUTE_PERMISSIONS[normalized as keyof typeof ROUTE_PERMISSIONS];
+  }
+  if (/^\/dashboard\/customers\/[^/]+$/.test(normalized)) {
+    return ROUTE_PERMISSIONS["/dashboard/customers/:accountId"] ?? null;
+  }
+  if (/^\/dashboard\/vendors\/[^/]+$/.test(normalized)) {
+    return ROUTE_PERMISSIONS["/dashboard/vendors/:accountId"] ?? null;
+  }
+  if (normalized.startsWith("/dashboard")) {
+    return false;
+  }
+  return null;
+}
+
+export function resolveNavLinkPermission(
+  href: string,
+  explicit?: string | null
+): RouteViewPermission {
+  if (explicit) {
+    return explicit;
+  }
+  return getRoutePermissionForPath(href);
+}
 
 export const NAV_LINKS = [
   { href: "/dashboard", label: "Overview", permission: null },

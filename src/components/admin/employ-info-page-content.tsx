@@ -9,10 +9,14 @@ import {
   deleteEmployInfo,
   generateEmployInfoPassword,
   getEmployInfoById,
+  getEmployInfoLoginAccountOptions,
   getEmployInfos,
   updateEmployInfo,
 } from "@/lib/api-client";
-import type { EmployInfoItem } from "@/types/employ-info";
+import type {
+  EmployInfoItem,
+  EmployInfoLoginAccountOption,
+} from "@/types/employ-info";
 import type { EmployInfoFormValues } from "@/types/employ-info";
 import { EmployInfoFormSheet } from "@/components/admin/employ-info-form-sheet";
 import { useEmployInfoColumns } from "@/components/admin/employ-info-table-columns";
@@ -62,6 +66,11 @@ export function EmployInfoPageContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<EmployInfoItem | null>(null);
+  const [loginAccountOptions, setLoginAccountOptions] = useState<
+    EmployInfoLoginAccountOption[]
+  >([]);
+  const [loginAccountOptionsLoading, setLoginAccountOptionsLoading] =
+    useState(false);
 
   const columns = useEmployInfoColumns();
 
@@ -101,6 +110,31 @@ export function EmployInfoPageContent() {
     }
   }, [token]);
 
+  const loadLoginAccountOptions = useCallback(async () => {
+    if (!token) {
+      setLoginAccountOptions([]);
+      return;
+    }
+    setLoginAccountOptionsLoading(true);
+    try {
+      setLoginAccountOptions(await getEmployInfoLoginAccountOptions(token));
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to load login accounts"
+      );
+      setLoginAccountOptions([]);
+    } finally {
+      setLoginAccountOptionsLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (!sessionReady || !token) return;
+    void loadLoginAccountOptions();
+  }, [sessionReady, token, loadLoginAccountOptions]);
+
   function handleNew() {
     setEditingItem(null);
     setSheetOpen(true);
@@ -139,6 +173,7 @@ export function EmployInfoPageContent() {
       pharm: values.pharm!,
       employType,
       active: values.active,
+      identityUserId: values.identityUserId.trim() || null,
     };
 
     setSheetSaving(true);
@@ -256,6 +291,8 @@ export function EmployInfoPageContent() {
           saving={sheetSaving}
           passwordLoading={passwordLoading}
           onRequestGeneratedPassword={requestGeneratedPassword}
+          loginAccountOptions={loginAccountOptions}
+          loginAccountOptionsLoading={loginAccountOptionsLoading}
           onSubmit={handleSheetSubmit}
         />
       </div>

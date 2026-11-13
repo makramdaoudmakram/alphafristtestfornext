@@ -41,6 +41,7 @@ import type {
   VoucherJournalLine,
 } from "@/types/collected-voucher";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { CostCenterCombobox } from "@/components/admin/cost-center-combobox";
 import { VoucherAttachmentsPanel } from "@/components/admin/voucher-attachments-panel";
 import { Badge } from "@/components/ui/badge";
@@ -969,7 +970,7 @@ export function CollectionVoucherPageContent() {
   const fieldClass = "h-12 bg-white text-lg text-slate-900";
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.collectedVoucher.view}>
       <div className="collect-voucher-page min-h-full bg-[#e8edf3] p-4 text-lg text-slate-900 md:p-6">
         {/* Page header */}
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

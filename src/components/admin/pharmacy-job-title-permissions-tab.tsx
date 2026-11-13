@@ -167,8 +167,12 @@ export function PharmacyJobTitlePermissionsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground text-sm">
-          Map AppPermissions to a pharmacy job title via{" "}
-          <code className="text-xs">PUT api/PharmacyJobTitle/{"{id}"}</code>.
+          Operational staff receive capabilities from the active pharmacy&apos;s job assignment
+          (job title permissions here), plus responsibility profiles and per-user Allow/Deny
+          overrides—not from global role grants. Save updates{" "}
+          <code className="text-xs">PharmacyJobTitlePermissions</code> in the database; users should
+          refresh or sign in again to see changes in{" "}
+          <code className="text-xs">GET api/Permissions/me</code>.
         </p>
         <Button type="button" variant="outline" onClick={() => void loadCatalog()} disabled={loading}>
           Refresh
@@ -179,8 +183,9 @@ export function PharmacyJobTitlePermissionsTab() {
         <CardHeader>
           <CardTitle>Job title permissions</CardTitle>
           <CardDescription>
-            Select a job title, adjust operational permissions, then save. Title metadata is
-            unchanged here.
+            Permissions saved here apply to every user with an active job assignment that uses this
+            title at their pharmacy (e.g. Inventory = Stock.View). Global roles and direct user
+            overrides are configured elsewhere.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

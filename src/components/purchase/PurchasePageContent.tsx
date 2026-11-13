@@ -11,7 +11,7 @@ import {
   getItemCatalog,
   getMovmentById,
   getNextMovValue,
-  getStors,
+  getOperationalStors,
   reversePostedPurchaseInvoice,
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
@@ -38,6 +38,7 @@ import {
 } from "@/lib/purchase-print";
 import { MovementLookup } from "@/components/movement/MovementLookup";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { usePermissions } from "@/components/permissions/permission-provider";
 import {
   FormFieldInlineWrap,
@@ -149,7 +150,7 @@ export function PurchasePageContent() {
 
     setStoresLoading(true);
     try {
-      setStores(await getStors(token));
+      setStores(await getOperationalStors(token));
     } catch (err) {
       setStores([]);
       toast.error("Could not load stores.", {
@@ -605,7 +606,7 @@ export function PurchasePageContent() {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.purchase.view}>
       {/* Keep header id registered while the detail card shows a loading skeleton */}
       <input
         type="hidden"

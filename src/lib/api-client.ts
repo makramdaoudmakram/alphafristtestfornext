@@ -93,6 +93,7 @@ import type {
   CreateEmployInfoRequest,
   EmployInfoCreateResult,
   EmployInfoItem,
+  EmployInfoLoginAccountOption,
   UpdateEmployInfoRequest,
 } from "@/types/employ-info";
 import type {
@@ -1177,6 +1178,24 @@ export async function registerWithAlfaApi(input: {
   }
 }
 
+export function getAuthorizationRegistry(token: string) {
+  return apiFetch<{
+    policyVersion: string;
+    pages: {
+      pageKey: string;
+      viewCapabilityCode: string | null;
+      sectionKey: string;
+    }[];
+  }>("Permissions/authorization-registry", {}, token).then((data) => ({
+    policyVersion: String(data.policyVersion ?? ""),
+    pages: (data.pages ?? []).map((p) => ({
+      pageKey: String(p.pageKey ?? ""),
+      viewCapabilityCode: (p.viewCapabilityCode ?? null) as string | null,
+      sectionKey: String(p.sectionKey ?? ""),
+    })),
+  }));
+}
+
 export function getMyPermissions(token: string) {
   return apiFetch<Record<string, unknown>>("Permissions/me", {}, token).then(
     (data) => ({
@@ -1189,6 +1208,21 @@ export function getMyPermissions(token: string) {
       operationalPermissions: (data.operationalPermissionCodes ??
         data.OperationalPermissionCodes ??
         []) as string[],
+      accountKind: (data.accountKind ?? data.AccountKind ?? null) as
+        | string
+        | null,
+      pharmacyPageAccessApplies: Boolean(
+        data.pharmacyPageAccessApplies ?? data.PharmacyPageAccessApplies
+      ),
+      pharmacyPages: (
+        (data.pharmacyPages ?? data.PharmacyPages ?? []) as Record<
+          string,
+          unknown
+        >[]
+      ).map((row) => ({
+        pageKey: String(row.pageKey ?? row.PageKey ?? ""),
+        isEnabled: Boolean(row.isEnabled ?? row.IsEnabled),
+      })),
     })
   );
 }
@@ -1289,6 +1323,19 @@ export function deleteRole(roleId: number, token: string) {
 
 export function getUsers(token: string) {
   return fetchAllPaged("Permissions/users", token, normalizeUserSummary);
+}
+
+/** Lightweight user id + email list for admin pickers (avoids role/permission aggregates). */
+export function getUsersPickerSummaries(token: string) {
+  return fetchAllPaged("Permissions/users/list", token, (raw) => {
+    const row = normalizeUserListItem(raw);
+    return {
+      userId: row.id,
+      email: row.email?.trim() || row.userName || row.id,
+      roles: [],
+      extraPermissionCount: 0,
+    } satisfies UserSummary;
+  });
 }
 
 function normalizeUserListItem(raw: Record<string, unknown>): UserListItem {
@@ -2552,10 +2599,39 @@ function normalizeEmployInfoItem(item: Record<string, unknown>): EmployInfoItem 
     employTypeName:
       readString(item, "employTypeName", "EmployTypeName") || null,
     active: readBoolean(item, "active", "Active"),
+    identityUserId:
+      readString(item, "identityUserId", "IdentityUserId") || null,
+    linkedLoginAccount: normalizeEmployInfoLinkedLoginAccount(
+      item.linkedLoginAccount ?? item.LinkedLoginAccount
+    ),
     password:
       readString(item, "password", "Password") ||
       readString(item, "passwordPlain", "PasswordPlain") ||
       null,
+  };
+}
+
+function normalizeEmployInfoLinkedLoginAccount(
+  raw: unknown
+): EmployInfoItem["linkedLoginAccount"] {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const userId = readString(obj, "userId", "UserId");
+  if (!userId) return null;
+  return {
+    userId,
+    email: readString(obj, "email", "Email") || null,
+    userName: readString(obj, "userName", "UserName") || null,
+  };
+}
+
+function normalizeEmployInfoLoginAccountOption(
+  item: Record<string, unknown>
+): EmployInfoLoginAccountOption {
+  return {
+    userId: readString(item, "userId", "UserId"),
+    email: readString(item, "email", "Email") || null,
+    userName: readString(item, "userName", "UserName") || null,
   };
 }
 
@@ -2574,7 +2650,20 @@ function employInfoRequestBody(
     body.PreviewPassword = data.previewPassword ?? null;
   }
 
+  body.IdentityUserId =
+    data.identityUserId && data.identityUserId.trim()
+      ? data.identityUserId.trim()
+      : null;
+
   return body;
+}
+
+export function getEmployInfoLoginAccountOptions(token: string) {
+  return fetchAllPaged(
+    "EmployInfo/login-account-options",
+    token,
+    normalizeEmployInfoLoginAccountOption
+  );
 }
 
 function normalizeEmployInfoCreateResult(
@@ -4107,10 +4196,18 @@ export function deleteCostCenter(id: number, token: string) {
   return apiFetch<void>(`CostCenter/${id}`, { method: "DELETE" }, token);
 }
 
+/** Store master list — requires Stor.View (not for operational dropdowns). */
 export function getStors(token: string) {
   return fetchAllPaged("Stor", token, normalizeStorItem, {
     sortBy: "id",
   });
+}
+
+/** Scoped stores for purchase, inventory, stock, and pharmacy operational pages. */
+export async function getOperationalStors(token: string): Promise<StorItem[]> {
+  const data = await apiFetch<unknown>("Stor/operational", {}, token);
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => normalizeStorItem(row as Record<string, unknown>));
 }
 
 /** AccountsChart rows for Stor Account No — API filters PARENTCode = 116. */

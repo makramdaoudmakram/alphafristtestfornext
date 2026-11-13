@@ -18,6 +18,7 @@ import {
 } from "@/lib/accounts-chart-tree";
 import type { AccountsChartItem } from "@/types/accounts-chart";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -492,7 +493,7 @@ export function AccountsChartPageContent() {
   }, [visibleRows, search]);
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.accountsChart.view}>
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

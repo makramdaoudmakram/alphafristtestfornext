@@ -21,6 +21,7 @@ import {
 } from "@/lib/ledger-api";
 import { getVendorByAccountId, saveVendorByAccountId } from "@/lib/vendor-api";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { PERMISSIONS } from "@/lib/route-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -212,7 +213,7 @@ export function VendorDetailsPageContent({ accountId }: { accountId: string }) {
   }
 
   return (
-    <PageGuard permission={null}>
+    <PageGuard permission={PERMISSIONS.vendor.view}>
       <div className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-4">

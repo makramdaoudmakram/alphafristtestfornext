@@ -35,11 +35,11 @@ import {
 import { computePharmTransferTotals } from "@/services/pharm-transfer.service";
 import { createPharmTransferService } from "@/services/pharm-transfer.service";
 import { getItemCatalog, getUnitConversionInfo } from "@/lib/api-client";
+import { resolveCatalogItemForStockSearch } from "@/lib/operational-stock-search-catalog";
 import { applyPharmTransferUnitPrices } from "@/lib/pharm-transfer-calculations";
 import { createUnitService } from "@/services/unit.service";
 import {
   ensureCatalogItemsForItmCodes,
-  findCatalogItemByCode,
   getItemDefaultUnitId,
   getItemUnitIds,
   indexCatalogItem,
@@ -440,19 +440,11 @@ export function PharmTransferPageContent() {
       }
       if (!token) return;
 
-      let catalogItem = findCatalogItemByCode(searchResult.itemCode, itemByCode);
-
-      if (
-        (!catalogItem || getItemUnitIds(catalogItem).length === 0) &&
-        searchResult.itemCatalogId > 0
-      ) {
-        try {
-          catalogItem = await getItemCatalog(searchResult.itemCatalogId, token);
-        } catch {
-          toast.error("Could not load item catalog record.");
-          return;
-        }
-      }
+      const catalogItem = await resolveCatalogItemForStockSearch(
+        token,
+        searchResult,
+        itemByCode
+      );
 
       if (!catalogItem) {
         toast.error(`Item "${searchResult.itemCode}" was not found in catalog.`);

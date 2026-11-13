@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { PackagePlus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { getStors, searchStockBatches } from "@/lib/api-client";
+import { getOperationalStors, searchStockBatches } from "@/lib/api-client";
 import {
   getInventoryStockStatus,
   type InventoryStockStatus,
@@ -155,7 +155,7 @@ export function InventoryPageContent() {
       setStores([]);
       return;
     }
-    void getStors(token)
+    void getOperationalStors(token)
       .then(setStores)
       .catch(() => setStores([]));
   }, [token]);
