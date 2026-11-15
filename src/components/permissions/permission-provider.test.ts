@@ -35,6 +35,11 @@ describe("canAccessPermission with pharmacy-scoped permissions", () => {
     expect(allowed).toBe(true);
   });
 
+  it("denies Users.ResetPassword without grant or admin role", () => {
+    const allowed = canAccessPermission(PERMISSIONS.users.resetPassword, [], []);
+    expect(allowed).toBe(false);
+  });
+
   it("preserves global Identity permissions without operational grants", () => {
     const allowed = canAccessPermission(
       PERMISSIONS.sales.view,

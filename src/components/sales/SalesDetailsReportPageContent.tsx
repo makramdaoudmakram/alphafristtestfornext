@@ -88,6 +88,7 @@ export function SalesDetailsReportPageContent() {
 
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalQuantity, setTotalQuantity] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
@@ -108,6 +109,7 @@ export function SalesDetailsReportPageContent() {
     setItems(page.items);
     setTotalRecords(page.totalRecords);
     setTotalQuantity(page.totalQuantity);
+    setTotalSales(page.totalSales);
     setPageNumber(page.pageNumber);
     setHasPreviousPage(page.hasPreviousPage);
     setHasNextPage(page.hasNextPage);
@@ -371,8 +373,9 @@ export function SalesDetailsReportPageContent() {
               Sales details ({totalRecords.toLocaleString()} lines)
             </CardTitle>
             <CardDescription>
-              Total quantity for the full filtered period:{" "}
-              {formatQuantity(totalQuantity)}.
+              Totals for the full filtered period: quantity{" "}
+              {formatQuantity(totalQuantity)}, sales value{" "}
+              {formatMoney(totalSales)}.
             </CardDescription>
           </CardHeader>
           <CardContent

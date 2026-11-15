@@ -6352,9 +6352,12 @@ export async function lookupSalesManByCode(token: string, code: string) {
   }
 }
 
-export async function lookupSalesManByPassword(token: string, password: string) {
+export async function lookupSalesManByPassword(
+  token: string,
+  password: string,
+  _employeeCode = ""
+) {
   try {
-    // Same transport as Pharmacy Transfer lookupEmployeeByPassword.
     const response = await fetch(
       `${API_BASE_URL}/EmployInfo/lookup-by-password`,
       {
@@ -7196,6 +7199,142 @@ export async function getSalesDetailsReport(
     token
   );
   return normalizeSalesDetailsReportPage(data);
+}
+
+function normalizeEmployeeCommissionLine(
+  raw: Record<string, unknown>
+): import("@/types/employee-commission-report").EmployeeCommissionLine {
+  return {
+    invoiceNo: Number(raw.invoiceNo ?? raw.InvoiceNo ?? raw.sthId ?? raw.SthId ?? 0),
+    invoiceDateUtc: readNullableString(raw, "invoiceDateUtc", "InvoiceDateUtc"),
+    pharmacyId: readNullableString(raw, "pharmacyId", "PharmacyId"),
+    pharmacyName: readNullableString(raw, "pharmacyName", "PharmacyName"),
+    empId: readNullableNumber(raw, "empId", "EmpId"),
+    employeeName: readNullableString(raw, "employeeName", "EmployeeName"),
+    itemName: readNullableString(raw, "itemName", "ItemName"),
+    quantity: Number(raw.quantity ?? raw.Quantity ?? 0),
+    commission: Number(raw.commission ?? raw.Commission ?? 0),
+  };
+}
+
+export async function postEmployeePersonalCommission(
+  token: string,
+  body: {
+    password: string;
+    dateFrom?: string;
+    dateTo?: string;
+    signal?: AbortSignal;
+  }
+): Promise<import("@/types/employee-commission-report").EmployeeCommissionPersonalResponse> {
+  const data = await apiFetch<Record<string, unknown>>(
+    "reports/employee-commission/personal",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        password: body.password,
+        dateFrom: body.dateFrom,
+        dateTo: body.dateTo,
+      }),
+      signal: body.signal,
+    },
+    token
+  );
+
+  const linesRaw = (data.lines ?? data.Lines) as unknown;
+  const lines = Array.isArray(linesRaw)
+    ? linesRaw.map((r) =>
+        normalizeEmployeeCommissionLine(r as Record<string, unknown>)
+      )
+    : [];
+
+  return {
+    employeeName: readNullableString(data, "employeeName", "EmployeeName"),
+    empId: Number(data.empId ?? data.EmpId ?? 0),
+    lines,
+    finalizedTransactionCount: Number(
+      data.finalizedTransactionCount ?? data.FinalizedTransactionCount ?? 0
+    ),
+    totalCommission: Number(data.totalCommission ?? data.TotalCommission ?? 0),
+    qualifyingLineCount: Number(
+      data.qualifyingLineCount ?? data.QualifyingLineCount ?? 0
+    ),
+    appliedDateFrom: readString(data, "appliedDateFrom", "AppliedDateFrom"),
+    appliedDateTo: readString(data, "appliedDateTo", "AppliedDateTo"),
+  };
+}
+
+export async function getEmployeeCommissionSummary(
+  token: string,
+  query: { dateFrom: string; dateTo: string; signal?: AbortSignal }
+): Promise<import("@/types/employee-commission-report").EmployeeCommissionSummaryResponse> {
+  const params = new URLSearchParams();
+  params.set("dateFrom", query.dateFrom.trim());
+  params.set("dateTo", query.dateTo.trim());
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `reports/employee-commission/summary?${params.toString()}`,
+    { signal: query.signal },
+    token
+  );
+
+  const rowsRaw = (data.rows ?? data.Rows) as unknown;
+  const rows = Array.isArray(rowsRaw)
+    ? rowsRaw.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          empId: Number(row.empId ?? row.EmpId ?? 0),
+          employeeName: readNullableString(row, "employeeName", "EmployeeName"),
+          finalizedTransactionCount: Number(
+            row.finalizedTransactionCount ?? row.FinalizedTransactionCount ?? 0
+          ),
+          totalCommission: Number(
+            row.totalCommission ?? row.TotalCommission ?? 0
+          ),
+        };
+      })
+    : [];
+
+  return {
+    rows,
+    appliedDateFrom: readString(data, "appliedDateFrom", "AppliedDateFrom"),
+    appliedDateTo: readString(data, "appliedDateTo", "AppliedDateTo"),
+  };
+}
+
+export async function getEmployeeCommissionDetails(
+  token: string,
+  query: {
+    dateFrom: string;
+    dateTo: string;
+    empId?: number;
+    signal?: AbortSignal;
+  }
+): Promise<import("@/types/employee-commission-report").EmployeeCommissionDetailsResponse> {
+  const params = new URLSearchParams();
+  params.set("dateFrom", query.dateFrom.trim());
+  params.set("dateTo", query.dateTo.trim());
+  if (query.empId != null && Number.isFinite(query.empId))
+    params.set("empId", String(query.empId));
+
+  const data = await apiFetch<Record<string, unknown>>(
+    `reports/employee-commission/details?${params.toString()}`,
+    { signal: query.signal },
+    token
+  );
+
+  const linesRaw = (data.lines ?? data.Lines) as unknown;
+  const lines = Array.isArray(linesRaw)
+    ? linesRaw.map((r) =>
+        normalizeEmployeeCommissionLine(r as Record<string, unknown>)
+      )
+    : [];
+
+  return {
+    lines,
+    totalCommission: Number(data.totalCommission ?? data.TotalCommission ?? 0),
+    appliedDateFrom: readString(data, "appliedDateFrom", "AppliedDateFrom"),
+    appliedDateTo: readString(data, "appliedDateTo", "AppliedDateTo"),
+  };
 }
 
 export async function getClosedShifts(

@@ -420,7 +420,7 @@ export function SalesPayMethodPageContent() {
             <CardContent>
               <form onSubmit={handleSubmit} className="grid max-w-lg gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="paymentName">Payment name</Label>
+                  <Label htmlFor="paymentName">Paymetod Name</Label>
                   <Input
                     id="paymentName"
                     value={paymentName}

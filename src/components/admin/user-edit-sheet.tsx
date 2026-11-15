@@ -297,6 +297,7 @@ export function UserEditSheet({
           </div>
         ) : userId ? (
           <div className="flex flex-col gap-6 px-4 pb-4">
+            <ActionGuard permission={PERMISSIONS.users.edit}>
             <form onSubmit={handleProfileSubmit} className="space-y-3">
               <FormFieldInline
                 id="edit-userName"
@@ -399,69 +400,76 @@ export function UserEditSheet({
                 </Button>
               </SheetFooter>
             </form>
+            </ActionGuard>
 
-            <Separator />
+            <ActionGuard permission={PERMISSIONS.users.edit}>
+              <>
+                <Separator />
+                {token && userId ? (
+                  <UserEffectiveAccessSection userId={userId} token={token} />
+                ) : null}
+              </>
+            </ActionGuard>
 
-            {token && userId ? (
-              <ActionGuard permission={PERMISSIONS.users.edit}>
-                <UserEffectiveAccessSection userId={userId} token={token} />
-              </ActionGuard>
-            ) : null}
+            <ActionGuard
+              permission={PERMISSIONS.responsibilityProfiles.manage}
+              requireGrantedPermission
+            >
+              <>
+                <Separator />
+                {token && userId ? (
+                  <UserResponsibilitiesSection userId={userId} token={token} />
+                ) : null}
+              </>
+            </ActionGuard>
 
-            <Separator />
+            <ActionGuard permission={PERMISSIONS.users.resetPassword}>
+              <>
+                <Separator />
+                <form onSubmit={handleResetPassword} className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Change password</h3>
+                    <p className="text-muted-foreground text-xs">
+                      Minimum 8 characters with uppercase, lowercase, and a digit.
+                      Requires <code className="text-xs">{PERMISSIONS.users.resetPassword}</code>.
+                      The current password is never shown.
+                    </p>
+                  </div>
+                  <FormFieldInline
+                    id="new-password"
+                    label="New password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={8}
+                  />
+                  <FormFieldInline
+                    id="confirm-password"
+                    label="Confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    minLength={8}
+                  />
 
-            {token && userId ? (
-              <ActionGuard
-                permission={PERMISSIONS.responsibilityProfiles.manage}
-                requireGrantedPermission
-              >
-                <UserResponsibilitiesSection userId={userId} token={token} />
-              </ActionGuard>
-            ) : null}
+                  {passwordError ? (
+                    <p className="text-destructive text-sm">{passwordError}</p>
+                  ) : null}
 
-            <Separator />
-
-            <form onSubmit={handleResetPassword} className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold">Change password</h3>
-                <p className="text-muted-foreground text-xs">
-                  Minimum 8 characters with uppercase, lowercase, and a digit.
-                  The current password is never shown.
-                </p>
-              </div>
-              <FormFieldInline
-                id="new-password"
-                label="New password"
-                type="password"
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                minLength={8}
-              />
-              <FormFieldInline
-                id="confirm-password"
-                label="Confirm"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                minLength={8}
-              />
-
-              {passwordError ? (
-                <p className="text-destructive text-sm">{passwordError}</p>
-              ) : null}
-
-              <div className="sm:pl-[calc(9.5rem+1rem)]">
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  disabled={resettingPassword || !newPassword || !confirmPassword}
-                >
-                  {resettingPassword ? "Resetting…" : "Reset password"}
-                </Button>
-              </div>
-            </form>
+                  <div className="sm:pl-[calc(9.5rem+1rem)]">
+                    <Button
+                      type="submit"
+                      variant="destructive"
+                      disabled={resettingPassword || !newPassword || !confirmPassword}
+                    >
+                      {resettingPassword ? "Resetting…" : "Reset password"}
+                    </Button>
+                  </div>
+                </form>
+              </>
+            </ActionGuard>
           </div>
         ) : null}
       </SheetContent>

@@ -143,6 +143,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             href: "/dashboard/pharm/sales-details-report",
             permission: PERMISSIONS.salesDetailsReport.view,
           },
+          {
+            title: "عمولتي",
+            href: "/dashboard/pharm/my-commission",
+            permission: PERMISSIONS.sales.view,
+          },
         ],
       },
     ],
@@ -191,26 +196,32 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Users",
             href: "/dashboard/admin/users",
+            permission: PERMISSIONS.users.view,
           },
           {
             title: "Create Permission",
             href: "/dashboard/admin/permissions",
+            permission: PERMISSIONS.permissions.manage,
           },
           {
             title: "Create Role",
             href: "/dashboard/admin/roles",
+            permission: PERMISSIONS.permissions.manage,
           },
           {
             title: "Assign User Roles",
             href: "/dashboard/admin/user-roles",
+            permission: PERMISSIONS.permissions.manage,
           },
           {
             title: "User Permissions",
             href: "/dashboard/admin/user-permissions",
+            permission: PERMISSIONS.permissions.manage,
           },
           {
             title: "Pharmacy Scope",
             href: "/dashboard/admin/pharmacy-scope",
+            permission: PERMISSIONS.pharmacyScope.manage,
           },
           {
             title: "صلاحيات الصيدليات",
@@ -235,6 +246,7 @@ export const SIDEBAR_NAV: NavItem[] = [
           {
             title: "Role Permissions",
             href: "/dashboard/permissions",
+            permission: PERMISSIONS.permissions.manage,
           },
         ],
       },
@@ -393,6 +405,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             permission: LEGACY_LEDGER_NAV_PERMISSION,
           },
           {
+            title: "عمولة الموظفين",
+            href: "/dashboard/accounts/employee-commission",
+            permission: PERMISSIONS.employeeCommissionReport.view,
+          },
+          {
             title: "مراكز التكلفه",
             href: "/dashboard/cost-centers",
             permission: PERMISSIONS.costCenter.view,
@@ -534,6 +551,9 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/shift-print": "Shift Print",
   "/dashboard/pharm/sales-invoice-report": "Sales Invoice Report",
   "/dashboard/pharm/sales-details-report": "Sales Details Report",
+  "/dashboard/reports/employee-commission": "Employee Commission Report",
+  "/dashboard/accounts/employee-commission": "Employee Commission Report",
+  "/dashboard/pharm/my-commission": "My Commission",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",
   "/dashboard/payment-voucher": "Payment Voucher",

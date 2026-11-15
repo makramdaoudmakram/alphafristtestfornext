@@ -7,8 +7,8 @@ import {
 } from "@/lib/pharmacy-page-access";
 
 describe("pharmacy-page-access", () => {
-  it("registry contains 88 page keys", () => {
-    expect(PHARMACY_REGISTRY_PAGE_KEYS.length).toBe(88);
+  it("registry contains expected page key count", () => {
+    expect(PHARMACY_REGISTRY_PAGE_KEYS.length).toBe(91);
   });
 
   it("resolves dynamic customer detail path", () => {
@@ -27,6 +27,13 @@ describe("pharmacy-page-access", () => {
       { pageKey: "/dashboard/sales", isEnabled: true },
     ]);
     expect(canAccessPage("/dashboard/sales", true, map)).toBe(true);
+  });
+
+  it("allows my-commission when API returns enabled for pharmacy users", () => {
+    const map = buildPharmacyPageEnabledMap([
+      { pageKey: "/dashboard/pharm/my-commission", isEnabled: true },
+    ]);
+    expect(canAccessPage("/dashboard/pharm/my-commission", true, map)).toBe(true);
   });
 
   it("denies disabled page when applies", () => {

@@ -96,6 +96,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteViewPermission> = {
   "/dashboard/sales/customers": "Customer.View",
   "/dashboard/shift": "Sales.View",
   "/dashboard/pharm/sales-details-report": "SalesDetailsReport.View",
+  "/dashboard/reports/employee-commission": "EmployeeCommissionReport.View",
+  "/dashboard/accounts/employee-commission": "EmployeeCommissionReport.View",
+  "/dashboard/pharm/my-commission": "Sales.View",
 };
 
 export const PERMISSIONS = {
@@ -305,6 +308,9 @@ export const PERMISSIONS = {
     view: "SalesDetailsReport.View",
     historySearch: "SalesDetailsReport.HistorySearch",
   },
+  employeeCommissionReport: {
+    view: "EmployeeCommissionReport.View",
+  },
   deliveryMonitoring: {
     view: "DeliveryMonitoring.View",
   },
@@ -318,6 +324,7 @@ export const PERMISSIONS = {
     view: "Users.View",
     create: "Users.Create",
     edit: "Users.Edit",
+    resetPassword: "Users.ResetPassword",
     delete: "Users.Delete",
   },
   pharmPurchase: {

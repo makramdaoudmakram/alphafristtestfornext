@@ -59,6 +59,8 @@ export function UsersPageContent() {
   const sessionReady = status !== "loading";
 
   const canEditUsers = hasPermission(PERMISSIONS.users.edit);
+  const canResetUserPassword = hasPermission(PERMISSIONS.users.resetPassword);
+  const canOpenUserSheet = canEditUsers || canResetUserPassword;
 
 
 
@@ -212,11 +214,7 @@ export function UsersPageContent() {
 
   return (
 
-    <PageGuard
-
-      permission={[PERMISSIONS.users.view, PERMISSIONS.permissions.manage]}
-
-    >
+    <PageGuard permission={PERMISSIONS.users.view}>
 
       <div className="space-y-4">
 
@@ -328,9 +326,9 @@ export function UsersPageContent() {
 
               pageSizeOptions={[10, 20, 50, 100]}
 
-              showActions={canEditUsers}
+              showActions={canOpenUserSheet}
 
-              onEdit={canEditUsers ? handleEditUser : undefined}
+              onEdit={canOpenUserSheet ? handleEditUser : undefined}
 
               getRowId={(row) => row.id}
 
@@ -338,7 +336,7 @@ export function UsersPageContent() {
 
               onRowClick={(row) => setSelectedUserId(row.id)}
 
-              onRowDoubleClick={canEditUsers ? handleEditUser : undefined}
+              onRowDoubleClick={canOpenUserSheet ? handleEditUser : undefined}
 
             />
 
@@ -374,8 +372,7 @@ export function UsersPageContent() {
 
 
 
-      <ActionGuard permission={PERMISSIONS.users.edit}>
-
+      {canOpenUserSheet ? (
         <UserEditSheet
 
           open={editSheetOpen}
@@ -393,10 +390,8 @@ export function UsersPageContent() {
           token={token ?? null}
 
           onUpdated={loadUsers}
-
         />
-
-      </ActionGuard>
+      ) : null}
 
     </PageGuard>
 

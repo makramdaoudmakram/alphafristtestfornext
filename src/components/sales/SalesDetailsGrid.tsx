@@ -350,12 +350,27 @@ export function SalesDetailsGrid({
           unitSellPrice: money(priced.itmSell),
           priceQtyNet: priced.priceQtyNet,
         };
-        patchLine(line.key, {
+        const limit = lineDiscountLimit(nextLine, egyptDateDisplay);
+        const gross = money(priced.itmSell * nextLine.quantity);
+        const pricePatch: Partial<SalesWorkspaceLine> = {
           unitId,
           unitSellPrice: money(priced.itmSell),
           priceQtyNet: priced.priceQtyNet,
-        });
-        void validateQtyAgainstStock(nextLine, [
+        };
+        if (nextLine.discountMode === "P" && nextLine.discountPercent > 0) {
+          if (nextLine.discountPercent > limit.percent) {
+            pricePatch.discountPercent = limit.percent;
+          }
+        } else if (nextLine.discountMode === "V" && nextLine.discountValue > 0) {
+          const capVal = maxDiscountValue(gross, limit.percent);
+          if (nextLine.discountValue > capVal) {
+            pricePatch.discountValue = capVal;
+          }
+        }
+        patchLine(line.key, pricePatch);
+        void validateQtyAgainstStock(
+          { ...nextLine, ...pricePatch },
+          [
           ...lines.filter((l) => l.key !== line.key),
           nextLine,
         ]);
@@ -795,10 +810,24 @@ export function SalesDetailsGrid({
                             return;
                           }
                         }
-                        patchLine(line.key, {
+                        const limit = lineDiscountLimit(line, egyptDateDisplay);
+                        const gross = money(nextQty * line.unitSellPrice);
+                        const patch: Partial<SalesWorkspaceLine> = {
                           quantity: nextQty,
                           qtyError: null,
-                        });
+                        };
+                        if (line.discountMode === "P" && line.discountPercent > 0) {
+                          const cap = limit.percent;
+                          if (line.discountPercent > cap) {
+                            patch.discountPercent = cap;
+                          }
+                        } else if (line.discountMode === "V" && line.discountValue > 0) {
+                          const capVal = maxDiscountValue(gross, limit.percent);
+                          if (line.discountValue > capVal) {
+                            patch.discountValue = capVal;
+                          }
+                        }
+                        patchLine(line.key, patch);
                       }}
                     />
                     {stockCheck ? (

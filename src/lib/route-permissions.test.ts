@@ -32,6 +32,16 @@ describe("route view permissions", () => {
     ]);
   });
 
+  it("maps admin user routes to Users.* capabilities", () => {
+    expect(getRoutePermissionForPath("/dashboard/admin/users")).toBe(
+      PERMISSIONS.users.view
+    );
+    expect(getRoutePermissionForPath("/dashboard/admin/users/create")).toBe(
+      PERMISSIONS.users.create
+    );
+    expect(PERMISSIONS.users.resetPassword).toBe("Users.ResetPassword");
+  });
+
   it("maps vendor and cost center routes to new View permissions", () => {
     expect(getRoutePermissionForPath("/dashboard/vendors")).toBe(
       PERMISSIONS.vendor.view
