@@ -46,6 +46,7 @@ export type ExcelEntityMetadata = {
   primaryKey: string;
   identityKey: boolean;
   alternateKey?: string | null;
+  updateMatchAlternateKey?: boolean;
   excludedColumns: string[];
   lookupColumns: string[];
   useCreateMethod: boolean;

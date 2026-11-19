@@ -15,15 +15,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ExcelEntityMetadata, ExcelImportMode } from "@/types/excel";
 import { cn } from "@/lib/utils";
 import {
+  ITEM_CATALOG_COLUMN_GROUPS,
+  itemCatalogColumnSortKey,
+} from "@/lib/excel-item-catalog-column-groups";
+import {
   buildAvailableColumns,
+  buildDisplaySelectedColumns,
   compareColumnNames,
+  countOptionalSelectedColumns,
+  dedupeColumnNames,
   findProperty,
+  getLockedMatchKeyColumns,
   isColumnLocked,
+  isHiddenForUpdateTemplate,
   isColumnRemovable,
   isDeleteMode,
+  isMatchKeyColumn,
   isPrimaryKeyLocked,
   shouldHidePrimaryKeyOnInsert,
   toFriendlyPropertyName,
+  usesAlternateKeyForUpdate,
 } from "@/components/excel/excel-column-transfer-utils";
 
 type ExcelColumnTransferListProps = {
@@ -192,11 +203,16 @@ export function ExcelColumnTransferList({
     setFocusedAvailable(0);
   }, [search, filteredAvailable.length]);
 
+  const displaySelectedColumns = useMemo(
+    () => buildDisplaySelectedColumns(metadata, mode, selectedColumns),
+    [metadata, mode, selectedColumns]
+  );
+
   useEffect(() => {
-    if (focusedSelected >= selectedColumns.length) {
-      setFocusedSelected(Math.max(0, selectedColumns.length - 1));
+    if (focusedSelected >= displaySelectedColumns.length) {
+      setFocusedSelected(Math.max(0, displaySelectedColumns.length - 1));
     }
-  }, [focusedSelected, selectedColumns.length]);
+  }, [focusedSelected, displaySelectedColumns.length]);
 
   const addColumn = useCallback(
     (columnName: string) => {
@@ -208,9 +224,11 @@ export function ExcelColumnTransferList({
       ) {
         return;
       }
-      onChange([...selectedColumns, columnName]);
+      if (isMatchKeyColumn(metadata, mode, columnName)) return;
+      if (isHiddenForUpdateTemplate(metadata, mode, columnName)) return;
+      onChange(dedupeColumnNames([...selectedColumns, columnName]));
     },
-    [deleteMode, disabled, onChange, selectedColumns]
+    [deleteMode, disabled, metadata, mode, onChange, selectedColumns]
   );
 
   const removeColumn = useCallback(
@@ -227,10 +245,85 @@ export function ExcelColumnTransferList({
     [deleteMode, disabled, metadata, mode, onChange, selectedColumns]
   );
 
+  const matchKeys = useMemo(
+    () => getLockedMatchKeyColumns(metadata, mode),
+    [metadata, mode]
+  );
+
+  const optionalSelectedCount = useMemo(
+    () => countOptionalSelectedColumns(metadata, mode, selectedColumns),
+    [metadata, mode, selectedColumns]
+  );
+
+  const useGroupedPicker =
+    metadata.entityName === "ItemCatalog" && !deleteMode;
+
+  const groupedAvailable = useMemo(() => {
+    if (!useGroupedPicker) {
+      return [{ id: "all", label: "All Fields", columns: filteredAvailable }];
+    }
+
+    const assigned = new Set<string>();
+    const groups = ITEM_CATALOG_COLUMN_GROUPS.map((group) => {
+      const columns = group.columns
+        .filter((name) =>
+          filteredAvailable.some(
+            (available) => compareColumnNames(available, name) === 0
+          )
+        )
+        .sort((a, b) => itemCatalogColumnSortKey(a) - itemCatalogColumnSortKey(b));
+      columns.forEach((name) => assigned.add(name.toLowerCase()));
+      return { id: group.id, label: group.label, columns };
+    }).filter((group) => group.columns.length > 0);
+
+    const other = filteredAvailable
+      .filter((name) => !assigned.has(name.toLowerCase()))
+      .sort((a, b) => itemCatalogColumnSortKey(a) - itemCatalogColumnSortKey(b));
+
+    if (other.length > 0) {
+      groups.push({ id: "other", label: "Other Fields", columns: other });
+    }
+
+    return groups;
+  }, [filteredAvailable, useGroupedPicker]);
+
+  const flatGroupedAvailable = useMemo(
+    () => dedupeColumnNames(groupedAvailable.flatMap((group) => group.columns)),
+    [groupedAvailable]
+  );
+
+  const selectAllAvailable = useCallback(() => {
+    if (disabled || deleteMode) return;
+    const next = new Set(selectedColumns.map((name) => name.toLowerCase()));
+    for (const name of availableColumns) {
+      next.add(name.toLowerCase());
+    }
+    const locked = new Set(
+      getLockedMatchKeyColumns(metadata, mode).map((name) => name.toLowerCase())
+    );
+    const merged = availableColumns.filter((name) => next.has(name.toLowerCase()));
+    const extras = selectedColumns.filter(
+      (name) =>
+        !locked.has(name.toLowerCase()) &&
+        !availableColumns.some(
+          (available) => compareColumnNames(available, name) === 0
+        )
+    );
+    onChange(dedupeColumnNames([...extras, ...merged]));
+  }, [availableColumns, deleteMode, disabled, metadata, mode, onChange, selectedColumns]);
+
+  const clearOptionalSelected = useCallback(() => {
+    if (disabled || deleteMode) return;
+    onChange([]);
+  }, [deleteMode, disabled, onChange]);
+
   const modeHint = useMemo(() => {
     if (deleteMode) return "Delete mode uses the primary key only.";
     if (shouldHidePrimaryKeyOnInsert(metadata, mode)) {
       return "Insert mode omits the identity primary key from the template.";
+    }
+    if (usesAlternateKeyForUpdate(metadata) && mode === "Update") {
+      return "Itm_Code is always included as the matching key (not an update field). Choose only the columns you want to change.";
     }
     if (isPrimaryKeyLocked(metadata, mode)) {
       return "Primary key and required fields stay selected and cannot be removed.";
@@ -239,16 +332,39 @@ export function ExcelColumnTransferList({
   }, [deleteMode, metadata, mode]);
 
   return (
-    <div ref={listRef} className="space-y-3">
-      <p className="text-muted-foreground text-xs">{modeHint}</p>
+    <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3">
+      <p className="text-muted-foreground shrink-0 text-xs">{modeHint}</p>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-2">
         <section
-          className="flex min-h-[22rem] flex-col rounded-lg border"
+          className="flex max-h-[min(50vh,22rem)] min-h-[12rem] flex-col rounded-lg border md:max-h-[min(48vh,20rem)]"
           aria-label="Available fields"
         >
-          <div className="border-b px-3 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
             <h3 className="text-sm font-semibold">Available Fields</h3>
+            {!deleteMode ? (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="text-primary text-xs font-medium hover:underline disabled:opacity-40"
+                  onClick={selectAllAvailable}
+                  disabled={disabled || availableColumns.length === 0}
+                >
+                  Select all
+                </button>
+                <span className="text-muted-foreground text-xs" aria-hidden>
+                  ·
+                </span>
+                <button
+                  type="button"
+                  className="text-muted-foreground text-xs font-medium hover:underline disabled:opacity-40"
+                  onClick={clearOptionalSelected}
+                  disabled={disabled || optionalSelectedCount === 0}
+                >
+                  Clear all
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2 border-b px-3 py-2">
@@ -288,7 +404,7 @@ export function ExcelColumnTransferList({
               }
             }}
           >
-            <div className="space-y-1.5 pr-1">
+            <div className="space-y-3 pr-1">
               {filteredAvailable.length === 0 ? (
                 <p className="text-muted-foreground px-2 py-6 text-center text-sm">
                   {availableColumns.length === 0
@@ -296,18 +412,32 @@ export function ExcelColumnTransferList({
                     : "No fields match your search."}
                 </p>
               ) : (
-                filteredAvailable.map((columnName, index) => (
-                  <FieldRow
-                    key={columnName}
-                    columnName={columnName}
-                    metadata={metadata}
-                    locked={false}
-                    disabled={disabled || deleteMode}
-                    showAdd
-                    tabIndex={index === focusedAvailable ? 0 : -1}
-                    onFocus={() => setFocusedAvailable(index)}
-                    onAdd={() => addColumn(columnName)}
-                  />
+                groupedAvailable.map((group) => (
+                  <div key={group.id}>
+                    {useGroupedPicker ? (
+                      <p className="text-muted-foreground mb-1 px-1 text-[11px] font-semibold tracking-wide uppercase">
+                        {group.label}
+                      </p>
+                    ) : null}
+                    <div className="space-y-1.5">
+                      {group.columns.map((columnName) => {
+                        const index = flatGroupedAvailable.indexOf(columnName);
+                        return (
+                          <FieldRow
+                            key={columnName}
+                            columnName={columnName}
+                            metadata={metadata}
+                            locked={false}
+                            disabled={disabled || deleteMode}
+                            showAdd
+                            tabIndex={index === focusedAvailable ? 0 : -1}
+                            onFocus={() => setFocusedAvailable(index)}
+                            onAdd={() => addColumn(columnName)}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))
               )}
             </div>
@@ -315,11 +445,16 @@ export function ExcelColumnTransferList({
         </section>
 
         <section
-          className="flex min-h-[22rem] flex-col rounded-lg border"
+          className="flex max-h-[min(50vh,22rem)] min-h-[12rem] flex-col rounded-lg border md:max-h-[min(48vh,20rem)]"
           aria-label="Fields to export"
         >
-          <div className="border-b px-3 py-2">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
             <h3 className="text-sm font-semibold">Fields to Export</h3>
+            <span className="text-muted-foreground text-xs">
+              {optionalSelectedCount} update column
+              {optionalSelectedCount === 1 ? "" : "s"}
+              {matchKeys.length > 0 ? ` · match: ${matchKeys.join(", ")}` : ""}
+            </span>
           </div>
 
           <div className="space-y-2 border-b px-3 py-2">
@@ -345,11 +480,11 @@ export function ExcelColumnTransferList({
             role="list"
             aria-label="Selected export columns"
             onKeyDown={(event) => {
-              if (selectedColumns.length === 0) return;
+              if (displaySelectedColumns.length === 0) return;
               if (event.key === "ArrowDown") {
                 event.preventDefault();
                 setFocusedSelected((current) =>
-                  Math.min(current + 1, selectedColumns.length - 1)
+                  Math.min(current + 1, displaySelectedColumns.length - 1)
                 );
               }
               if (event.key === "ArrowUp") {
@@ -359,13 +494,15 @@ export function ExcelColumnTransferList({
             }}
           >
             <div className="space-y-1.5 pr-1">
-              {selectedColumns.length === 0 ? (
+              {displaySelectedColumns.length === 0 ? (
                 <p className="text-muted-foreground px-2 py-6 text-center text-sm">
-                  Select at least one field to export.
+                  Match key only — add update columns from the left.
                 </p>
               ) : (
-                selectedColumns.map((columnName, index) => {
-                  const locked = isColumnLocked(metadata, mode, columnName);
+                displaySelectedColumns.map((columnName, index) => {
+                  const locked =
+                    isColumnLocked(metadata, mode, columnName) ||
+                    isMatchKeyColumn(metadata, mode, columnName);
                   return (
                     <FieldRow
                       key={columnName}

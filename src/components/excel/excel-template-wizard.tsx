@@ -26,6 +26,11 @@ import {
 
 } from "@/components/excel/excel-column-transfer-list";
 
+import {
+  getLockedMatchKeyColumns,
+  usesAlternateKeyForUpdate,
+} from "@/components/excel/excel-column-transfer-utils";
+
 import { Button } from "@/components/ui/button";
 
 import {
@@ -224,9 +229,22 @@ export function ExcelTemplateWizard({
 
     if (mode === "Delete") return true;
 
+    if (usesAlternateKeyForUpdate(metadata) && mode === "Update") {
+      return true;
+    }
+
     return selectedColumns.length > 0;
 
   }, [metadata, mode, selectedColumns]);
+
+  const canExportTemplate = useMemo(() => {
+    if (!metadata || loadingMetadata) return false;
+    if (mode === "Delete") return false;
+    if (usesAlternateKeyForUpdate(metadata) && mode === "Update") {
+      return true;
+    }
+    return selectedColumns.length > 0;
+  }, [loadingMetadata, metadata, mode, selectedColumns]);
 
 
 
@@ -278,9 +296,16 @@ export function ExcelTemplateWizard({
 
     <Dialog open={open} onOpenChange={onOpenChange}>
 
-      <DialogContent className={step === 3 ? "max-w-5xl" : "max-w-2xl"}>
+      <DialogContent
+        className={
+          step === 3
+            ? "flex max-h-[min(92vh,880px)] max-w-5xl flex-col gap-0 overflow-hidden p-0"
+            : "max-w-2xl"
+        }
+        data-testid="excel-template-wizard"
+      >
 
-        <DialogHeader>
+        <DialogHeader className={step === 3 ? "shrink-0 border-b px-6 py-4" : undefined}>
 
           <DialogTitle className="flex items-center gap-2">
 
@@ -306,7 +331,13 @@ export function ExcelTemplateWizard({
 
         ) : (
 
-          <div className="space-y-4">
+          <div
+            className={
+              step === 3
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-4"
+                : "space-y-4"
+            }
+          >
 
             {step === 1 ? (
 
@@ -430,7 +461,7 @@ export function ExcelTemplateWizard({
 
             {step === 4 && metadata ? (
 
-              <Card>
+              <Card className="shrink-0">
 
                 <CardHeader className="pb-3">
 
@@ -478,7 +509,12 @@ export function ExcelTemplateWizard({
 
                     </Label>
 
-                    <p className="break-words">{selectedColumns.join(", ") || "—"}</p>
+                    <p className="break-words">
+                      {[
+                        ...getLockedMatchKeyColumns(metadata, mode),
+                        ...selectedColumns,
+                      ].join(", ") || "—"}
+                    </p>
 
                   </div>
 
@@ -494,7 +530,14 @@ export function ExcelTemplateWizard({
 
 
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter
+          className={
+            step === 3
+              ? "bg-background sticky bottom-0 shrink-0 gap-2 border-t px-6 py-4 sm:justify-between"
+              : "gap-2 sm:justify-between"
+          }
+          data-testid="excel-template-wizard-footer"
+        >
 
           <div className="flex gap-2">
 
@@ -516,7 +559,7 @@ export function ExcelTemplateWizard({
 
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
 
             <Button
 
@@ -533,6 +576,19 @@ export function ExcelTemplateWizard({
               Close
 
             </Button>
+
+            {step === 3 ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!canExportTemplate || downloading}
+                onClick={() => void handleDownload()}
+                data-testid="excel-template-export-step3"
+              >
+                <Download className="size-4" />
+                {downloading ? "Exporting…" : "Export"}
+              </Button>
+            ) : null}
 
             {step < 4 ? (
 
@@ -564,9 +620,11 @@ export function ExcelTemplateWizard({
 
                 type="button"
 
-                disabled={downloading || loadingMetadata || !metadata}
+                disabled={downloading || loadingMetadata || !canExportTemplate}
 
                 onClick={() => void handleDownload()}
+
+                data-testid="excel-template-export-step4"
 
               >
 

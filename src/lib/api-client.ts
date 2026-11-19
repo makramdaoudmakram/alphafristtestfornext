@@ -5365,6 +5365,11 @@ function normalizeExcelEntityMetadata(
     identityKey: readBoolean(raw, "identityKey", "IdentityKey"),
     alternateKey:
       readString(raw, "alternateKey", "AlternateKey") || null,
+    updateMatchAlternateKey: readBoolean(
+      raw,
+      "updateMatchAlternateKey",
+      "UpdateMatchAlternateKey"
+    ),
     excludedColumns: Array.isArray(excludedRaw)
       ? excludedRaw.map((item) => String(item))
       : [],
