@@ -105,6 +105,31 @@ export function getApiErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Request failed.";
 }
 
+export async function getHeadOfficeEligibleUsers(token: string) {
+  const data = await apiFetch<unknown>(
+    "head-office-store-assignments/eligible-users",
+    {},
+    token
+  );
+  const list = Array.isArray(data) ? data : [];
+  return list.map((item) => {
+    const raw = item as Record<string, unknown>;
+    return {
+      userId: readString(raw, "id", "Id"),
+      email: readString(raw, "email", "Email"),
+      name: readString(raw, "name", "Name"),
+    };
+  });
+}
+
+export async function deactivateHeadOfficeJobTitle(userId: string, token: string) {
+  return apiFetch(
+    `head-office-store-assignments/users/${encodeURIComponent(userId)}/job-title/deactivate`,
+    { method: "POST" },
+    token
+  );
+}
+
 export async function getHeadOfficeEligibleStores(token: string) {
   const data = await apiFetch<unknown>(
     "head-office-store-assignments/eligible-stores",

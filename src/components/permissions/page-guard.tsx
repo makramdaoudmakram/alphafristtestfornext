@@ -63,11 +63,14 @@ export function PageGuard({
   permission,
   pageKey,
   redirectTo,
+  requireHeadOfficePrincipal,
   children,
 }: {
   permission?: RouteViewPermission;
   pageKey?: string | null;
   redirectTo?: string;
+  /** When set, pharmacy users must be Head Office principals (or Admin) — not pharmacy job-title only. */
+  requireHeadOfficePrincipal?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -78,6 +81,7 @@ export function PageGuard({
     operationalPermissions,
     pharmacyPageAccessApplies,
     canAccessPage: canAccessPharmacyPage,
+    isHeadOfficePrincipal,
     loading,
     ready,
     error,
@@ -113,7 +117,14 @@ export function PageGuard({
       ? pageKey
       : resolvePageKeyFromPathname(pathname);
   const level1Allowed = canAccessPharmacyPage(level1PageKey);
-  const allowed = level1Allowed && level2Allowed;
+  const headOfficeAllowed =
+    !requireHeadOfficePrincipal ||
+    isHeadOfficePrincipal ||
+    roles.some((role) => {
+      const normalized = role.toLowerCase();
+      return normalized === "admin" || normalized === "superadmin";
+    });
+  const allowed = level1Allowed && level2Allowed && headOfficeAllowed;
 
   useEffect(() => {
     if (!redirectTo || redirectedRef.current) return;
@@ -206,6 +217,11 @@ export function PageGuard({
                     PageKey: <code className="text-xs">{level1PageKey}</code>
                   </>
                 ) : null}
+              </p>
+            ) : requireHeadOfficePrincipal && !headOfficeAllowed ? (
+              <p className="text-muted-foreground text-sm">
+                This page is limited to Head Office store operators (or
+                administrators).
               </p>
             ) : level2Permission !== null ? (
               <p className="text-muted-foreground text-sm">

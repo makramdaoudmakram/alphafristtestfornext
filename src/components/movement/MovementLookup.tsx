@@ -21,6 +21,8 @@ export type MovementLookupProps = {
   disabled?: boolean;
   className?: string;
   id?: string;
+  /** Passed through to Movment/lookup (e.g. pharm-recive HO create uses `source`). */
+  scopeRoute?: string;
 };
 
 function optionLabel(item: MovmentLookupItem): string {
@@ -45,6 +47,7 @@ export function MovementLookup({
   disabled = false,
   className,
   id,
+  scopeRoute,
 }: MovementLookupProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -58,6 +61,7 @@ export function MovementLookup({
     token,
     search,
     enabled: open && !!token && parentId > 0,
+    scopeRoute,
   });
 
   const selectedLabel = value ? optionLabel(value) : null;

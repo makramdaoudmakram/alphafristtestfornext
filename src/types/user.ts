@@ -18,6 +18,7 @@ export type UserListItem = {
   lockoutEnabled: boolean;
   accountKind: UserAccountKindValue;
   homeParmId: number | null;
+  isPrivilegedAccount?: boolean;
 };
 
 export type UserListPagedResult = {

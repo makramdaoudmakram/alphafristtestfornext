@@ -110,7 +110,7 @@ export function SalesMissingItemsSheet({
   }, [wantList]);
 
   const addItem = (item: ItemCatalogItem) => {
-    const id = item.itemCatalogId || item.id;
+    const id = item.id;
     if (!id || id <= 0) {
       toast.error("Invalid item.");
       return;
@@ -209,7 +209,7 @@ export function SalesMissingItemsSheet({
                   </li>
                 ) : null}
                 {suggestions.map((item) => {
-                  const id = item.itemCatalogId || item.id;
+                  const id = item.id;
                   return (
                     <li key={id} role="option">
                       <button

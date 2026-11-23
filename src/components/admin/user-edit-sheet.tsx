@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   getUserById,
@@ -27,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { UserResponsibilitiesSection } from "@/components/admin/user-responsibilities-section";
 import { UserEffectiveAccessSection } from "@/components/admin/user-effective-access-section";
 import { ActionGuard } from "@/components/permissions/page-guard";
+import { usePermissions } from "@/components/permissions/permission-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import {
   Sheet,
@@ -111,6 +113,15 @@ export function UserEditSheet({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const { data: session } = useSession();
+  const { roles, refresh } = usePermissions();
+  const callerIsSuperAdmin = roles.some(
+    (role) => role.toLowerCase() === "superadmin"
+  );
+  const [targetPrivileged, setTargetPrivileged] = useState(false);
+  const canAdministerTarget = !targetPrivileged || callerIsSuperAdmin;
+  const isSelf = Boolean(session?.user?.id && session.user.id === userId);
+
   const resetPasswordFields = useCallback(() => {
     setNewPassword("");
     setConfirmPassword("");
@@ -129,6 +140,7 @@ export function UserEditSheet({
 
     try {
       const user = await getUserById(userId, token);
+      setTargetPrivileged(Boolean(user.isPrivilegedAccount));
       setProfile(toProfileValues(user));
     } catch (error) {
       const message =
@@ -262,6 +274,7 @@ export function UserEditSheet({
 
       toast.success(result.message);
       resetPasswordFields();
+      await refresh();
     } catch (error) {
       const message =
         error instanceof ApiError
@@ -367,6 +380,7 @@ export function UserEditSheet({
                     />
                     Email confirmed
                   </label>
+                  {canAdministerTarget && !isSelf ? (
                   <label className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={profile.isActive}
@@ -379,6 +393,13 @@ export function UserEditSheet({
                     />
                     Account active
                   </label>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      {isSelf
+                        ? "You cannot deactivate your own account."
+                        : "Only a SuperAdmin can change this administrator account."}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -395,7 +416,7 @@ export function UserEditSheet({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" variant="update" disabled={savingProfile}>
+                <Button type="submit" variant="update" disabled={savingProfile || !canAdministerTarget}>
                   {savingProfile ? "Saving…" : "Save changes"}
                 </Button>
               </SheetFooter>
@@ -423,6 +444,7 @@ export function UserEditSheet({
               </>
             </ActionGuard>
 
+            {canAdministerTarget ? (
             <ActionGuard permission={PERMISSIONS.users.resetPassword}>
               <>
                 <Separator />
@@ -470,6 +492,7 @@ export function UserEditSheet({
                 </form>
               </>
             </ActionGuard>
+            ) : null}
           </div>
         ) : null}
       </SheetContent>

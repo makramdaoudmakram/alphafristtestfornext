@@ -6,8 +6,9 @@ import type { MovmentLookupItem } from "@/types/movment";
 
 const cache = new Map<string, MovmentLookupItem[]>();
 
-function cacheKey(parentId: number, search: string): string {
-  return `${parentId}|${search.trim().toLowerCase()}`;
+function cacheKey(parentId: number, search: string, scopeRoute?: string): string {
+  const route = scopeRoute?.trim().toLowerCase() ?? "";
+  return `${parentId}|${route}|${search.trim().toLowerCase()}`;
 }
 
 type UseMovmentLookupOptions = {
@@ -16,6 +17,7 @@ type UseMovmentLookupOptions = {
   search: string;
   enabled?: boolean;
   debounceMs?: number;
+  scopeRoute?: string;
 };
 
 export function useMovmentLookup({
@@ -24,6 +26,7 @@ export function useMovmentLookup({
   search,
   enabled = true,
   debounceMs = 250,
+  scopeRoute,
 }: UseMovmentLookupOptions) {
   const [items, setItems] = useState<MovmentLookupItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,7 +48,7 @@ export function useMovmentLookup({
       return;
     }
 
-    const key = cacheKey(parentId, search);
+    const key = cacheKey(parentId, search, scopeRoute);
     const cached = cache.get(key);
     if (cached) {
       setItems(cached);
@@ -66,6 +69,7 @@ export function useMovmentLookup({
       void lookupMovments(token, parentId, search, {
         pageSize: 50,
         signal: controller.signal,
+        scopeRoute,
       })
         .then((rows) => {
           if (requestId !== requestIdRef.current) return;
@@ -88,7 +92,7 @@ export function useMovmentLookup({
       window.clearTimeout(timer);
       abortRef.current?.abort();
     };
-  }, [enabled, token, parentId, search, debounceMs]);
+  }, [enabled, token, parentId, search, debounceMs, scopeRoute]);
 
   return { items, loading, error, clearCacheForParent };
 }

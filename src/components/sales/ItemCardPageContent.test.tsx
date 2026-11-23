@@ -28,7 +28,10 @@ vi.mock("@/lib/api-client", () => ({
     stores: [],
     unrestrictedStoreAccess: true,
   }),
-  getPharms: vi.fn().mockResolvedValue([]),
+  getItemCardBranches: vi.fn().mockResolvedValue({
+    branches: [{ parmId: 1, parmArName: "Test", parmEnName: "Test" }],
+    unrestrictedBranchAccess: true,
+  }),
   lookupItemCatalog: vi.fn(),
   lookupItemCatalogBySegment: vi.fn(),
 }));
@@ -36,6 +39,16 @@ vi.mock("@/lib/api-client", () => ({
 import { ItemCardPageContent } from "@/components/sales/ItemCardPageContent";
 
 describe("ItemCardPageContent", () => {
+  it("loads scoped stores and branches without pharmacy master list", async () => {
+  const { getItemCardStores, getItemCardBranches } = await import("@/lib/api-client");
+    render(<ItemCardPageContent />);
+
+    await waitFor(() => {
+      expect(vi.mocked(getItemCardStores)).toHaveBeenCalled();
+      expect(vi.mocked(getItemCardBranches)).toHaveBeenCalled();
+    });
+  });
+
   it("renders movement description column when results are shown", async () => {
     const sample: ItemCardResponse = {
       itemId: 1,

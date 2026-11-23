@@ -10,7 +10,6 @@ import type { ItemCatalogItem } from "@/types/item-catalog";
 function catalogRow(overrides: Partial<ItemCatalogItem> = {}): ItemCatalogItem {
   return {
     id: 99,
-    itemCatalogId: 99,
     itmCode: "PRIMARY",
     itmCode2: "34740",
     itmUnit1: 1,

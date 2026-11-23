@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { commitExcelImport, previewExcelImport, waitForExcelImportJob } from "@/lib/api-client";
+import {
+  commitExcelImport,
+  ExcelImportJobWaitTimeoutError,
+  getExcelImportJobStatus,
+  previewExcelImport,
+  waitForExcelImportJob,
+} from "@/lib/api-client";
 import { ExcelImportErrorTable } from "@/components/excel/excel-import-error-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,6 +147,10 @@ export function ExcelImportDialog({
     null
   );
   const [jobStatus, setJobStatus] = useState<ExcelImportJobStatus | null>(null);
+  const [pendingImportJobId, setPendingImportJobId] = useState<string | null>(
+    null
+  );
+  const commitInFlightRef = useRef(false);
 
   const displayName = entityLabel ?? entityName;
 
@@ -153,7 +163,20 @@ export function ExcelImportDialog({
     setPreviewResult(null);
     setCommitResult(null);
     setJobStatus(null);
+    setPendingImportJobId(null);
+    commitInFlightRef.current = false;
   }, []);
+
+  const finishSuccessfulImport = useCallback(
+    (result: ExcelImportResult) => {
+      setCommitResult(result);
+      setStep("result");
+      setPendingImportJobId(null);
+      toast.success("Import committed successfully");
+      void onCommitted?.();
+    },
+    [onCommitted]
+  );
 
   useEffect(() => {
     if (!open) {
@@ -216,9 +239,12 @@ export function ExcelImportDialog({
 
   async function handleCommit() {
     if (!token || !previewResult?.importSessionId) return;
+    if (commitInFlightRef.current) return;
 
+    commitInFlightRef.current = true;
     setBusy(true);
     setJobStatus(null);
+    setPendingImportJobId(null);
     try {
       const commitResponse = await commitExcelImport(
         entityName,
@@ -228,41 +254,91 @@ export function ExcelImportDialog({
 
       if (commitResponse.isAsync) {
         setStep("committing");
-        const result = await waitForExcelImportJob(
-          entityName,
-          commitResponse.importJobId,
-          token,
-          setJobStatus
-        );
-        setCommitResult(result);
-        setStep("result");
+        try {
+          const result = await waitForExcelImportJob(
+            entityName,
+            commitResponse.importJobId,
+            token,
+            setJobStatus
+          );
+          if (result.success) {
+            finishSuccessfulImport(result);
+          } else {
+            setCommitResult(result);
+            setStep("result");
+            toast.error("Import failed — no changes were saved");
+          }
+        } catch (error) {
+          if (error instanceof ExcelImportJobWaitTimeoutError) {
+            setPendingImportJobId(error.importJobId);
+            setJobStatus(error.lastStatus);
+            setStep("committing");
+            toast.warning(error.message);
+            return;
+          }
+          throw error;
+        }
+        return;
+      }
 
-        if (result.success) {
-          toast.success("Import committed successfully");
-          await onCommitted?.();
+      if (commitResponse.result.success) {
+        finishSuccessfulImport(commitResponse.result);
+      } else {
+        setCommitResult(commitResponse.result);
+        setStep("result");
+        toast.error("Import failed — no changes were saved");
+      }
+    } catch (error) {
+      if (!(error instanceof ExcelImportJobWaitTimeoutError)) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to commit import"
+        );
+        setStep("preview");
+      }
+    } finally {
+      setBusy(false);
+      commitInFlightRef.current = false;
+    }
+  }
+
+  async function handleRecheckImportJob() {
+    if (!token || !pendingImportJobId) return;
+
+    setBusy(true);
+    try {
+      const status = await getExcelImportJobStatus(
+        entityName,
+        pendingImportJobId,
+        token
+      );
+      setJobStatus(status);
+
+      if (status.status === "Completed" || status.status === "Failed") {
+        if (!status.result) {
+          toast.error(
+            status.message || "Import finished without a result payload."
+          );
+          return;
+        }
+
+        if (status.result.success) {
+          finishSuccessfulImport(status.result);
         } else {
+          setCommitResult(status.result);
+          setStep("result");
+          setPendingImportJobId(null);
           toast.error("Import failed — no changes were saved");
         }
         return;
       }
 
-      setCommitResult(commitResponse.result);
-      setStep("result");
-
-      if (commitResponse.result.success) {
-        toast.success("Import committed successfully");
-        await onCommitted?.();
-      } else {
-        toast.error("Import failed — no changes were saved");
-      }
+      toast.message("Import still running on the server.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to commit import"
+        error instanceof Error ? error.message : "Failed to check import status"
       );
-      setStep("preview");
     } finally {
       setBusy(false);
-      setJobStatus(null);
     }
   }
 
@@ -421,8 +497,15 @@ export function ExcelImportDialog({
                 Saving rows in one transaction. Please keep this dialog open.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <ImportProgressBar status={jobStatus} />
+              {pendingImportJobId ? (
+                <p className="text-muted-foreground text-sm">
+                  Waiting stopped because this is taking longer than usual. The
+                  server may still be processing — this does not mean the import
+                  failed.
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         ) : null}
@@ -519,6 +602,17 @@ export function ExcelImportDialog({
                 onClick={() => void handleCommit()}
               >
                 {busy ? "Starting…" : "Commit import"}
+              </Button>
+            ) : null}
+
+            {step === "committing" && pendingImportJobId ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => void handleRecheckImportJob()}
+              >
+                Check status
               </Button>
             ) : null}
           </div>

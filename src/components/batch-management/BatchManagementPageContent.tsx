@@ -97,11 +97,9 @@ function storeOptionLabel(
   return store.storEnName?.trim() || store.storArName?.trim() || `Store ${store.id}`;
 }
 
-function catalogIdOf(item: Pick<ItemCatalogItem, "id" | "itemCatalogId"> | null | undefined) {
+function catalogIdOf(item: Pick<ItemCatalogItem, "id"> | null | undefined) {
   if (!item) return 0;
-  if (item.id > 0) return item.id;
-  if (item.itemCatalogId > 0) return item.itemCatalogId;
-  return 0;
+  return item.id > 0 ? item.id : 0;
 }
 
 function resolveRowItemCatalogId(

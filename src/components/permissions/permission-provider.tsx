@@ -25,6 +25,7 @@ interface PermissionContextValue {
   activePharmacyId: string | null;
   operationalPermissions: string[];
   accountKind: string | null;
+  isHeadOfficePrincipal: boolean;
   pharmacyPageAccessApplies: boolean;
   pharmacyPageEnabledByKey: ReadonlyMap<string, boolean>;
   loading: boolean;
@@ -96,6 +97,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
   const [activePharmacyId, setActivePharmacyId] = useState<string | null>(null);
   const [operationalPermissions, setOperationalPermissions] = useState<string[]>([]);
   const [accountKind, setAccountKind] = useState<string | null>(null);
+  const [isHeadOfficePrincipal, setIsHeadOfficePrincipal] = useState(false);
   const [pharmacyPageAccessApplies, setPharmacyPageAccessApplies] =
     useState(false);
   const [pharmacyPageEnabledByKey, setPharmacyPageEnabledByKey] = useState<
@@ -122,6 +124,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       setActivePharmacyId(null);
       setOperationalPermissions([]);
       setAccountKind(null);
+      setIsHeadOfficePrincipal(false);
       setPharmacyPageAccessApplies(false);
       setPharmacyPageEnabledByKey(new Map());
       setError(null);
@@ -147,6 +150,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       setActivePharmacyId(data.activePharmacyId);
       setOperationalPermissions(data.operationalPermissions);
       setAccountKind(data.accountKind);
+      setIsHeadOfficePrincipal(data.isHeadOfficePrincipal);
       setPharmacyPageAccessApplies(data.pharmacyPageAccessApplies);
       setPharmacyPageEnabledByKey(
         buildPharmacyPageEnabledMap(data.pharmacyPages)
@@ -157,6 +161,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       setActivePharmacyId(null);
       setOperationalPermissions([]);
       setAccountKind(null);
+      setIsHeadOfficePrincipal(false);
       setPharmacyPageAccessApplies(false);
       setPharmacyPageEnabledByKey(new Map());
       setAuthorizationRegistry(null);
@@ -194,6 +199,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       ready,
       error,
       accountKind,
+      isHeadOfficePrincipal,
       pharmacyPageAccessApplies,
       pharmacyPageEnabledByKey,
       hasPermission: (code: string) =>
@@ -219,6 +225,7 @@ export function PermissionProvider({ children }: { children: React.ReactNode }) 
       activePharmacyId,
       operationalPermissions,
       accountKind,
+      isHeadOfficePrincipal,
       pharmacyPageAccessApplies,
       pharmacyPageEnabledByKey,
       loading,

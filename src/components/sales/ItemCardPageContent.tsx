@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import {
   ApiError,
   getItemCard,
+  getItemCardBranches,
   getItemCardStores,
-  getPharms,
   lookupItemCatalog,
   lookupItemCatalogBySegment,
 } from "@/lib/api-client";
@@ -42,9 +42,12 @@ import {
   ITEM_AUTOCOMPLETE_LIMIT,
   hasSearchableCatalogQuery,
 } from "@/lib/item-catalog-search";
-import type { ItemCardResponse, ItemCardStoreOption } from "@/types/item-card";
+import type {
+  ItemCardBranchOption,
+  ItemCardResponse,
+  ItemCardStoreOption,
+} from "@/types/item-card";
 import type { ItemCatalogItem } from "@/types/item-catalog";
-import type { PharmItem } from "@/types/pharm";
 
 function itemCardStoreLabel(store: ItemCardStoreOption): string {
   const en = store.storEnName?.trim();
@@ -126,7 +129,8 @@ export function ItemCardPageContent() {
   const [documentType, setDocumentType] = useState("");
   const [itemCardStores, setItemCardStores] = useState<ItemCardStoreOption[]>([]);
   const [unrestrictedStoreAccess, setUnrestrictedStoreAccess] = useState(false);
-  const [branches, setBranches] = useState<PharmItem[]>([]);
+  const [branches, setBranches] = useState<ItemCardBranchOption[]>([]);
+  const [unrestrictedBranchAccess, setUnrestrictedBranchAccess] = useState(false);
   const [lookupsLoading, setLookupsLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -136,18 +140,20 @@ export function ItemCardPageContent() {
     if (!token) return;
     let cancelled = false;
     setLookupsLoading(true);
-    void Promise.all([getItemCardStores(token), getPharms(token)])
-      .then(([storeScope, pharmRows]) => {
+    void Promise.all([getItemCardStores(token), getItemCardBranches(token)])
+      .then(([storeScope, branchScope]) => {
         if (cancelled) return;
         setItemCardStores(storeScope.stores);
         setUnrestrictedStoreAccess(storeScope.unrestrictedStoreAccess);
-        setBranches(pharmRows);
+        setBranches(branchScope.branches);
+        setUnrestrictedBranchAccess(branchScope.unrestrictedBranchAccess);
       })
       .catch((error) => {
         if (cancelled) return;
         setItemCardStores([]);
         setUnrestrictedStoreAccess(false);
         setBranches([]);
+        setUnrestrictedBranchAccess(false);
         toast.error(
           error instanceof Error
             ? error.message
@@ -258,7 +264,7 @@ export function ItemCardPageContent() {
   }, [itemCardStores]);
 
   const branchOptions = useMemo<ComboboxOption[]>(() => {
-    const sourceBranches = unrestrictedStoreAccess
+    const sourceBranches = unrestrictedBranchAccess
       ? branches
       : scopedPharmacies;
     const rows = sourceBranches
@@ -270,11 +276,11 @@ export function ItemCardPageContent() {
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-    if (unrestrictedStoreAccess || authorizedParmIdSet.size > 0) {
+    if (unrestrictedBranchAccess || authorizedParmIdSet.size > 0) {
       return rows;
     }
     return [{ value: "", label: "All Branches" }, ...rows];
-  }, [scopedPharmacies, branches, unrestrictedStoreAccess, authorizedParmIdSet.size]);
+  }, [scopedPharmacies, branches, unrestrictedBranchAccess, authorizedParmIdSet.size]);
 
   const loadCard = useCallback(
     async (nextPage = 1) => {

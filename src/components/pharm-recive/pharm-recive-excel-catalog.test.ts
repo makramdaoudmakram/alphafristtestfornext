@@ -7,7 +7,6 @@ vi.mock("@/lib/api-client", () => ({
   getItemCatalogByCodes: vi.fn(async (_token: string, codes: string[]) =>
     codes.map((code) => ({
       id: 1,
-      itemCatalogId: 1,
       itmCode: code,
       itmCode2: null,
       itmNameAr: "ع",
@@ -68,7 +67,6 @@ describe("Excel import catalog seeding fixes Unit combobox", () => {
         "aug100",
         {
           id: 1,
-          itemCatalogId: 1,
           itmCode: "AUG100",
           itmUnit1: 10,
           itmUnit2: 20,

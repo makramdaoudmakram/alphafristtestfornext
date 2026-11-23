@@ -48,7 +48,7 @@ describe("operational-stock-search-catalog", () => {
   it("builds catalog row from stock search snapshot with matching ids", () => {
     const built = itemCatalogItemFromStockSearchRow(searchRow());
     expect(built).not.toBeNull();
-    expect(built!.itemCatalogId).toBe(42);
+    expect(built!.id).toBe(42);
     expect(built!.itmCode).toBe("PHX1");
     expect(built!.itmUnit1).toBe(1);
   });
@@ -59,7 +59,7 @@ describe("operational-stock-search-catalog", () => {
       searchRow(),
       new Map()
     );
-    expect(resolved?.itemCatalogId).toBe(42);
+    expect(resolved?.id).toBe(42);
     expect(getItemCatalog).not.toHaveBeenCalled();
     expect(getItemCatalogByCodes).not.toHaveBeenCalled();
   });
@@ -68,7 +68,6 @@ describe("operational-stock-search-catalog", () => {
     getItemCatalogByCodes.mockResolvedValue([
       {
         id: 42,
-        itemCatalogId: 42,
         itmCode: "PHX1",
         itmUnit1: 5,
         itmUnit2: null,
@@ -97,7 +96,6 @@ describe("operational-stock-search-catalog", () => {
   it("uses cached catalog by code when units are present", async () => {
     const cached: ItemCatalogItem = {
       id: 42,
-      itemCatalogId: 42,
       itmCode: "PHX1",
       itmCode2: null,
       itmIntCode: null,

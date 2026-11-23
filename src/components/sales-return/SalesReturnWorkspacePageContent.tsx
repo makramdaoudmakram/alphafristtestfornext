@@ -34,7 +34,6 @@ import {
   finalizeSalePayment,
   getSalesReceipt,
   getCurrentOpenShift,
-  getItemCatalog,
   getUnitConversionInfo,
   getSalePaymentContext,
   getSalePaymentKinds,
@@ -55,7 +54,8 @@ import {
   sumLinesNet,
   validateReturnQuantities,
 } from "@/lib/sales-workspace-calc";
-import { formatUnitOptionLabel } from "@/lib/item-unit-options";
+import { formatUnitOptionLabel, getItemUnitIds } from "@/lib/item-unit-options";
+import { resolveCatalogItemForStockSearch } from "@/lib/operational-stock-search-catalog";
 import {
   findEmptySalesReturnLineIndex,
   patchSalesReturnLineFromStockSearch,
@@ -484,9 +484,30 @@ export function SalesReturnWorkspacePageContent() {
       }
       let catalogItem;
       try {
-        catalogItem = await getItemCatalog(searchResult.itemCatalogId, token);
-      } catch {
-        toast.error("Could not load item catalog record.");
+        catalogItem = await resolveCatalogItemForStockSearch(
+          token,
+          searchResult,
+          new Map()
+        );
+      } catch (err) {
+        const detail =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error && err.message.trim()
+              ? err.message
+              : null;
+        toast.error(
+          detail
+            ? `Could not load item catalog record: ${detail}`
+            : "Could not load item catalog record."
+        );
+        return;
+      }
+
+      if (!catalogItem || getItemUnitIds(catalogItem).length === 0) {
+        toast.error(
+          `Item "${searchResult.itemCode}" has no units configured in the catalog.`
+        );
         return;
       }
 

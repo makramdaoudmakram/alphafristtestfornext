@@ -3,11 +3,9 @@ import type {
   ItemCatalogUpsertRequest,
 } from "@/types/item-catalog";
 
-/** Primary key for ItemCatalog API routes (Id, fallback ItemCatalogId). */
-export function resolveItemCatalogApiId(row: Pick<ItemCatalogItem, "id" | "itemCatalogId">): number | null {
-  if (row.id > 0) return row.id;
-  if (row.itemCatalogId > 0) return row.itemCatalogId;
-  return null;
+/** Primary key for ItemCatalog API routes. */
+export function resolveItemCatalogApiId(row: Pick<ItemCatalogItem, "id">): number | null {
+  return row.id > 0 ? row.id : null;
 }
 
 export type ItemCatalogFormValues = {

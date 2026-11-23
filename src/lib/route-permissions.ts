@@ -79,7 +79,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteViewPermission> = {
   "/dashboard/pharm/transactions/pharmacy-acceptance": "Sales.View",
   "/dashboard/pharm/transactions/stor-to-pharm": "Sales.View",
   "/dashboard/pharm/transactions/accepted-pharmacy-orders": "PharmReciveAcceptedOrders.View",
-  "/dashboard/pharm/transactions/pharm-to-store": "Sales.View",
+  "/dashboard/pharm/transactions/pharm-to-store": "Movment.View",
   "/dashboard/pharm/transactions/pharm-to-store-send": "Sales.View",
   "/dashboard/pharm/transactions/pharmacy-transfer": "Sales.View",
   "/dashboard/transactions/purchase/reversal": "Purchase.View",
@@ -98,6 +98,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteViewPermission> = {
   "/dashboard/pharm/sales-details-report": "SalesDetailsReport.View",
   "/dashboard/reports/employee-commission": "EmployeeCommissionReport.View",
   "/dashboard/accounts/employee-commission": "EmployeeCommissionReport.View",
+  "/dashboard/accounts/shift-accept": "ShiftAccept.View",
   "/dashboard/pharm/my-commission": "Sales.View",
 };
 
@@ -310,6 +311,9 @@ export const PERMISSIONS = {
   },
   employeeCommissionReport: {
     view: "EmployeeCommissionReport.View",
+  },
+  shiftAccept: {
+    view: "ShiftAccept.View",
   },
   deliveryMonitoring: {
     view: "DeliveryMonitoring.View",

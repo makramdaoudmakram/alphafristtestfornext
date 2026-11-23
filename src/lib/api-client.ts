@@ -173,7 +173,13 @@ import type {
   BatchTraceabilityExpiryStatus,
   BatchTraceabilityTimelineEntry,
 } from "@/types/batch-traceability";
-import type { ItemCardQuery, ItemCardResponse, ItemCardRow, ItemCardStoresResponse } from "@/types/item-card";
+import type {
+  ItemCardBranchesResponse,
+  ItemCardQuery,
+  ItemCardResponse,
+  ItemCardRow,
+  ItemCardStoresResponse,
+} from "@/types/item-card";
 import type {
   ExcelEntityMetadata,
   ExcelImportCommitResponse,
@@ -733,19 +739,11 @@ function normalizeItemCatalogChild(
   };
 }
 
-function readItemCatalogId(item: Record<string, unknown>): number {
-  const id = readNumber(item, "id", "Id");
-  if (id > 0) return id;
-  const catalogId = readNumber(item, "itemCatalogId", "ItemCatalogId");
-  return catalogId > 0 ? catalogId : 0;
-}
-
 function normalizeItemCatalogItem(item: Record<string, unknown>): ItemCatalogItem {
   const child = item.child ?? item.Child;
 
   return {
-    id: readItemCatalogId(item),
-    itemCatalogId: readNumber(item, "itemCatalogId", "ItemCatalogId"),
+    id: readNumber(item, "id", "Id"),
     itmCode:
       readString(item, "itmCode", "itm_Code", "Itm_Code", "ItmCode") || null,
     itmCode2:
@@ -988,6 +986,10 @@ async function parseError(response: Response): Promise<string> {
     return "Unauthorized — your session expired. Please sign out and sign in again.";
   }
 
+  if (response.status === 403) {
+    return "You do not have permission to perform this action.";
+  }
+
   if (response.status === 405) {
     return "HTTP 405 Method Not Allowed — IIS blocked the update request. Redeploy web.config on the API server.";
   }
@@ -1223,6 +1225,9 @@ export function getMyPermissions(token: string) {
         pageKey: String(row.pageKey ?? row.PageKey ?? ""),
         isEnabled: Boolean(row.isEnabled ?? row.IsEnabled),
       })),
+      isHeadOfficePrincipal: Boolean(
+        data.isHeadOfficePrincipal ?? data.IsHeadOfficePrincipal
+      ),
     })
   );
 }
@@ -1367,6 +1372,7 @@ function normalizeUserListItem(raw: Record<string, unknown>): UserListItem {
       : false,
     accountKind: readAccountKindFromApi(raw.accountKind ?? raw.AccountKind),
     homeParmId: readHomeParmIdFromApi(raw.homeParmId ?? raw.HomeParmId),
+    isPrivilegedAccount: readBoolean(raw, "isPrivilegedAccount", "IsPrivilegedAccount"),
   };
 }
 
@@ -2290,11 +2296,17 @@ export function lookupMovments(
   token: string,
   parentId: number,
   search?: string,
-  options?: { pageNumber?: number; pageSize?: number; signal?: AbortSignal }
+  options?: {
+    pageNumber?: number;
+    pageSize?: number;
+    signal?: AbortSignal;
+    scopeRoute?: string;
+  }
 ): Promise<MovmentLookupItem[]> {
   const params = new URLSearchParams();
   params.set("parentId", String(parentId));
   if (search?.trim()) params.set("search", search.trim());
+  if (options?.scopeRoute?.trim()) params.set("scopeRoute", options.scopeRoute.trim());
   params.set("pageNumber", String(options?.pageNumber ?? 1));
   params.set("pageSize", String(options?.pageSize ?? 50));
 
@@ -3421,6 +3433,32 @@ export function getItemCardStores(token: string) {
   );
 }
 
+export function getItemCardBranches(token: string) {
+  return apiFetch<unknown>("reports/item-card/branches", {}, token).then(
+    normalizeItemCardBranchesResponse
+  );
+}
+
+function normalizeItemCardBranchesResponse(raw: unknown): ItemCardBranchesResponse {
+  const obj = (raw ?? {}) as Record<string, unknown>;
+  const branchesRaw = obj.branches ?? obj.Branches ?? [];
+  return {
+    branches: Array.isArray(branchesRaw)
+      ? branchesRaw.map((row) => {
+          const item = (row ?? {}) as Record<string, unknown>;
+          return {
+            parmId: readNumber(item, "parmId", "ParmId"),
+            parmArName: readNullableString(item, "parmArName", "ParmArName"),
+            parmEnName: readNullableString(item, "parmEnName", "ParmEnName"),
+          };
+        })
+      : [],
+    unrestrictedBranchAccess: Boolean(
+      obj.unrestrictedBranchAccess ?? obj.UnrestrictedBranchAccess ?? false
+    ),
+  };
+}
+
 function normalizeItemCardStoresResponse(raw: unknown): ItemCardStoresResponse {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const storesRaw = obj.stores ?? obj.Stores ?? [];
@@ -3719,6 +3757,45 @@ export function searchPharmPurchaseReturnItemsWithStock(
 
   return apiFetch<unknown>(
     `PharmPurchaseReturnH/item-search?${params.toString()}`,
+    { signal: options?.signal },
+    token
+  ).then((data) => {
+    if (Array.isArray(data)) {
+      return data.map((item) =>
+        normalizeReturnItemStockSearchItem(item as Record<string, unknown>)
+      );
+    }
+    return parseArrayOrPaged(data, normalizeReturnItemStockSearchItem);
+  });
+}
+
+/** General Purchase Return — source store from selected vendor-return movement (Movment parent 2 MovStor). */
+export function searchGeneralPurchaseReturnItemsWithStock(
+  token: string,
+  movmentRowId: number,
+  search: string,
+  options?: {
+    take?: number;
+    language?: "en" | "ar";
+    signal?: AbortSignal;
+    doubleSpaceWildcard?: boolean;
+  }
+) {
+  const useWildcard = options?.doubleSpaceWildcard === true;
+  const q = useWildcard ? search : search.trim();
+  const params = new URLSearchParams();
+  params.set("movmentRowId", String(movmentRowId));
+  if (q.trim()) params.set("search", q);
+  if (options?.take != null && options.take > 0) {
+    params.set("take", String(options.take));
+  }
+  if (options?.language === "en" || options?.language === "ar") {
+    params.set("language", options.language);
+  }
+  if (useWildcard) params.set("doubleSpaceWildcard", "true");
+
+  return apiFetch<unknown>(
+    `ReturnTransH/item-search?${params.toString()}`,
     { signal: options?.signal },
     token
   ).then((data) => {
@@ -5228,8 +5305,7 @@ function normalizeItemCatalogLookupItem(
   item: Record<string, unknown>
 ): ItemCatalogItem {
   return {
-    id: readItemCatalogId(item),
-    itemCatalogId: readNumber(item, "id", "Id", "itemCatalogId", "ItemCatalogId"),
+    id: readNumber(item, "id", "Id"),
     itmCode:
       readString(item, "itmCode", "itm_Code", "Itm_Code", "ItmCode") || null,
     itmCode2: null,
@@ -5775,38 +5851,6 @@ export async function getExcelImportJobStatus(
   }
 
   return normalizeExcelImportJobStatus(data);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-export async function waitForExcelImportJob(
-  entityName: string,
-  importJobId: string,
-  token: string,
-  onProgress?: (status: ExcelImportJobStatus) => void,
-  pollIntervalMs = 800
-): Promise<ExcelImportResult> {
-  while (true) {
-    const status = await getExcelImportJobStatus(entityName, importJobId, token);
-    onProgress?.(status);
-
-    if (status.status === "Completed" || status.status === "Failed") {
-      if (!status.result) {
-        throw new ApiError(
-          500,
-          status.message || "Import job finished without a result payload."
-        );
-      }
-
-      return status.result;
-    }
-
-    await delay(pollIntervalMs);
-  }
 }
 
 function errorsOnlyMessage(data: Record<string, unknown>): boolean {
@@ -7342,6 +7386,36 @@ export async function getEmployeeCommissionDetails(
   };
 }
 
+function normalizeShiftAcceptPendingRow(data: Record<string, unknown>): import("@/types/shift-accept").ShiftAcceptPendingRow {
+  return {
+    shiftId: readNumber(data, "shiftId", "ShiftId") ?? 0,
+    pharmacyName: readString(data, "pharmacyName", "PharmacyName") || null,
+    scId: readNumber(data, "scId", "ScId") ?? 0,
+    startTime: readString(data, "startTime", "StartTime") || null,
+    transferValue: Number(readNumber(data, "transferValue", "TransferValue") ?? 0),
+  };
+}
+
+export async function getShiftAcceptPending(
+  token: string,
+  options?: { signal?: AbortSignal }
+): Promise<import("@/types/shift-accept").ShiftAcceptPendingList> {
+  const data = await apiFetch<Record<string, unknown>>(
+    "shift-accept/pending",
+    { signal: options?.signal },
+    token
+  );
+  const rawRows = Array.isArray(data.rows)
+    ? data.rows
+    : Array.isArray(data.Rows)
+      ? data.Rows
+      : [];
+  const rows = rawRows
+    .filter((r): r is Record<string, unknown> => r != null && typeof r === "object")
+    .map((r) => normalizeShiftAcceptPendingRow(r));
+  return { rows };
+}
+
 export async function getClosedShifts(
   token: string,
   query: {
@@ -7772,3 +7846,8 @@ export async function getInventoryAdjustmentReportDetail(
   );
   return normalizeInventoryAdjustmentReportDetail(data);
 }
+
+export {
+  ExcelImportJobWaitTimeoutError,
+  waitForExcelImportJob,
+} from "@/lib/excel-import-job";

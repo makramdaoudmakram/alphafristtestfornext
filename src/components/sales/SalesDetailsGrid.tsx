@@ -30,6 +30,7 @@ import {
 } from "@/lib/sales-discount-limit";
 import { formatSalesBatchOptionLabel } from "@/lib/sales-batch-option-label";
 import { salesItemPrimaryLabel } from "@/lib/sales-item-search-ux";
+import { unitConversionRequestErrorMessage } from "@/lib/unit-conversion-request-error";
 import { cn } from "@/lib/utils";
 import type {
   SalesItemSearchHit,
@@ -374,9 +375,9 @@ export function SalesDetailsGrid({
           ...lines.filter((l) => l.key !== line.key),
           nextLine,
         ]);
-      } catch {
+      } catch (err) {
         if (unitSeqRef.current.get(line.key) !== requestId) return;
-        onToast?.("error", "Unit conversion failed.");
+        onToast?.("error", unitConversionRequestErrorMessage(err));
       }
     },
     [token, patchLine, onToast, validateQtyAgainstStock, lines]

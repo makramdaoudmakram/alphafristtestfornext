@@ -3,7 +3,9 @@ import {
   filterNavGroups,
   filterNavLinks,
   pharmacyNavSectionHasVisibleChildren,
+  type NavLinkAccessOptions,
 } from "@/components/dashboard/nav-main";
+import { isAdminRole } from "@/components/permissions/permission-provider";
 import {
   buildPharmacyPageEnabledMap,
   canAccessPage,
@@ -17,9 +19,12 @@ function makeCanAccess(options: {
   pharmacyPageAccessApplies: boolean;
   operationalPermissions: string[];
   globalPermissions?: string[];
+  isHeadOfficePrincipal?: boolean;
+  roles?: string[];
 }) {
   const global = new Set(options.globalPermissions ?? []);
   const operational = new Set(options.operationalPermissions);
+  const roles = options.roles ?? [];
   const enabledByPageKey = buildPharmacyPageEnabledMap(
     [...options.enabledPageKeys].map((pageKey) => ({
       pageKey,
@@ -27,7 +32,11 @@ function makeCanAccess(options: {
     }))
   );
 
-  return (permission: string | null | undefined, href: string) => {
+  return (
+    permission: string | null | undefined,
+    href: string,
+    linkOptions?: NavLinkAccessOptions
+  ) => {
     const pageKey = resolvePageKeyFromPathname(href);
     if (
       !canAccessPage(
@@ -37,6 +46,12 @@ function makeCanAccess(options: {
       )
     ) {
       return false;
+    }
+
+    if (linkOptions?.requireHeadOfficePrincipal) {
+      const headOfficeNavAllowed =
+        Boolean(options.isHeadOfficePrincipal) || isAdminRole(roles);
+      if (!headOfficeNavAllowed) return false;
     }
 
     const routePerm = resolveNavLinkPermission(href, permission ?? undefined);
@@ -193,6 +208,48 @@ describe("B3–B4 purchase sidebar entries", () => {
         (l) => l.href === "/dashboard/pharm/transactions/pharmacy-purchase"
       )
     ).toBe(false);
+  });
+
+  it("hides Pharm-to-Store receive when only Movment.View (pharmacy operator)", () => {
+    const enabledKeys = new Set([
+      ...allPharmacyOpsEnabled,
+      "/dashboard/pharm/transactions/pharm-to-store",
+      "/dashboard/pharm/transactions/pharm-to-store-send",
+    ]);
+    const canAccess = makeCanAccess({
+      enabledPageKeys: enabledKeys,
+      pharmacyPageAccessApplies: true,
+      operationalPermissions: ["Movment.View", "Sales.View"],
+      isHeadOfficePrincipal: false,
+    });
+    const warehouse = SIDEBAR_NAV.find((e) => e.title === "المخازن ");
+    expect(warehouse).toBeDefined();
+    const flat = filterNavLinks(warehouse!.items ?? [], canAccess);
+    expect(flat.some((l) => l.href === "/dashboard/pharm/transactions/pharm-to-store")).toBe(
+      false
+    );
+    const pharmacy = getPharmacyNav();
+    const pharmFlat = filterNavLinks(pharmacy.items ?? [], canAccess);
+    expect(
+      pharmFlat.some((l) => l.href === "/dashboard/pharm/transactions/pharm-to-store-send")
+    ).toBe(true);
+  });
+
+  it("shows Pharm-to-Store receive for Head Office principal with Movment.View", () => {
+    const enabledKeys = new Set([
+      "/dashboard/pharm/transactions/pharm-to-store",
+    ]);
+    const canAccess = makeCanAccess({
+      enabledPageKeys: enabledKeys,
+      pharmacyPageAccessApplies: true,
+      operationalPermissions: ["Movment.View"],
+      isHeadOfficePrincipal: true,
+    });
+    const warehouse = SIDEBAR_NAV.find((e) => e.title === "المخازن ");
+    const flat = filterNavLinks(warehouse!.items ?? [], canAccess);
+    expect(flat.some((l) => l.href === "/dashboard/pharm/transactions/pharm-to-store")).toBe(
+      true
+    );
   });
 
   it("F — neither purchase permission hides purchase links", () => {

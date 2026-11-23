@@ -60,8 +60,6 @@ export type ItemCatalogItem = {
 
   id: number;
 
-  itemCatalogId: number;
-
   itmCode: string | null;
 
   itmCode2: string | null;

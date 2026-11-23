@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { getUsersPickerSummaries } from "@/lib/api-client";
 import {
   addHeadOfficeStore,
+  deactivateHeadOfficeJobTitle,
   getApiErrorMessage,
   getHeadOfficeEligibleStores,
+  getHeadOfficeEligibleUsers,
   getHeadOfficeUserAssignment,
   removeHeadOfficeStoreAssignment,
   setHeadOfficeJobTitle,
@@ -80,10 +81,17 @@ export function HeadOfficeStoreAssignmentsPageContent() {
     setCatalogLoading(true);
     try {
       const [userList, stores] = await Promise.all([
-        getUsersPickerSummaries(token),
+        getHeadOfficeEligibleUsers(token),
         getHeadOfficeEligibleStores(token),
       ]);
-      setUsers(userList);
+      setUsers(
+        userList.map((user) => ({
+          userId: user.userId,
+          email: user.email || user.name || user.userId,
+          roles: [],
+          extraPermissionCount: 0,
+        }))
+      );
       setEligibleStores(stores);
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -127,6 +135,17 @@ export function HeadOfficeStoreAssignmentsPageContent() {
         token
       );
       toast.success("Head Office job title assigned.");
+      await loadAssignment();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    }
+  };
+
+  const deactivateJob = async () => {
+    if (!token || !selectedUserId) return;
+    try {
+      await deactivateHeadOfficeJobTitle(selectedUserId, token);
+      toast.success("Head Office job deactivated.");
       await loadAssignment();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -228,6 +247,15 @@ export function HeadOfficeStoreAssignmentsPageContent() {
                   <Button type="button" variant="outline" onClick={() => void loadAssignment()} disabled={loading}>
                     Refresh
                   </Button>
+                  {assignment.jobAssignment?.isActive ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void deactivateJob()}
+                    >
+                      Deactivate job
+                    </Button>
+                  ) : null}
                 </div>
               </CardContent>
             </Card>

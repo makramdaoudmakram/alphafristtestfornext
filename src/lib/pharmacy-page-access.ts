@@ -1,5 +1,5 @@
 /**
- * Level 1 pharmacy page keys — mirrors Alfa `PharmacyPageRegistry` (88 entries).
+ * Level 1 pharmacy page keys — mirrors Alfa `PharmacyPageRegistry` (92 entries).
  */
 
 export const PHARMACY_REGISTRY_PAGE_KEYS = [
@@ -27,6 +27,7 @@ export const PHARMACY_REGISTRY_PAGE_KEYS = [
   "/dashboard/pharm/sales-details-report",
   "/dashboard/reports/employee-commission",
   "/dashboard/accounts/employee-commission",
+  "/dashboard/accounts/shift-accept",
   "/dashboard/pharm/my-commission",
   "/dashboard/transactions/purchase",
   "/dashboard/transactions/purchase/invoice-draft",

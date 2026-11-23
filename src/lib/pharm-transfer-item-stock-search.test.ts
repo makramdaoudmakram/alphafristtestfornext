@@ -6,7 +6,6 @@ import type { ReturnItemStockSearchItem } from "@/types/stock";
 function catalog(id: number): ItemCatalogItem {
   return {
     id,
-    itemCatalogId: id,
     itmCode: "PHX1",
     itmCode2: null,
     itmIntCode: null,

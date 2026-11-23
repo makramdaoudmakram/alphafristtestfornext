@@ -98,6 +98,9 @@ export type ExcelImportResult = {
 /** Row count at or above which commit runs as a background job with polling. */
 export const EXCEL_IMPORT_ASYNC_ROW_THRESHOLD = 25;
 
+/** Max time to poll a background Excel import job before prompting status re-check. */
+export const EXCEL_IMPORT_JOB_MAX_WAIT_MS = 15 * 60 * 1000;
+
 export type ExcelImportJobStatusName =
   | "Queued"
   | "Running"

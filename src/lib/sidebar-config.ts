@@ -6,6 +6,8 @@ export type NavLinkItem = {
   title: string;
   href: string;
   permission?: string | null;
+  /** Pharm-to-Store receive / other Head Office–only entries (see PageGuard). */
+  requireHeadOfficePrincipal?: boolean;
 };
 
 export type NavGroupItem = {
@@ -410,6 +412,11 @@ export const SIDEBAR_NAV: NavItem[] = [
             permission: PERMISSIONS.employeeCommissionReport.view,
           },
           {
+            title: "قبول الشيفت",
+            href: "/dashboard/accounts/shift-accept",
+            permission: PERMISSIONS.shiftAccept.view,
+          },
+          {
             title: "مراكز التكلفه",
             href: "/dashboard/cost-centers",
             permission: PERMISSIONS.costCenter.view,
@@ -493,7 +500,8 @@ export const SIDEBAR_NAV: NavItem[] = [
        {
         title: "التحويل من الصيدليات",
         href: "/dashboard/pharm/transactions/pharm-to-store",
-        permission: PERMISSIONS.sales.view,
+        permission: PERMISSIONS.movment.view,
+        requireHeadOfficePrincipal: true,
       },
       {
         title: "متابعة المناديب والإحصائيات",
@@ -553,6 +561,7 @@ export const PAGE_TITLES: Record<string, string> = {
   "/dashboard/pharm/sales-details-report": "Sales Details Report",
   "/dashboard/reports/employee-commission": "Employee Commission Report",
   "/dashboard/accounts/employee-commission": "Employee Commission Report",
+  "/dashboard/accounts/shift-accept": "Shift Accept",
   "/dashboard/pharm/my-commission": "My Commission",
   "/dashboard/accounts-chart": "Accounts Chart",
   "/dashboard/collection-voucher": "Collection Voucher",

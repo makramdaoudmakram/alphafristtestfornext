@@ -684,6 +684,8 @@ export function ReturnPageContent() {
                   <ReturnItemStockSearchBox
                     token={token}
                     storeId={getDefaultMovementStoreId(selectedMovement)}
+                    searchSource="general-purchase-return"
+                    movmentRowId={selectedMovement?.id ?? null}
                     disabled={!sessionAuthenticated || loading || !isEditable}
                     preferAvailableQty
                     showBatchDetails

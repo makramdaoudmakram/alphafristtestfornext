@@ -3,7 +3,7 @@
 /**
  * Sales customer autocomplete — same portal/debounce UX pattern as
  * SalesItemAutocompleteCell / Purchase ItemCatalogAutocompleteCell.
- * Uses GET /api/Customer (dbo.Customer) via getCustomers(token, search).
+ * Uses GET /api/Customer/lookup (dbo.Customer) via lookupCustomersForSales.
  */
 
 import {
@@ -17,7 +17,9 @@ import {
 import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
-import { getCustomers } from "@/lib/customer-api";
+import { ApiError } from "@/lib/api-client";
+import { lookupCustomersForSales } from "@/lib/customer-api";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CustomerItem } from "@/types/customer";
 
@@ -58,10 +60,14 @@ export function SalesCustomerAutocomplete({
   const [wantList, setWantList] = useState(true);
   const [suggestions, setSuggestions] = useState<CustomerItem[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   const hasQuery = value.trim().length > 0;
   const showList =
-    wantList && !disabled && hasQuery && (suggestions.length > 0 || lookupLoading);
+    wantList
+    && !disabled
+    && hasQuery
+    && (suggestions.length > 0 || lookupLoading || Boolean(lookupError));
 
   const syncMenuPosition = useCallback(() => {
     const el = rootRef.current;
@@ -79,19 +85,29 @@ export function SalesCustomerAutocomplete({
     if (!wantList || disabled || !q || !token) {
       setSuggestions([]);
       setLookupLoading(false);
+      setLookupError(null);
       return;
     }
 
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLookupLoading(true);
+      setLookupError(null);
       try {
-        const rows = await getCustomers(token, q);
+        const rows = await lookupCustomersForSales(token, q, TAKE);
         if (controller.signal.aborted) return;
-        setSuggestions(rows.slice(0, TAKE));
-      } catch {
+        setSuggestions(rows);
+      } catch (error) {
         if (controller.signal.aborted) return;
         setSuggestions([]);
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "Customer search failed.";
+        setLookupError(message);
+        toast.error(message);
       } finally {
         if (!controller.signal.aborted) setLookupLoading(false);
       }
@@ -187,6 +203,9 @@ export function SalesCustomerAutocomplete({
           <li className="text-muted-foreground px-2 py-1.5 text-xs">
             Searching…
           </li>
+        ) : null}
+        {lookupError && !lookupLoading ? (
+          <li className="text-destructive px-2 py-1.5 text-xs">{lookupError}</li>
         ) : null}
         {suggestions.map((customer, index) => (
           <li

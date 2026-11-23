@@ -58,3 +58,14 @@ export type ItemCardStoresResponse = {
   stores: ItemCardStoreOption[];
   unrestrictedStoreAccess: boolean;
 };
+
+export type ItemCardBranchOption = {
+  parmId: number;
+  parmArName: string | null;
+  parmEnName: string | null;
+};
+
+export type ItemCardBranchesResponse = {
+  branches: ItemCardBranchOption[];
+  unrestrictedBranchAccess: boolean;
+};

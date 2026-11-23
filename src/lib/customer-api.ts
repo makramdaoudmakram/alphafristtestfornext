@@ -211,6 +211,26 @@ export async function getCustomers(token: string, search?: string): Promise<Cust
   return page.items;
 }
 
+/** Sales workspace autocomplete — GET /api/Customer/lookup (dbo.Customer, Sales.View or Customer.View). */
+export async function lookupCustomersForSales(
+  token: string,
+  search: string,
+  take = 20
+): Promise<CustomerItem[]> {
+  const params = new URLSearchParams();
+  const term = search.trim();
+  if (term) params.set("search", term);
+  params.set("take", String(take));
+
+  const data = await apiFetch<unknown>(
+    `Customer/lookup?${params.toString()}`,
+    {},
+    token
+  );
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((row) => normalizeCustomer(row as Record<string, unknown>));
+}
+
 export async function getCustomerById(
   custCode: number,
   token: string

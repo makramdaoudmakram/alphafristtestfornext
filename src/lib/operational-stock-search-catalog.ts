@@ -19,7 +19,6 @@ export function itemCatalogItemFromStockSearchRow(
 
   const item: ItemCatalogItem = {
     id: search.itemCatalogId,
-    itemCatalogId: search.itemCatalogId,
     itmCode: code,
     itmCode2: null,
     itmIntCode: null,

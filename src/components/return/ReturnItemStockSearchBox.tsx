@@ -12,6 +12,8 @@ import { createPortal } from "react-dom";
 import { Input } from "@/components/ui/input";
 import { formControlFocusClass } from "@/components/ui/form-field-inline";
 import {
+  ApiError,
+  searchGeneralPurchaseReturnItemsWithStock,
   searchPharmPurchaseReturnItemsWithStock,
   searchPharmReciveItemsWithStock,
   searchReturnItemsWithStock,
@@ -40,12 +42,17 @@ type ReturnItemStockSearchBoxProps = {
   /** Sales Return: show item code + batch columns in the dropdown. */
   showBatchDetails?: boolean;
   /**
+   * `general-purchase-return` uses ReturnTransH/item-search (Movment parent 2 MovStor).
    * `pharm-purchase-return` uses PharmPurchaseReturnH/item-search (server-resolved store).
    * `pharm-recive` uses PharmReciveH/item-search (Movment parent 8 MovStor).
    * Default uses Stock/return-item-search or SalesReturn/item-search.
    */
-  searchSource?: "default" | "pharm-purchase-return" | "pharm-recive";
-  /** Required when searchSource is `pharm-recive` — selected Movment row id (parent 8). */
+  searchSource?:
+    | "default"
+    | "general-purchase-return"
+    | "pharm-purchase-return"
+    | "pharm-recive";
+  /** Required for `general-purchase-return` and `pharm-recive` — selected Movment row id. */
   movmentRowId?: number | null;
   /** Called when the user picks a search result (Phase 3 — add to detail grid). */
   onItemSelected?: (item: ReturnItemStockSearchItem) => void;
@@ -79,18 +86,20 @@ export function ReturnItemStockSearchBox({
   const [wantList, setWantList] = useState(true);
   const [results, setResults] = useState<ReturnItemStockSearchItem[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const storeReady = Boolean(token?.trim());
+  const movementRequired =
+    searchSource === "pharm-recive" || searchSource === "general-purchase-return";
   const movementReady =
-    searchSource !== "pharm-recive" ||
-    (movmentRowId != null && movmentRowId > 0);
+    !movementRequired || (movmentRowId != null && movmentRowId > 0);
   const inputDisabled = disabled || !storeReady || !movementReady;
 
   const showList =
     wantList &&
     !inputDisabled &&
     query.trim().length > 0 &&
-    (results.length > 0 || lookupLoading);
+    (results.length > 0 || lookupLoading || Boolean(searchError));
 
   const syncMenuPosition = useCallback(() => {
     const el = rootRef.current;
@@ -104,10 +113,13 @@ export function ReturnItemStockSearchBox({
   }, []);
 
   useEffect(() => {
-    if (searchSource !== "pharm-recive") return;
+    if (searchSource !== "pharm-recive" && searchSource !== "general-purchase-return") {
+      return;
+    }
     setResults([]);
     setQuery("");
     setWantList(true);
+    setSearchError(null);
   }, [movmentRowId, searchSource]);
 
   useEffect(() => {
@@ -126,43 +138,57 @@ export function ReturnItemStockSearchBox({
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setLookupLoading(true);
+      setSearchError(null);
       try {
+        const commonOpts = {
+          language: itemLanguage,
+          signal: controller.signal,
+          doubleSpaceWildcard: true as const,
+        };
         const rows =
-          searchSource === "pharm-purchase-return"
-            ? await searchPharmPurchaseReturnItemsWithStock(token, rawQuery, {
-                take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
-                language: itemLanguage,
-                signal: controller.signal,
-                doubleSpaceWildcard: true,
-              })
-            : searchSource === "pharm-recive"
-              ? await searchPharmReciveItemsWithStock(
-                  token,
-                  movmentRowId!,
-                  rawQuery,
-                  {
-                    take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
-                    language: itemLanguage,
-                    signal: controller.signal,
-                    doubleSpaceWildcard: true,
-                  }
-                )
-              : await searchReturnItemsWithStock(
+          searchSource === "general-purchase-return"
+            ? await searchGeneralPurchaseReturnItemsWithStock(
                 token,
+                movmentRowId!,
                 rawQuery,
-                storeId?.trim() || undefined,
-                {
+                { take: 20, ...commonOpts }
+              )
+            : searchSource === "pharm-purchase-return"
+              ? await searchPharmPurchaseReturnItemsWithStock(token, rawQuery, {
                   take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
-                  language: itemLanguage,
-                  signal: controller.signal,
-                  doubleSpaceWildcard: true,
-                }
-              );
+                  ...commonOpts,
+                })
+              : searchSource === "pharm-recive"
+                ? await searchPharmReciveItemsWithStock(
+                    token,
+                    movmentRowId!,
+                    rawQuery,
+                    {
+                      take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+                      ...commonOpts,
+                    }
+                  )
+                : await searchReturnItemsWithStock(
+                    token,
+                    rawQuery,
+                    storeId?.trim() || undefined,
+                    {
+                      take: RETURN_ITEM_STOCK_SEARCH_LIMIT,
+                      ...commonOpts,
+                    }
+                  );
         if (controller.signal.aborted) return;
         setResults(rows);
-      } catch {
+      } catch (err) {
         if (controller.signal.aborted) return;
         setResults([]);
+        if (err instanceof ApiError) {
+          setSearchError(err.message);
+        } else if (err instanceof Error && err.message.trim()) {
+          setSearchError(err.message);
+        } else {
+          setSearchError("Item search failed. Check your connection and try again.");
+        }
       } finally {
         if (!controller.signal.aborted) setLookupLoading(false);
       }
@@ -298,9 +324,14 @@ export function ReturnItemStockSearchBox({
         onPointerDown={(event) => event.stopPropagation()}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        {lookupLoading && results.length === 0 ? (
+        {lookupLoading && results.length === 0 && !searchError ? (
           <li className="text-muted-foreground px-2 py-1.5 text-xs">
             Searching…
+          </li>
+        ) : null}
+        {searchError && !lookupLoading ? (
+          <li className="text-destructive px-2 py-1.5 text-xs" role="alert">
+            {searchError}
           </li>
         ) : null}
         {results.map((item, index) => {
@@ -411,11 +442,13 @@ export function ReturnItemStockSearchBox({
         disabled={inputDisabled}
         value={query}
         placeholder={
-          storeReady
-            ? itemLanguage === "ar"
-              ? "بحث عن صنف — الاسم / تاريخ الانتهاء / الكمية / سعر البيع"
-              : "Search item — Name / Exp Date / Qty / Sales Price"
-            : "Select a movement first"
+          !storeReady
+            ? "Sign in to search items"
+            : !movementReady
+              ? "Select a movement first"
+              : itemLanguage === "ar"
+                ? "بحث عن صنف — الاسم / تاريخ الانتهاء / الكمية / سعر البيع"
+                : "Search item — Name / Exp Date / Qty / Sales Price"
         }
         className={formControlFocusClass}
         onChange={(e) => {

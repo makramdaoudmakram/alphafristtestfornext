@@ -66,6 +66,7 @@ import { MovementLookup } from "@/components/movement/MovementLookup";
 import { ReturnItemStockSearchBox } from "@/components/return/ReturnItemStockSearchBox";
 import { StockBarcodePrintDialog } from "@/components/stock/stock-barcode-print-dialog";
 import { PageGuard } from "@/components/permissions/page-guard";
+import { usePermissions } from "@/components/permissions/permission-provider";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import { FormFieldInlineWrap } from "@/components/ui/form-field-inline";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,6 +84,11 @@ export function PharmRecivePageContent() {
   const sessionAuthenticated = status === "authenticated" && !!token;
 
   const pharmState = usePharmRecive(token);
+  const { isHeadOfficePrincipal } = usePermissions();
+  const movementLookupScopeRoute = useMemo(() => {
+    if (pharmState.mode !== "new") return undefined;
+    return isHeadOfficePrincipal ? "source" : undefined;
+  }, [isHeadOfficePrincipal, pharmState.mode]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const loadedFromUrlRef = useRef<number | null>(null);
@@ -898,6 +904,7 @@ export function PharmRecivePageContent() {
                     parentId={PHARM_RECIVE_MOV_PARENT_ID}
                     token={token}
                     value={selectedMovement}
+                    scopeRoute={movementLookupScopeRoute}
                     disabled={hasRecord || !isEditable || fathIdLoading}
                     onChange={(item) => void handleMovementChange(item)}
                   />

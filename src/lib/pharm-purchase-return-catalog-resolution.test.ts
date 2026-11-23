@@ -26,7 +26,6 @@ function catalogRow(
 ): ItemCatalogItem {
   return {
     id: 99,
-    itemCatalogId: 99,
     itmCode: "81848",
     itmCode2: null,
     itmUnit1: 5,

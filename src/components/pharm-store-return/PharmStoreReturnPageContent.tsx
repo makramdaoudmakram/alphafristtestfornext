@@ -262,7 +262,7 @@ function SectionList({
   );
 }
 
-export function PharmStoreReturnPageContent() {
+function PharmStoreReturnAcceptWorkspace() {
   const { data: session, status } = useSession();
   const token = session?.accessToken;
   const sessionReady = status !== "loading";
@@ -371,10 +371,7 @@ export function PharmStoreReturnPageContent() {
   }
 
   return (
-    <PageGuard
-      permission={PERMISSIONS.sales.view}
-      redirectTo="/unauthorized?from=pharm-to-store&permission=Sales.View"
-    >
+    <>
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Pharm-to-Store</h2>
@@ -528,6 +525,19 @@ export function PharmStoreReturnPageContent() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export function PharmStoreReturnPageContent() {
+  return (
+    <PageGuard
+      permission={PERMISSIONS.movment.view}
+      requireHeadOfficePrincipal
+      pageKey="/dashboard/pharm/transactions/pharm-to-store"
+      redirectTo="/unauthorized?from=pharm-to-store&permission=Movment.View"
+    >
+      <PharmStoreReturnAcceptWorkspace />
     </PageGuard>
   );
 }
