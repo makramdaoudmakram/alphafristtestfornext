@@ -105,9 +105,11 @@ export type ExcelImportJobStatusName =
   | "Queued"
   | "Running"
   | "Completed"
-  | "Failed";
+  | "Failed"
+  | "Interrupted";
 
 export type ExcelImportJobStatus = {
+  lastProgressUtc?: string | null;
   importJobId: string;
   entityName: string;
   status: ExcelImportJobStatusName;
@@ -122,16 +124,21 @@ export type ExcelImportCommitResponse =
   | { isAsync: false; result: ExcelImportResult }
   | { isAsync: true; importJobId: string };
 
+/** Mirrors Alfa.DTO.ExcelImportJobStatus */
 export function excelImportJobStatusFromApiValue(
   value: number
 ): ExcelImportJobStatusName {
   switch (value) {
+    case 0:
+      return "Queued";
     case 1:
       return "Running";
     case 2:
       return "Completed";
     case 3:
       return "Failed";
+    case 4:
+      return "Interrupted";
     default:
       return "Queued";
   }

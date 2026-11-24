@@ -5,11 +5,19 @@ import { FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   commitExcelImport,
-  ExcelImportJobWaitTimeoutError,
   getExcelImportJobStatus,
   previewExcelImport,
-  waitForExcelImportJob,
 } from "@/lib/api-client";
+import {
+  EXCEL_IMPORT_FINALIZING_DETAIL,
+  excelImportDisplayPercent,
+  excelImportIsFinalizing,
+} from "@/lib/excel-import-progress";
+import {
+  ExcelImportJobInterruptedError,
+  ExcelImportJobWaitTimeoutError,
+  waitForExcelImportJob,
+} from "@/lib/excel-import-job";
 import { ExcelImportErrorTable } from "@/components/excel/excel-import-error-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,15 +108,21 @@ function ImportProgressBar({
 }: {
   status: ExcelImportJobStatus | null;
 }) {
-  const percent = status?.progressPercent ?? 0;
   const processed = status?.processedRows ?? 0;
   const total = status?.totalRows ?? 0;
+  const isFinalizing = excelImportIsFinalizing(status);
+  const percent = excelImportDisplayPercent(status);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">
-          {status?.message || "Starting import…"}
+          {isFinalizing
+            ? EXCEL_IMPORT_FINALIZING_DETAIL
+            : status?.message ||
+              (status?.status === "Running"
+                ? "Processing import…"
+                : "Starting import…")}
         </span>
         <span className="font-medium">{percent}%</span>
       </div>
@@ -120,7 +134,9 @@ function ImportProgressBar({
       </div>
       {total > 0 ? (
         <p className="text-muted-foreground text-xs">
-          Processed {processed} of {total} rows
+          {isFinalizing
+            ? EXCEL_IMPORT_FINALIZING_DETAIL
+            : `Processed ${processed} of ${total} rows`}
         </p>
       ) : null}
     </div>
@@ -269,6 +285,13 @@ export function ExcelImportDialog({
             toast.error("Import failed — no changes were saved");
           }
         } catch (error) {
+          if (error instanceof ExcelImportJobInterruptedError) {
+            setPendingImportJobId(commitResponse.importJobId);
+            setJobStatus(error.lastStatus);
+            setStep("committing");
+            toast.warning(error.message);
+            return;
+          }
           if (error instanceof ExcelImportJobWaitTimeoutError) {
             setPendingImportJobId(error.importJobId);
             setJobStatus(error.lastStatus);
@@ -312,6 +335,14 @@ export function ExcelImportDialog({
         token
       );
       setJobStatus(status);
+
+      if (status.status === "Interrupted") {
+        toast.warning(
+          status.message ??
+            "Import was interrupted. Verify whether it committed before retrying the same file."
+        );
+        return;
+      }
 
       if (status.status === "Completed" || status.status === "Failed") {
         if (!status.result) {
@@ -502,8 +533,8 @@ export function ExcelImportDialog({
               {pendingImportJobId ? (
                 <p className="text-muted-foreground text-sm">
                   Waiting stopped because this is taking longer than usual. The
-                  server may still be processing — this does not mean the import
-                  failed.
+                  import may still be processing on the server — use Check status
+                  before starting another import with the same file.
                 </p>
               ) : null}
             </CardContent>

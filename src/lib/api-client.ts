@@ -5742,15 +5742,60 @@ export async function previewExcelImport(
   return result;
 }
 
-function normalizeExcelImportJobStatus(
+export function extractExcelImportJobStatusBody(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const jobRaw = data.job ?? data.Job;
+  return jobRaw && typeof jobRaw === "object"
+    ? (jobRaw as Record<string, unknown>)
+    : data;
+}
+
+export class ExcelImportJobPollParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExcelImportJobPollParseError";
+  }
+}
+
+const VALID_EXCEL_IMPORT_JOB_STATUS = new Set([
+  0, 1, 2, 3, 4,
+]);
+
+export function normalizeExcelImportJobStatus(
   raw: Record<string, unknown>
 ): ExcelImportJobStatus {
-  const resultRaw = raw.result ?? raw.Result;
+  const importJobId = readString(raw, "importJobId", "ImportJobId");
+  if (!importJobId) {
+    throw new ExcelImportJobPollParseError(
+      "Import job status response is missing importJobId."
+    );
+  }
+
+  const entityName = readString(raw, "entityName", "EntityName");
+  if (!entityName) {
+    throw new ExcelImportJobPollParseError(
+      "Import job status response is missing entityName."
+    );
+  }
+
   const statusValue = readNumber(raw, "status", "Status");
+  if (
+    statusValue === undefined ||
+    statusValue === null ||
+    Number.isNaN(statusValue) ||
+    !VALID_EXCEL_IMPORT_JOB_STATUS.has(statusValue)
+  ) {
+    throw new ExcelImportJobPollParseError(
+      "Import job status response has an invalid or missing status."
+    );
+  }
+
+  const resultRaw = raw.result ?? raw.Result;
 
   return {
-    importJobId: readString(raw, "importJobId", "ImportJobId"),
-    entityName: readString(raw, "entityName", "EntityName"),
+    importJobId,
+    entityName,
     status: excelImportJobStatusFromApiValue(statusValue),
     progressPercent: readNumber(raw, "progressPercent", "ProgressPercent"),
     processedRows: readNumber(raw, "processedRows", "ProcessedRows"),
@@ -5829,6 +5874,19 @@ export async function getExcelImportJobStatus(
   importJobId: string,
   token: string
 ): Promise<ExcelImportJobStatus> {
+  const poll = await getExcelImportJobPoll(entityName, importJobId, token);
+  return poll.status;
+}
+
+export async function getExcelImportJobPoll(
+  entityName: string,
+  importJobId: string,
+  token: string
+): Promise<{
+  status: ExcelImportJobStatus;
+  message: string | null;
+  diagnostics: Record<string, unknown> | null;
+}> {
   const response = await timedFetch(
     alfaUrl(
       `Excel/import/${encodeURIComponent(entityName)}/jobs/${encodeURIComponent(importJobId)}`
@@ -5850,7 +5908,23 @@ export async function getExcelImportJobStatus(
     throw new ApiError(response.status, readString(data, "message", "Message"));
   }
 
-  return normalizeExcelImportJobStatus(data);
+  const statusBody = extractExcelImportJobStatusBody(data);
+  if (!statusBody || typeof statusBody !== "object") {
+    throw new ExcelImportJobPollParseError(
+      "Import job status response could not be interpreted."
+    );
+  }
+
+  const diagnosticsRaw = data.diagnostics ?? data.Diagnostics;
+
+  return {
+    status: normalizeExcelImportJobStatus(statusBody as Record<string, unknown>),
+    diagnostics:
+      diagnosticsRaw && typeof diagnosticsRaw === "object"
+        ? (diagnosticsRaw as Record<string, unknown>)
+        : null,
+    message: readNullableString(data, "message", "Message"),
+  };
 }
 
 function errorsOnlyMessage(data: Record<string, unknown>): boolean {
@@ -7848,6 +7922,7 @@ export async function getInventoryAdjustmentReportDetail(
 }
 
 export {
+  ExcelImportJobInterruptedError,
   ExcelImportJobWaitTimeoutError,
   waitForExcelImportJob,
 } from "@/lib/excel-import-job";

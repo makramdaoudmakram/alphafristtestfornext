@@ -1,11 +1,30 @@
 import { EXCEL_IMPORT_JOB_MAX_WAIT_MS } from "@/types/excel";
 import type { ExcelImportJobStatus, ExcelImportResult } from "@/types/excel";
-import { ApiError, getExcelImportJobStatus } from "@/lib/api-client";
+import {
+  ApiError,
+  ExcelImportJobPollParseError,
+  getExcelImportJobStatus,
+} from "@/lib/api-client";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+export class ExcelImportJobInterruptedError extends Error {
+  readonly importJobId: string;
+  readonly lastStatus: ExcelImportJobStatus;
+
+  constructor(importJobId: string, lastStatus: ExcelImportJobStatus) {
+    super(
+      lastStatus.message ??
+        "This import was interrupted when the server restarted. Verify whether it committed before importing the same file again."
+    );
+    this.name = "ExcelImportJobInterruptedError";
+    this.importJobId = importJobId;
+    this.lastStatus = lastStatus;
+  }
 }
 
 export class ExcelImportJobWaitTimeoutError extends Error {
@@ -39,6 +58,8 @@ export async function waitForExcelImportJob(
   const maxWaitMs = options?.maxWaitMs ?? EXCEL_IMPORT_JOB_MAX_WAIT_MS;
   const startedAt = Date.now();
   let lastStatus: ExcelImportJobStatus | null = null;
+  let transientPollErrors = 0;
+  const maxTransientPollErrors = 3;
 
   while (true) {
     if (Date.now() - startedAt > maxWaitMs) {
@@ -49,9 +70,45 @@ export async function waitForExcelImportJob(
       );
     }
 
-    const status = await getExcelImportJobStatus(entityName, importJobId, token);
+    let status: ExcelImportJobStatus;
+    try {
+      status = await getExcelImportJobStatus(entityName, importJobId, token);
+      transientPollErrors = 0;
+    } catch (error) {
+      if (
+        error instanceof ExcelImportJobPollParseError ||
+        (error instanceof ApiError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 408)
+      ) {
+        throw error;
+      }
+
+      transientPollErrors += 1;
+      if (transientPollErrors >= maxTransientPollErrors) {
+        throw error;
+      }
+
+      await delay(pollIntervalMs);
+      continue;
+    }
+
     lastStatus = status;
     onProgress?.(status);
+
+    if (status.status === "Interrupted") {
+      throw new ExcelImportJobInterruptedError(importJobId, status);
+    }
+
+    if (status.status === "Failed") {
+      const interrupted =
+        status.result?.errors?.some((e) => e.errorCode === "ImportInterrupted") ??
+        status.message?.includes("Import interrupted before commit");
+      if (interrupted) {
+        throw new ExcelImportJobInterruptedError(importJobId, status);
+      }
+    }
 
     if (status.status === "Completed" || status.status === "Failed") {
       if (!status.result) {
