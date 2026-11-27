@@ -41,6 +41,7 @@ import {
   computeTotalDiscount,
   computeTotalSalesValue,
 } from "@/lib/pharm-purchase-calculations";
+import { applyCatalogMapToState } from "@/lib/catalog-map-merge";
 import {
   findCatalogItemByCode,
   getCanonicalItemCatalogCode,
@@ -256,6 +257,11 @@ export function PharmPurchaseReturnPageContent() {
     [details]
   );
 
+  const syncCatalogMap = useCallback((map?: Map<string, ItemCatalogItem>) => {
+    if (!map || map.size === 0) return;
+    setItemByCode((prev) => applyCatalogMapToState(prev, map));
+  }, []);
+
   const handleCatalogItemApplied = useCallback(
     (item: ItemCatalogItem) => {
       setItemByCode((prev) => {
@@ -418,8 +424,8 @@ export function PharmPurchaseReturnPageContent() {
     const id = Number(idParam);
     if (!Number.isFinite(id) || id <= 0) return;
     loadedFromUrlRef.current = id;
-    void loadRecord(id, itemByCode, catalogItems);
-  }, [searchParams, token, loadRecord, itemByCode, catalogItems]);
+    void loadRecord(id, itemByCode, catalogItems, syncCatalogMap);
+  }, [searchParams, token, loadRecord, itemByCode, catalogItems, syncCatalogMap]);
 
   const recordId = form.watch("id");
   const pthId = form.watch("pthId");
@@ -520,7 +526,7 @@ export function PharmPurchaseReturnPageContent() {
           onRefresh={() => {
             void loadContext();
             void loadItemCatalog();
-            void handleRefresh(itemByCode, catalogItems);
+            void handleRefresh(itemByCode, catalogItems, syncCatalogMap);
           }}
           onFirst={() => undefined}
           onPrev={() => undefined}

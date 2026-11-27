@@ -107,6 +107,13 @@ function toggleToLanguage(value: PharmReciveItemLanguage): SalesSearchLanguage {
   return value === "ar" ? "Arabic" : "English";
 }
 
+/** Sales-only shell: full main width minus a slim gutter (dashboard main keeps p-4/md:p-6). */
+const SALES_PAGE_SHELL =
+  "flex w-full max-w-none -mx-4 px-2 py-2 sm:px-3 md:-mx-6";
+const SALES_CARD = "gap-4 py-4";
+const SALES_CARD_HEADER = "px-4";
+const SALES_CARD_CONTENT = "px-4";
+
 /** Egypt server display → date only (DD/MM/YYYY). No browser clock. */
 function formatEgyptDateOnly(display: string): string {
   const raw = (display || "").trim();
@@ -132,7 +139,6 @@ export function SalesWorkspacePageContent() {
   const [shiftNumber, setShiftNumber] = useState<string>("—");
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [missingItemsOpen, setMissingItemsOpen] = useState(false);
-  const [toolbarExpanded, setToolbarExpanded] = useState(false);
 
   const [language, setLanguage] = useState<SalesSearchLanguage>("English");
   const [stockScope, setStockScope] =
@@ -1021,9 +1027,9 @@ export function SalesWorkspacePageContent() {
 
   return (
     <PageGuard permission={PERMISSIONS.sales.view}>
-      <div className="mx-auto flex w-full max-w-[1600px] px-3 py-3 sm:px-4">
-        <div className="flex w-full min-w-0 items-stretch">
-          <div className="flex min-w-0 flex-1 flex-col gap-3 pr-2">
+      <div className={SALES_PAGE_SHELL}>
+        <div className="flex w-full min-w-0 items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 pr-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
             <h1 className="text-2xl font-semibold tracking-tight">Sales</h1>
@@ -1075,15 +1081,17 @@ export function SalesWorkspacePageContent() {
         </div>
 
         {tabs.length === 0 || !active ? (
-          <Card>
-            <CardContent className="py-8 text-sm text-muted-foreground">
+          <Card className={SALES_CARD}>
+            <CardContent
+              className={cn(SALES_CARD_CONTENT, "py-8 text-sm text-muted-foreground")}
+            >
               Loading Sales workspace…
             </CardContent>
           </Card>
         ) : (
           <>
-            <Card>
-              <CardHeader>
+            <Card className={SALES_CARD}>
+              <CardHeader className={SALES_CARD_HEADER}>
                 <CardTitle>{active.label}</CardTitle>
                 <CardDescription>
                   Date: {formatEgyptDateOnly(active.egyptTimeDisplay || egyptTime)}
@@ -1095,7 +1103,9 @@ export function SalesWorkspacePageContent() {
                     : ""}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2 md:items-start">
+              <CardContent
+                className={cn(SALES_CARD_CONTENT, "grid gap-4 md:grid-cols-2 md:items-start")}
+              >
                 <div className="space-y-2">
                   <Label>Sales Man</Label>
                   {active.salesManId ? (
@@ -1166,8 +1176,8 @@ export function SalesWorkspacePageContent() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className={SALES_CARD}>
+              <CardHeader className={SALES_CARD_HEADER}>
                 <div>
                   <CardTitle>Sales details</CardTitle>
                   <CardDescription>
@@ -1175,7 +1185,7 @@ export function SalesWorkspacePageContent() {
                   </CardDescription>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className={cn(SALES_CARD_CONTENT, "space-y-3")}>
                 <div className="flex flex-wrap items-center gap-2 text-sm lg:flex-nowrap">
                   {(
                     [
@@ -1221,8 +1231,8 @@ export function SalesWorkspacePageContent() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardContent className="pt-6">
+            <Card className={SALES_CARD}>
+              <CardContent className={cn(SALES_CARD_CONTENT, "pt-4")}>
                 <div className="space-y-2">
                   <Label>Discount</Label>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1275,8 +1285,8 @@ export function SalesWorkspacePageContent() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
+            <Card className={SALES_CARD}>
+              <CardHeader className={SALES_CARD_HEADER}>
                 <div>
                   <CardTitle>Payment</CardTitle>
                   <CardDescription>
@@ -1284,7 +1294,7 @@ export function SalesWorkspacePageContent() {
                   </CardDescription>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className={cn(SALES_CARD_CONTENT, "space-y-4")}>
                 <div className="space-y-2">
                   <Label>
                     Customer
@@ -1583,8 +1593,6 @@ export function SalesWorkspacePageContent() {
           </div>
 
           <SalesPageToolbar
-            expanded={toolbarExpanded}
-            onExpandedChange={setToolbarExpanded}
             disabled={!token}
             onCustomer={() => setAddCustomerOpen(true)}
             onMissingSalesItem={() => setMissingItemsOpen(true)}

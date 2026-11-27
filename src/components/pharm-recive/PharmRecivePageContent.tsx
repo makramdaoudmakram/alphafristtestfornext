@@ -13,6 +13,7 @@ import {
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
+import { applyCatalogMapToState } from "@/lib/catalog-map-merge";
 import {
   ensureCatalogItemsForItmCodes,
   findCatalogItemByCode,
@@ -162,6 +163,15 @@ export function PharmRecivePageContent() {
     void loadUnits();
     void loadStores();
   }, [sessionReady, sessionAuthenticated, loadItemCatalog, loadUnits, loadStores]);
+
+  const syncCatalogMap = useCallback((map?: Map<string, ItemCatalogItem>) => {
+    if (!map || map.size === 0) return;
+    setItemByCode((prev) => {
+      const next = applyCatalogMapToState(prev, map);
+      itemByCodeRef.current = next;
+      return next;
+    });
+  }, []);
 
   const handleCatalogItemApplied = useCallback(
     (item: ItemCatalogItem) => {
@@ -547,8 +557,8 @@ export function PharmRecivePageContent() {
     if (!Number.isFinite(id) || id <= 0) return;
     if (loadedFromUrlRef.current === id) return;
     loadedFromUrlRef.current = id;
-    void loadRecord(id, itemByCode, catalogItems);
-  }, [token, searchParams, loadRecord, itemByCode, catalogItems]);
+    void loadRecord(id, itemByCode, catalogItems, syncCatalogMap);
+  }, [token, searchParams, loadRecord, itemByCode, catalogItems, syncCatalogMap]);
 
   const onNew = useCallback(() => {
     handleNew();
@@ -861,13 +871,13 @@ export function PharmRecivePageContent() {
           onRefresh={() => {
             void loadItemCatalog();
             void loadUnits();
-            void handleRefresh(itemByCode, catalogItems);
+            void handleRefresh(itemByCode, catalogItems, syncCatalogMap);
             setAuditRefreshKey((value) => value + 1);
           }}
-          onFirst={() => void navigate("first", itemByCode, catalogItems)}
-          onPrev={() => void navigate("prev", itemByCode, catalogItems)}
-          onNext={() => void navigate("next", itemByCode, catalogItems)}
-          onLast={() => void navigate("last", itemByCode, catalogItems)}
+          onFirst={() => void navigate("first", itemByCode, catalogItems, syncCatalogMap)}
+          onPrev={() => void navigate("prev", itemByCode, catalogItems, syncCatalogMap)}
+          onNext={() => void navigate("next", itemByCode, catalogItems, syncCatalogMap)}
+          onLast={() => void navigate("last", itemByCode, catalogItems, syncCatalogMap)}
           onSearch={() => setSearchOpen(true)}
           onCreateExcelTemplate={handleCreateExcelTemplate}
           excelTemplateDisabled={templateDownloading}
@@ -982,7 +992,9 @@ export function PharmRecivePageContent() {
           onSearch={runSearch}
           movementParentId={PHARM_RECIVE_MOV_PARENT_ID}
           token={token}
-          onSelect={(result) => void loadRecord(result.id, itemByCode, catalogItems)}
+          onSelect={(result) =>
+            void loadRecord(result.id, itemByCode, catalogItems, syncCatalogMap)
+          }
         />
 
         <StockBarcodePrintDialog

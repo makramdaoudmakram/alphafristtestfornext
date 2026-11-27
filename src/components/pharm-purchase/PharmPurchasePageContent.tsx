@@ -36,6 +36,8 @@ import {
   computeTotalSalesValue,
   computeTotalDiscount,
 } from "@/lib/pharm-purchase-calculations";
+import { applyCatalogMapToState } from "@/lib/catalog-map-merge";
+import { indexCatalogItem } from "@/lib/item-unit-options";
 import { createPharmPurchaseService } from "@/services/pharm-purchase.service";
 import { PERMISSIONS } from "@/lib/route-permissions";
 import type { PharmPurchaseContext, PharmPurchaseItemLanguage } from "@/types/pharm-purchase";
@@ -254,15 +256,18 @@ export function PharmPurchasePageContent() {
     [details]
   );
 
+  const syncCatalogMap = useCallback((map?: Map<string, ItemCatalogItem>) => {
+    if (!map || map.size === 0) return;
+    setItemByCode((prev) => applyCatalogMapToState(prev, map));
+  }, []);
+
   const handleCatalogItemApplied = useCallback((item: ItemCatalogItem) => {
-    const code = item.itmCode?.trim();
-    if (!code) return;
     setItemByCode((prev) => {
       const map = new Map(prev);
-      map.set(code.toLowerCase(), item);
+      indexCatalogItem(map, item, catalogItems);
       return map;
     });
-  }, []);
+  }, [catalogItems]);
 
   const handleSave = useCallback(() => {
     if (!context?.scopeValid) {
@@ -280,8 +285,8 @@ export function PharmPurchasePageContent() {
     const id = Number(idParam);
     if (!Number.isFinite(id) || id <= 0) return;
     loadedFromUrlRef.current = id;
-    void loadRecord(id, itemByCode, catalogItems);
-  }, [searchParams, token, loadRecord, itemByCode, catalogItems]);
+    void loadRecord(id, itemByCode, catalogItems, syncCatalogMap);
+  }, [searchParams, token, loadRecord, itemByCode, catalogItems, syncCatalogMap]);
 
   const recordId = form.watch("id");
   const pthId = form.watch("pthId");
@@ -399,12 +404,12 @@ export function PharmPurchasePageContent() {
           onRefresh={() => {
             void loadContext();
             void loadItemCatalog();
-            void handleRefresh(itemByCode, catalogItems);
+            void handleRefresh(itemByCode, catalogItems, syncCatalogMap);
           }}
-          onFirst={() => void navigate("first", itemByCode, catalogItems)}
-          onPrev={() => void navigate("prev", itemByCode, catalogItems)}
-          onNext={() => void navigate("next", itemByCode, catalogItems)}
-          onLast={() => void navigate("last", itemByCode, catalogItems)}
+          onFirst={() => void navigate("first", itemByCode, catalogItems, syncCatalogMap)}
+          onPrev={() => void navigate("prev", itemByCode, catalogItems, syncCatalogMap)}
+          onNext={() => void navigate("next", itemByCode, catalogItems, syncCatalogMap)}
+          onLast={() => void navigate("last", itemByCode, catalogItems, syncCatalogMap)}
           onSearch={() => setSearchOpen(true)}
           onCreateExcelTemplate={() => undefined}
           excelImportHref="#"
@@ -542,7 +547,7 @@ export function PharmPurchasePageContent() {
           token={token}
           catalogItems={catalogItems}
           onSelect={async (row) => {
-            await loadRecord(row.id, itemByCode, catalogItems);
+            await loadRecord(row.id, itemByCode, catalogItems, syncCatalogMap);
           }}
         />
 

@@ -111,7 +111,8 @@ export function usePharmPurchaseReturn(token: string | undefined) {
     async (
       id: number,
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!service) return;
       setLoading(true);
@@ -133,7 +134,9 @@ export function usePharmPurchaseReturn(token: string | undefined) {
         );
         applyDocument(doc.header, enriched);
         setMode("view");
+        onCatalogMap?.(catalogMap);
         toast.success(`Loaded pharmacy purchase return #${doc.header.pthId ?? id}`);
+        return catalogMap;
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -274,7 +277,8 @@ export function usePharmPurchaseReturn(token: string | undefined) {
   const handleRefresh = useCallback(
     async (
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       const id =
         form.getValues("id") ??
@@ -282,7 +286,7 @@ export function usePharmPurchaseReturn(token: string | undefined) {
           ? loadedRecordIdRef.current
           : null);
       if (id) {
-        await loadRecord(id, itemByCode, catalogItems);
+        await loadRecord(id, itemByCode, catalogItems, onCatalogMap);
       }
     },
     [form, loadRecord]

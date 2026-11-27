@@ -622,6 +622,90 @@ function readItemCatalogUnit(
   );
 }
 
+/** SalesItemSearch / item-stock DTOs use Unit1 → unit1, not ItemCatalog itm_Unit1 keys. */
+export function readSalesItemSearchUnit(
+  obj: Record<string, unknown>,
+  unitNumber: 1 | 2 | 3
+): number | null {
+  return readNullableNumber(
+    obj,
+    `unit${unitNumber}`,
+    `Unit${unitNumber}`,
+    `itmUnit${unitNumber}`,
+    `itm_Unit${unitNumber}`,
+    `Itm_Unit${unitNumber}`,
+    `ItmUnit${unitNumber}`
+  );
+}
+
+export function readSalesItemSearchUnit1Unit2(
+  obj: Record<string, unknown>
+): number | null {
+  return readNullableNumber(
+    obj,
+    "unit1Unit2",
+    "Unit1Unit2",
+    "itmUnit1Unit2",
+    "itm_Unit1Unit2",
+    "Itm_Unit1Unit2",
+    "ItmUnit1Unit2"
+  );
+}
+
+export function readSalesItemSearchUnit1Unit3(
+  obj: Record<string, unknown>
+): number | null {
+  return readNullableNumber(
+    obj,
+    "unit1Unit3",
+    "Unit1Unit3",
+    "itmUnit1Unit3",
+    "itm_Unit1Unit3",
+    "itm_Unit1_Unit3",
+    "Itm_Unit1_Unit3",
+    "ItmUnit1Unit3"
+  );
+}
+
+/** Normalizes one SalesItemSearch row — exported for unit-mapping regression tests. */
+export function mapSalesItemSearchHitRow(
+  row: Record<string, unknown>
+): import("@/types/sales-workspace").SalesItemSearchHit {
+  const stocksRaw = row.stocks ?? row.Stocks;
+  const stocks = Array.isArray(stocksRaw) ? stocksRaw : [];
+  return {
+    itemCatalogId: readNumber(row, "itemCatalogId", "ItemCatalogId"),
+    itmCode: readString(row, "itmCode", "ItmCode"),
+    itmNameAr: readString(row, "itmNameAr", "ItmNameAr"),
+    itmNameEn: readString(row, "itmNameEn", "ItmNameEn"),
+    defSellPrice: readNullableNumber(row, "defSellPrice", "DefSellPrice"),
+    defPharmPrice: readNullableNumber(row, "defPharmPrice", "DefPharmPrice"),
+    unit1: readSalesItemSearchUnit(row, 1),
+    unit2: readSalesItemSearchUnit(row, 2),
+    unit3: readSalesItemSearchUnit(row, 3),
+    unit1Unit2: readSalesItemSearchUnit1Unit2(row),
+    unit1Unit3: readSalesItemSearchUnit1Unit3(row),
+    itmMaxDiscPer: readNullableNumber(row, "itmMaxDiscPer", "ItmMaxDiscPer"),
+    groupNameEn: readString(row, "groupNameEn", "GroupNameEn"),
+    groupNameAr: readString(row, "groupNameAr", "GroupNameAr"),
+    itmSrvc: readBoolean(row, "itmSrvc", "ItmSrvc", "itm_Srvc", "Itm_Srvc"),
+    stocks: stocks.map((s) => {
+      const st = s as Record<string, unknown>;
+      return {
+        stockId: readNumber(st, "stockId", "StockId"),
+        batchNo: readString(st, "batchNo", "BatchNo"),
+        expDate: readNullableString(st, "expDate", "ExpDate"),
+        availableQty: readNumber(st, "availableQty", "AvailableQty"),
+        salesPrice: readNumber(st, "salesPrice", "SalesPrice"),
+        storId: readNumber(st, "storId", "StorId"),
+        storName: readNullableString(st, "storName", "StorName"),
+        parmId: readNullableNumber(st, "parmId", "ParmId"),
+        pharmacyName: readNullableString(st, "pharmacyName", "PharmacyName"),
+      };
+    }),
+  };
+}
+
 function normalizeGroupItem(item: Record<string, unknown>): GroupItem {
   return {
     id: readNumber(item, "id", "Id"),
@@ -3054,11 +3138,24 @@ function normalizeReturnItemStockSearchItem(
     transferQty: readNumber(item, "transferQty", "TransferQty"),
     availableQty: readNumber(item, "availableQty", "AvailableQty"),
     baseAvailableQty: readNumber(item, "baseAvailableQty", "BaseAvailableQty"),
-    itmUnit1: readNullableNumber(item, "itmUnit1", "ItmUnit1"),
-    itmUnit2: readNullableNumber(item, "itmUnit2", "ItmUnit2"),
-    itmUnit3: readNullableNumber(item, "itmUnit3", "ItmUnit3"),
-    itmUnit1Unit2: readNullableNumber(item, "itmUnit1Unit2", "ItmUnit1Unit2"),
-    itmUnit1Unit3: readNullableNumber(item, "itmUnit1Unit3", "ItmUnit1Unit3"),
+    itmUnit1: readItemCatalogUnit(item, 1),
+    itmUnit2: readItemCatalogUnit(item, 2),
+    itmUnit3: readItemCatalogUnit(item, 3),
+    itmUnit1Unit2: readNullableNumber(
+      item,
+      "itmUnit1Unit2",
+      "itm_Unit1Unit2",
+      "Itm_Unit1Unit2",
+      "ItmUnit1Unit2"
+    ),
+    itmUnit1Unit3: readNullableNumber(
+      item,
+      "itmUnit1Unit3",
+      "itm_Unit1Unit3",
+      "itm_Unit1_Unit3",
+      "Itm_Unit1_Unit3",
+      "ItmUnit1Unit3"
+    ),
     salesPrice: readNumber(item, "salesPrice", "SalesPrice"),
     costPrice: readNumber(item, "costPrice", "CostPrice"),
     stockId: readNullableNumber(item, "stockId", "StockId"),
@@ -5360,8 +5457,21 @@ function normalizeItemCatalogLookupItem(
     itmUnit1: readItemCatalogUnit(item, 1),
     itmUnit2: readItemCatalogUnit(item, 2),
     itmUnit3: readItemCatalogUnit(item, 3),
-    itmUnit1Unit2: null,
-    itmUnit1Unit3: null,
+    itmUnit1Unit2: readNullableNumber(
+      item,
+      "itmUnit1Unit2",
+      "itm_Unit1Unit2",
+      "Itm_Unit1Unit2",
+      "ItmUnit1Unit2"
+    ),
+    itmUnit1Unit3: readNullableNumber(
+      item,
+      "itmUnit1Unit3",
+      "itm_Unit1Unit3",
+      "itm_Unit1_Unit3",
+      "Itm_Unit1_Unit3",
+      "ItmUnit1Unit3"
+    ),
     child: null,
   };
 }
@@ -6219,42 +6329,9 @@ export async function searchSalesItems(
     parmId: readNumber(data, "parmId", "ParmId"),
     pharmacyName: readString(data, "pharmacyName", "PharmacyName"),
     storId: readNumber(data, "storId", "StorId"),
-    items: items.map((row) => {
-      const r = row as Record<string, unknown>;
-      const stocksRaw = r.stocks ?? r.Stocks;
-      const stocks = Array.isArray(stocksRaw) ? stocksRaw : [];
-      return {
-        itemCatalogId: readNumber(r, "itemCatalogId", "ItemCatalogId"),
-        itmCode: readString(r, "itmCode", "ItmCode"),
-        itmNameAr: readString(r, "itmNameAr", "ItmNameAr"),
-        itmNameEn: readString(r, "itmNameEn", "ItmNameEn"),
-        defSellPrice: readNullableNumber(r, "defSellPrice", "DefSellPrice"),
-        defPharmPrice: readNullableNumber(r, "defPharmPrice", "DefPharmPrice"),
-        unit1: readNullableNumber(r, "unit1", "Unit1"),
-        unit2: readNullableNumber(r, "unit2", "Unit2"),
-        unit3: readNullableNumber(r, "unit3", "Unit3"),
-        unit1Unit2: readNullableNumber(r, "unit1Unit2", "Unit1Unit2"),
-        unit1Unit3: readNullableNumber(r, "unit1Unit3", "Unit1Unit3"),
-        itmMaxDiscPer: readNullableNumber(r, "itmMaxDiscPer", "ItmMaxDiscPer"),
-        groupNameEn: readString(r, "groupNameEn", "GroupNameEn"),
-        groupNameAr: readString(r, "groupNameAr", "GroupNameAr"),
-        itmSrvc: readBoolean(r, "itmSrvc", "ItmSrvc", "itm_Srvc", "Itm_Srvc"),
-        stocks: stocks.map((s) => {
-          const st = s as Record<string, unknown>;
-          return {
-            stockId: readNumber(st, "stockId", "StockId"),
-            batchNo: readString(st, "batchNo", "BatchNo"),
-            expDate: readNullableString(st, "expDate", "ExpDate"),
-            availableQty: readNumber(st, "availableQty", "AvailableQty"),
-            salesPrice: readNumber(st, "salesPrice", "SalesPrice"),
-            storId: readNumber(st, "storId", "StorId"),
-            storName: readNullableString(st, "storName", "StorName"),
-            parmId: readNullableNumber(st, "parmId", "ParmId"),
-            pharmacyName: readNullableString(st, "pharmacyName", "PharmacyName"),
-          };
-        }),
-      } satisfies import("@/types/sales-workspace").SalesItemSearchHit;
-    }),
+    items: items.map((row) =>
+      mapSalesItemSearchHitRow(row as Record<string, unknown>)
+    ),
   };
 }
 
@@ -6307,9 +6384,9 @@ export async function getSalesItemPharmacyStock(
     itmCode: readString(data, "itmCode", "ItmCode"),
     itmNameAr: readString(data, "itmNameAr", "ItmNameAr"),
     itmNameEn: readString(data, "itmNameEn", "ItmNameEn"),
-    unit1: readNullableNumber(data, "unit1", "Unit1"),
-    unit2: readNullableNumber(data, "unit2", "Unit2"),
-    unit3: readNullableNumber(data, "unit3", "Unit3"),
+    unit1: readSalesItemSearchUnit(data, 1),
+    unit2: readSalesItemSearchUnit(data, 2),
+    unit3: readSalesItemSearchUnit(data, 3),
     currentStorId: readNumber(data, "currentStorId", "CurrentStorId"),
     currentParmId: readNumber(data, "currentParmId", "CurrentParmId"),
     currentPharmacyName: readString(

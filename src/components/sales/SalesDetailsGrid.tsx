@@ -15,6 +15,7 @@ import {
 import { applyPriceQtyNetToBasePrices } from "@/lib/purchase-unit-conversion";
 import {
   checkInvoiceStockAllocation,
+  convertSalesQuantityAcrossUnits,
   createEmptySalesLine,
   formatInvoiceStockInsufficientMessage,
   invoiceRemainingBaseForStock,
@@ -333,7 +334,14 @@ export function SalesDetailsGrid({
       unitSeqRef.current.set(line.key, requestId);
 
       const base = line.baseUnitSellPrice;
-      patchLine(line.key, { unitId });
+
+      const convertedQty = convertSalesQuantityAcrossUnits(line, line.quantity, unitId);
+      if (convertedQty.error) {
+        onToast?.("error", convertedQty.error);
+        return;
+      }
+      const nextQuantity =
+        convertedQty.quantity != null ? convertedQty.quantity : line.quantity;
 
       try {
         const info = await getUnitConversionInfo(token, code, unitId, 1);
@@ -348,6 +356,7 @@ export function SalesDetailsGrid({
         const nextLine: SalesWorkspaceLine = {
           ...line,
           unitId,
+          quantity: nextQuantity,
           unitSellPrice: money(priced.itmSell),
           priceQtyNet: priced.priceQtyNet,
         };
@@ -355,6 +364,7 @@ export function SalesDetailsGrid({
         const gross = money(priced.itmSell * nextLine.quantity);
         const pricePatch: Partial<SalesWorkspaceLine> = {
           unitId,
+          quantity: nextQuantity,
           unitSellPrice: money(priced.itmSell),
           priceQtyNet: priced.priceQtyNet,
         };

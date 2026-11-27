@@ -180,7 +180,8 @@ export function usePharmPurchase(token: string | undefined) {
     async (
       id: number,
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!service) return;
       setLoading(true);
@@ -202,6 +203,7 @@ export function usePharmPurchase(token: string | undefined) {
         );
         applyDocument(doc.header, details);
         setMode("view");
+        onCatalogMap?.(catalogMap);
         toast.success(`Loaded pharmacy purchase #${doc.header.pthId ?? id}`);
         return catalogMap;
       } catch (error) {
@@ -467,10 +469,11 @@ export function usePharmPurchase(token: string | undefined) {
   const handleRefresh = useCallback(
     async (
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (currentId) {
-        await loadRecord(currentId, itemByCode, catalogItems);
+        await loadRecord(currentId, itemByCode, catalogItems, onCatalogMap);
       } else {
         await refreshNavIds();
       }
@@ -482,7 +485,8 @@ export function usePharmPurchase(token: string | undefined) {
     async (
       target: "first" | "prev" | "next" | "last",
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!navIds.length) {
         toast.message("No purchase records available to navigate.");
@@ -495,7 +499,7 @@ export function usePharmPurchase(token: string | undefined) {
       else if (target === "prev") nextIndex = idx <= 0 ? 0 : idx - 1;
       else nextIndex = idx < 0 ? 0 : Math.min(idx + 1, navIds.length - 1);
 
-      await loadRecord(navIds[nextIndex]!, itemByCode, catalogItems);
+      await loadRecord(navIds[nextIndex]!, itemByCode, catalogItems, onCatalogMap);
     },
     [currentId, loadRecord, navIds]
   );

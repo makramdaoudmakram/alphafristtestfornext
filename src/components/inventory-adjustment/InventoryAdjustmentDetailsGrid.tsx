@@ -18,7 +18,10 @@ import {
   INVENTORY_ADJUSTMENT_DETAIL_GRID_LEGACY_WIDTH_KEY,
   INVENTORY_ADJUSTMENT_DETAIL_GRID_STORAGE_KEY,
 } from "@/components/inventory-adjustment/inventory-adjustment-detail-grid-columns";
-import { buildRowUnitComboboxOptions } from "@/lib/item-unit-options";
+import {
+  buildRowUnitComboboxOptions,
+  findCatalogItemByCode,
+} from "@/lib/item-unit-options";
 import { formatExpDateMmYyyy } from "@/lib/purchase-exp-date";
 import { cn } from "@/lib/utils";
 import type { InventoryAdjustmentDetail } from "@/types/inventory-adjustment";
@@ -252,8 +255,9 @@ export function InventoryAdjustmentDetailsGrid({
         header: "Unit",
         meta: { editable: true },
         cell: ({ row }) => {
-          const catalogItem =
-            itemByCode.get(row.original.itmCode.trim().toLowerCase()) ?? null;
+          const catalogItem = row.original.itmCode.trim()
+            ? findCatalogItemByCode(row.original.itmCode, itemByCode)
+            : null;
           const unitOptions: ComboboxOption[] = buildRowUnitComboboxOptions(
             units,
             catalogItem,

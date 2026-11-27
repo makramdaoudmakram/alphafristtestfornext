@@ -12,9 +12,13 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+const TOOLBAR_RAIL_WIDTH = "2.75rem";
+
+/** Fixed 36×36px — overrides global Button transition-all / size variants for this rail only. */
+const SALES_ACTION_BTN_DIM =
+  "box-border !size-9 !min-h-9 !min-w-9 !max-h-9 !max-w-9 shrink-0 justify-center gap-0 !p-0 !transition-colors hover:!scale-100 active:!scale-100";
+
 type SalesPageToolbarProps = {
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
   disabled?: boolean;
   onCustomer: () => void;
   onMissingSalesItem: () => void;
@@ -32,54 +36,33 @@ type ToolbarAction = {
 
 function ToolbarButton({
   action,
-  expanded,
   disabled,
 }: {
   action: ToolbarAction;
-  expanded: boolean;
   disabled?: boolean;
 }) {
-  const button = (
-    <Button
-      type="button"
-      size={expanded ? "sm" : "icon"}
-      variant={action.variant ?? "default"}
-      disabled={disabled}
-      aria-label={action.label}
-      onClick={action.onClick}
-      className={cn(
-        "w-full justify-start gap-2 overflow-hidden",
-        !expanded && "size-9 justify-center px-0",
-        action.className
-      )}
-    >
-      {action.icon}
-      <span
-        className={cn(
-          "truncate whitespace-nowrap transition-opacity duration-150",
-          expanded ? "opacity-100" : "sr-only opacity-0"
-        )}
-      >
-        {action.label}
-      </span>
-    </Button>
-  );
-
-  if (expanded) {
-    return <div className="w-full">{button}</div>;
-  }
-
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant={action.variant ?? "default"}
+          disabled={disabled}
+          aria-label={action.label}
+          onClick={action.onClick}
+          className={cn(SALES_ACTION_BTN_DIM, action.className)}
+        >
+          {action.icon}
+          <span className="sr-only">{action.label}</span>
+        </Button>
+      </TooltipTrigger>
       <TooltipContent side="left">{action.label}</TooltipContent>
     </Tooltip>
   );
 }
 
 export function SalesPageToolbar({
-  expanded,
-  onExpandedChange,
   disabled = false,
   onCustomer,
   onMissingSalesItem,
@@ -119,28 +102,20 @@ export function SalesPageToolbar({
   return (
     <aside
       aria-label="Sales actions"
-      onMouseEnter={() => onExpandedChange(true)}
-      onMouseLeave={() => onExpandedChange(false)}
-      className={cn(
-        "border-border bg-background sticky top-0 flex shrink-0 flex-col gap-1 self-stretch border-l py-2 pl-1.5 pr-1.5 transition-[width] duration-200 ease-out",
-        expanded ? "w-[13.5rem]" : "w-11"
-      )}
+      className="border-border bg-background sticky top-0 z-20 shrink-0 self-start border-l py-2 pl-1.5 pr-1.5"
+      style={{
+        width: TOOLBAR_RAIL_WIDTH,
+        minWidth: TOOLBAR_RAIL_WIDTH,
+        maxWidth: TOOLBAR_RAIL_WIDTH,
+      }}
     >
       <TooltipProvider delayDuration={200}>
-        <ToolbarButton
-          action={messageAction}
-          expanded={expanded}
-          disabled={disabled}
-        />
-
-        {actions.map((action) => (
-          <ToolbarButton
-            key={action.key}
-            action={action}
-            expanded={expanded}
-            disabled={disabled}
-          />
-        ))}
+        <div className="flex flex-col gap-1">
+          <ToolbarButton action={messageAction} disabled={disabled} />
+          {actions.map((action) => (
+            <ToolbarButton key={action.key} action={action} disabled={disabled} />
+          ))}
+        </div>
       </TooltipProvider>
     </aside>
   );

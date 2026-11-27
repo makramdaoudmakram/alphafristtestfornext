@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { receiptPrintCss } from "@/components/sales/SalesThermalReceipt";
+import { scheduleThermalBrowserPrint } from "@/lib/thermal-browser-print";
 import type { ShiftClosingReceipt } from "@/types/shift-closing-receipt";
 import type { ReceiptPaperWidth } from "@/types/sales-receipt";
 
@@ -60,38 +61,36 @@ export function ShiftClosingThermalReceipt({
 }) {
   useEffect(() => {
     if (!autoPrint) return;
-    const timer = window.setTimeout(() => window.print(), 50);
-    window.addEventListener("afterprint", onClose);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener("afterprint", onClose);
-    };
-  }, [autoPrint, onClose]);
+    return scheduleThermalBrowserPrint({
+      onPrint: () => window.print(),
+      onAfterPrint: onClose,
+    });
+  }, [autoPrint, onClose, receipt]);
 
   if (typeof document === "undefined") return null;
 
   const extraCss = `
-#sales-receipt-print-root .receipt-table {
-  width: 100%;
-  border-collapse: collapse;
+#sales-receipt-print-root .receipt-classification {
   margin-top: 4px;
-  font-size: inherit;
+  padding-top: 2px;
+  border-top: 1px dashed #000;
 }
-#sales-receipt-print-root .receipt-table th,
-#sales-receipt-print-root .receipt-table td {
-  border: 1px solid #000;
-  padding: 2px 3px;
-  text-align: left;
-  vertical-align: top;
-  word-break: break-word;
+#sales-receipt-print-root .receipt-classification:first-of-type {
+  margin-top: 2px;
 }
-#sales-receipt-print-root .receipt-table th {
+#sales-receipt-print-root .receipt-classification-name {
   font-weight: 700;
+  word-break: break-word;
+  margin-bottom: 2px;
 }
-#sales-receipt-print-root .receipt-table td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+@media print {
+  #sales-receipt-print-root,
+  #sales-receipt-print-root .receipt-sheet,
+  #sales-receipt-print-root .receipt-sheet * {
+    visibility: visible !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }
 `;
 
@@ -126,26 +125,40 @@ export function ShiftClosingThermalReceipt({
           ))}
         </section>
         <div className="receipt-rule" />
-        <table className="receipt-table">
-          <thead>
-            <tr>
-              <th>Classification Name</th>
-              <th>Value</th>
-              <th>Expected</th>
-              <th>Difference</th>
-            </tr>
-          </thead>
-          <tbody>
-            {receipt.classifications.map((line) => (
-              <tr key={line.classificationName}>
-                <td dir="auto">{line.classificationName}</td>
-                <td className="num">{money(line.value)}</td>
-                <td className="num">{money(line.expected)}</td>
-                <td className="num">{money(line.difference)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <section className="receipt-classifications">
+          <div className="receipt-center receipt-title" style={{ fontSize: "inherit" }}>
+            PAYMENTS
+          </div>
+          {receipt.classifications.length === 0 ? (
+            <div className="receipt-row">
+              <span>No payment lines</span>
+              <span>—</span>
+            </div>
+          ) : (
+            receipt.classifications.map((line, index) => (
+              <div
+                className="receipt-classification"
+                key={`${line.classificationName}-${index}`}
+              >
+                <div className="receipt-classification-name" dir="auto">
+                  {line.classificationName || "—"}
+                </div>
+                <div className="receipt-row">
+                  <span>Value</span>
+                  <span>{money(line.value)}</span>
+                </div>
+                <div className="receipt-row">
+                  <span>Expected</span>
+                  <span>{money(line.expected)}</span>
+                </div>
+                <div className="receipt-row">
+                  <span>Difference</span>
+                  <span>{money(line.difference)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </section>
       </article>
     </div>,
     document.body

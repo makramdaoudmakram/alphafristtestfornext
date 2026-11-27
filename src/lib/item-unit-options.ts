@@ -200,13 +200,13 @@ export function buildRowUnitComboboxOptions(
     }));
   }
 
-  const allowedIds = getItemUnitIds(item);
-  return allUnits
-    .filter((unit) => allowedIds.includes(unit.uCode))
-    .map((unit) => ({
-      value: String(unit.uCode),
-      label: formatUnitOptionLabel(unit.uCode, unit),
-    }));
+  const unitByCode = new Map<number, Pick<UnitItem, "uNameAr" | "uNameEn">>();
+  for (const unit of allUnits) {
+    unitByCode.set(unit.uCode, unit);
+  }
+
+  // Always list every ItemCatalog unit id even when the master Unit table row is missing.
+  return buildItemUnitComboboxOptions(item, unitByCode);
 }
 
 /** Prefer catalog row with unit fields when lookup payload is incomplete. */

@@ -91,7 +91,8 @@ export function useInventoryAdjustment(token: string | undefined) {
     async (
       id: number,
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!service) return;
       setLoading(true);
@@ -116,6 +117,7 @@ export function useInventoryAdjustment(token: string | undefined) {
           .map((row) => row.id)
           .filter((value): value is number => value != null && value > 0);
         setMode("view");
+        onCatalogMap?.(catalogMap);
         return catalogMap;
       } catch (error) {
         toast.error("Could not load inventory document.", {

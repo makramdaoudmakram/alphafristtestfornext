@@ -123,7 +123,6 @@ export function SalesReturnWorkspacePageContent() {
   const [shiftNumber, setShiftNumber] = useState<string>("—");
   const [returnShiftReady, setReturnShiftReady] = useState(false);
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
-  const [toolbarExpanded, setToolbarExpanded] = useState(false);
 
   const [language, setLanguage] = useState<SalesSearchLanguage>("English");
   /** Ephemeral only — never stored in tab state or browser storage. */
@@ -1271,8 +1270,6 @@ export function SalesReturnWorkspacePageContent() {
           </div>
 
           <SalesPageToolbar
-            expanded={toolbarExpanded}
-            onExpandedChange={setToolbarExpanded}
             disabled={!token}
             onCustomer={() => setAddCustomerOpen(true)}
             onMissingSalesItem={() => toast.message("Not available on Sales Return.")}

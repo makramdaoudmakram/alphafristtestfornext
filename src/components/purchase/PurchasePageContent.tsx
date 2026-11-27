@@ -16,6 +16,7 @@ import {
 } from "@/lib/api-client";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { UnitItem } from "@/types/unit";
+import { applyCatalogMapToState } from "@/lib/catalog-map-merge";
 import {
   getItemUnitIds,
   mergeCatalogItemWithCache,
@@ -178,6 +179,11 @@ export function PurchasePageContent() {
     void loadUnits();
     void loadStores();
   }, [sessionReady, sessionAuthenticated, loadItemCatalog, loadUnits, loadStores]);
+
+  const syncCatalogMap = useCallback((map?: Map<string, ItemCatalogItem>) => {
+    if (!map || map.size === 0) return;
+    setItemByCode((prev) => applyCatalogMapToState(prev, map));
+  }, []);
 
   const handleCatalogItemApplied = useCallback(
     (item: ItemCatalogItem) => {
@@ -367,8 +373,8 @@ export function PurchasePageContent() {
         `Invoice ${venBillNo || result.pthId} reversed. It is now editable so the Vendor can be corrected.`
       );
       setReverseConfirmOpen(false);
-      const map = await loadRecord(recordId, itemByCode, catalogItems);
-      if (map && map.size > 0) setItemByCode(map);
+      const map = await loadRecord(recordId, itemByCode, catalogItems, syncCatalogMap);
+      if (map && map.size > 0) syncCatalogMap(map);
       await syncMovementFromLoadedHeader();
       setAuditRefreshKey((value) => value + 1);
     } catch (error) {
@@ -404,8 +410,8 @@ export function PurchasePageContent() {
     if (!Number.isFinite(id) || id <= 0) return;
     if (loadedFromUrlRef.current === id) return;
     loadedFromUrlRef.current = id;
-    void loadRecord(id, itemByCode, catalogItems);
-  }, [token, searchParams, loadRecord, itemByCode, catalogItems]);
+    void loadRecord(id, itemByCode, catalogItems, syncCatalogMap);
+  }, [token, searchParams, loadRecord, itemByCode, catalogItems, syncCatalogMap]);
 
   const onNew = useCallback(() => {
     handleNew();
@@ -663,13 +669,13 @@ export function PurchasePageContent() {
           onRefresh={() => {
             void loadItemCatalog();
             void loadUnits();
-            void handleRefresh(itemByCode, catalogItems);
+            void handleRefresh(itemByCode, catalogItems, syncCatalogMap);
             setAuditRefreshKey((value) => value + 1);
           }}
-          onFirst={() => void navigate("first", itemByCode, catalogItems)}
-          onPrev={() => void navigate("prev", itemByCode, catalogItems)}
-          onNext={() => void navigate("next", itemByCode, catalogItems)}
-          onLast={() => void navigate("last", itemByCode, catalogItems)}
+          onFirst={() => void navigate("first", itemByCode, catalogItems, syncCatalogMap)}
+          onPrev={() => void navigate("prev", itemByCode, catalogItems, syncCatalogMap)}
+          onNext={() => void navigate("next", itemByCode, catalogItems, syncCatalogMap)}
+          onLast={() => void navigate("last", itemByCode, catalogItems, syncCatalogMap)}
           onSearch={() => setSearchOpen(true)}
           onCreateExcelTemplate={() => void handleCreateExcelTemplate()}
           excelTemplateDisabled={!token || templateDownloading}
@@ -780,8 +786,8 @@ export function PurchasePageContent() {
           token={token}
           catalogItems={catalogItems}
           onSelect={async (row) => {
-            const map = await loadRecord(row.id, itemByCode, catalogItems);
-            if (map && map.size > 0) setItemByCode(map);
+            const map = await loadRecord(row.id, itemByCode, catalogItems, syncCatalogMap);
+            if (map && map.size > 0) syncCatalogMap(map);
             await syncMovementFromLoadedHeader();
           }}
         />

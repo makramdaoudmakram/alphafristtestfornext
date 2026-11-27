@@ -22,7 +22,6 @@ import {
   PURCHASE_DETAIL_GRID_LEGACY_WIDTH_KEY,
   PURCHASE_DETAIL_GRID_STORAGE_KEY,
 } from "@/components/purchase/purchase-detail-grid-columns";
-import { getUnitConversionInfo } from "@/lib/api-client";
 import { catalogDefaultPrices } from "@/lib/item-catalog-search";
 import {
   buildRowUnitComboboxOptions,
@@ -34,11 +33,8 @@ import {
   isExpDateOnOrAfterCurrentMonth,
 } from "@/lib/purchase-exp-date";
 import { formatStorDisplayName } from "@/lib/purchase-stores";
-import {
-  applyPriceQtyNetToBasePrices,
-  basePricesFromDisplayed,
-  resolveRowBasePrices,
-} from "@/lib/purchase-unit-conversion";
+import { basePricesFromDisplayed } from "@/lib/purchase-unit-conversion";
+import { buildPurchaseStyleUnitChangePatch } from "@/lib/transaction-detail-unit-change";
 import { cn } from "@/lib/utils";
 import type { ItemCatalogItem } from "@/types/item-catalog";
 import type { PurchaseDetail, PurchaseDetailPatch } from "@/types/purchase";
@@ -171,52 +167,18 @@ export function DetailsGrid({
     conversionSeqRef.current.set(row.clientRowId, requestId);
 
     void (async () => {
-      let base = basePrices;
-      if (!base && (row.baseItmPurPrice == null || row.baseItmSell == null)) {
-        if (row.unitId != null && row.unitId > 0 && row.unitId !== unitId) {
-          const current = await getUnitConversionInfo(
-            token,
-            code,
-            row.unitId,
-            stockConversionQuantity(row)
-          );
-          if (conversionSeqRef.current.get(row.clientRowId) !== requestId) return;
-          base = basePricesFromDisplayed(
-            row.itmPurPrice,
-            row.itmSell,
-            current.priceQtyNet
-          );
-        }
-      }
-      base ??= resolveRowBasePrices(row);
-
-      const info = await getUnitConversionInfo(
+      const patch = await buildPurchaseStyleUnitChangePatch(
         token,
+        row,
         code,
         unitId,
-        stockConversionQuantity(row)
+        basePrices,
+        options
       );
       if (conversionSeqRef.current.get(row.clientRowId) !== requestId) return;
+      if (!patch) return;
 
-      const nextPrices = applyPriceQtyNetToBasePrices(
-        base.baseItmPurPrice,
-        base.baseItmSell,
-        info.priceQtyNet
-      );
-
-      onChangeRow(
-        rowIndex,
-        withSameRowQtyBonus(row, {
-          unitId,
-          itmPurPrice: nextPrices.itmPurPrice,
-          itmSell: nextPrices.itmSell,
-          baseItmPurPrice: base.baseItmPurPrice,
-          baseItmSell: base.baseItmSell,
-          priceQtyNet: nextPrices.priceQtyNet,
-          skipDiscPercent: options?.skipDiscPercent === true ? true : undefined,
-          skipTax: options?.skipTax === true ? true : undefined,
-        })
-      );
+      onChangeRow(rowIndex, withSameRowQtyBonus(row, patch));
     })();
   }, [onChangeRow, token]);
 

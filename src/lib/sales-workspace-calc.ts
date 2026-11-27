@@ -271,6 +271,38 @@ export function convertSalesQuantityToBase(
   };
 }
 
+/** Keep base quantity fixed when the sales line unit changes. */
+export function convertSalesQuantityAcrossUnits(
+  line: SalesUnitConversionFields,
+  quantity: number,
+  nextUnitId: number
+): { quantity: number | null; error: string | null } {
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return { quantity, error: null };
+  }
+  if (line.unitId === nextUnitId) {
+    return { quantity, error: null };
+  }
+
+  const from = convertSalesQuantityToBase(line, quantity);
+  if (from.error || from.quantityNet == null) {
+    return { quantity: null, error: from.error };
+  }
+
+  const to = convertSalesQuantityToBase(
+    { ...line, unitId: nextUnitId },
+    1
+  );
+  if (to.error || to.conversionValue == null || to.conversionValue <= 0) {
+    return { quantity: null, error: to.error };
+  }
+
+  return {
+    quantity: roundQty(from.quantityNet / to.conversionValue),
+    error: null,
+  };
+}
+
 /** Convert Stock.AvailableQty (base) into the currently selected unit. */
 export function displayAvailableQtyInSelectedUnit(
   line: Pick<SalesWorkspaceLine, "availableQty"> & SalesUnitConversionFields

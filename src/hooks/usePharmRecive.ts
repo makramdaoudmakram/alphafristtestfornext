@@ -238,7 +238,8 @@ export function usePharmRecive(token: string | undefined) {
     async (
       id: number,
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!service) return;
       setLoading(true);
@@ -264,7 +265,9 @@ export function usePharmRecive(token: string | undefined) {
         );
         applyDocument(doc.header, enriched);
         setMode("view");
+        onCatalogMap?.(catalogMap);
         await refreshNavIds();
+        return catalogMap;
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not load document");
       } finally {
@@ -440,10 +443,14 @@ export function usePharmRecive(token: string | undefined) {
   }, [canDelete, currentId, handleNew, refreshNavIds, service]);
 
   const handleRefresh = useCallback(
-    async (itemByCode?: Map<string, ItemCatalogItem>, catalogItems?: ItemCatalogItem[]) => {
+    async (
+      itemByCode?: Map<string, ItemCatalogItem>,
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
+    ) => {
       const id = currentId ?? loadedRecordIdRef.current;
       if (id != null && id > 0) {
-        await loadRecord(id, itemByCode, catalogItems);
+        await loadRecord(id, itemByCode, catalogItems, onCatalogMap);
       } else {
         await refreshNavIds();
       }
@@ -455,7 +462,8 @@ export function usePharmRecive(token: string | undefined) {
     async (
       direction: "first" | "prev" | "next" | "last",
       itemByCode?: Map<string, ItemCatalogItem>,
-      catalogItems?: ItemCatalogItem[]
+      catalogItems?: ItemCatalogItem[],
+      onCatalogMap?: (map: Map<string, ItemCatalogItem>) => void
     ) => {
       if (!service || navIds.length === 0) return;
       const id = currentId ?? loadedRecordIdRef.current;
@@ -467,7 +475,7 @@ export function usePharmRecive(token: string | undefined) {
       else if (direction === "next") nextIndex = Math.min(navIds.length - 1, index + 1);
       const nextId = navIds[nextIndex];
       if (nextId != null && nextId > 0) {
-        await loadRecord(nextId, itemByCode, catalogItems);
+        await loadRecord(nextId, itemByCode, catalogItems, onCatalogMap);
       }
     },
     [currentId, loadRecord, navIds, service]
